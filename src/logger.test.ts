@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
-import { createLogger } from '.';
+import type { LogEntry, Transport } from './types';
+import { createLogger, Logger } from '.';
 import { resolveEnvLevel, redact } from './utils';
 
 describe('Logger', () => {
@@ -25,15 +26,23 @@ describe('Logger', () => {
     expect(typeof logger.module).toBe('function');
     expect(typeof logger.settings).toBe('function');
     expect(typeof logger.close).toBe('function');
+    expect(typeof logger.trace).toBe('function');
+    expect(typeof logger.fatal).toBe('function');
+    expect(typeof logger.measure).toBe('function');
+    expect(typeof logger.once).toBe('function');
+    expect(typeof logger.throttle).toBe('function');
+    expect(typeof logger.run).toBe('function');
   });
 
   test('logs at different levels', () => {
-    const logger = createLogger({ settings: { level: 'debug' } });
+    const logger = createLogger({ settings: { level: 'trace' } });
+    logger.trace('trace message');
     logger.debug('debug message');
     logger.info('info message');
     logger.success('success message');
     logger.warn('warn message');
     logger.error('error message');
+    logger.fatal('fatal message');
   });
 
   test('respects log level', () => {
@@ -223,7 +232,7 @@ describe('Logger', () => {
     };
     try {
       const logger = createLogger({
-        settings: { colors: false, level: 'info', showLevel: true },
+        settings: { colors: false, level: 'info', mode: 'pretty', showLevel: true },
       });
       logger.info('hello level');
     } finally {
@@ -244,6 +253,7 @@ describe('Logger', () => {
           colors: false,
           formatContext: 'kv',
           level: 'info',
+          mode: 'pretty',
         },
       });
       logger.info('hello ctx', { name: 'vasya', userId: 42 });
@@ -262,7 +272,7 @@ describe('Logger', () => {
     };
     try {
       const logger = createLogger({
-        settings: { colors: false, level: 'info' },
+        settings: { colors: false, level: 'info', mode: 'pretty' },
       });
       logger.info('hello ctx', { userId: 42 });
     } finally {
@@ -279,7 +289,7 @@ describe('Logger', () => {
     };
     try {
       const logger = createLogger({
-        settings: { colors: false, level: 'info' },
+        settings: { colors: false, level: 'info', mode: 'pretty' },
       });
       logger.info('hello no level');
     } finally {
@@ -351,6 +361,146 @@ describe('Logger', () => {
     expect(content).toContain('from logger a');
     expect(content).toContain('from logger b');
     await Bun.$`rm -rf ${dir}`;
+  });
+
+  test('lazy message and context are not evaluated when level is disabled', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    let evaluated = 0;
+    try {
+      const logger = createLogger({ settings: { level: 'info', mode: 'json' } });
+      logger.debug(() => {
+        evaluated += 1;
+        return 'lazy debug message';
+      }, () => {
+        evaluated += 1;
+        return { expensive: evaluated };
+      });
+      logger.info(() => {
+        evaluated += 1;
+        return 'lazy info message';
+      });
+    } finally {
+      console.log = original;
+    }
+    // only the info thunk runs
+    expect(evaluated).toBe(1);
+    expect(outputs.some((out) => out.includes('lazy info message'))).toBe(true);
+    expect(outputs.some((out) => out.includes('lazy debug message'))).toBe(false);
+  });
+
+  test('measure logs duration and returns the result', async () => {
+    const result = await createLogger({ settings: { level: 'debug', mode: 'json' } }).measure(
+      'db.query',
+      () => 42
+    );
+    expect(result).toBe(42);
+  });
+
+  test('once logs a key only once', () => {
+    const outputs: string[] = [];
+    const original = console.warn;
+    console.warn = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({ settings: { level: 'debug', mode: 'json' } });
+      logger.once('db-down', 'database down');
+      logger.once('db-down', 'database down again');
+      logger.once('other-key', 'other event');
+    } finally {
+      console.warn = original;
+    }
+    expect(outputs.filter((out) => out.includes('database down')).length).toBe(1);
+    expect(outputs.filter((out) => out.includes('other event')).length).toBe(1);
+  });
+
+  test('throttle drops calls within the interval', () => {
+    const outputs: string[] = [];
+    const original = console.warn;
+    console.warn = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({ settings: { level: 'debug', mode: 'json' } });
+      logger.throttle('conn', 10_000, 'connection failed');
+      logger.throttle('conn', 10_000, 'connection failed again');
+      logger.throttle('other', 10_000, 'other failure');
+    } finally {
+      console.warn = original;
+    }
+    expect(outputs.filter((out) => out.includes('connection failed')).length).toBe(1);
+    expect(outputs.filter((out) => out.includes('other failure')).length).toBe(1);
+  });
+
+  test('run merges async-local context into entries', async () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({ settings: { level: 'debug', mode: 'json' } });
+      await logger.run({ requestId: 'abc' }, async () => {
+        logger.info('inside run');
+        await Bun.sleep(1);
+        logger.info('still inside run');
+      });
+      logger.info('outside run');
+    } finally {
+      console.log = original;
+    }
+    const inside = outputs.filter((out) => out.includes('requestId'));
+    expect(inside).toHaveLength(2);
+    expect(outputs.some((out) => out.includes('outside run') && !out.includes('requestId'))).toBe(true);
+  });
+
+  test('fatal and trace levels render and respect ordering', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    const originalError = console.error;
+    console.log = (value: unknown) => {
+      outputs.push(`log:${String(value)}`);
+    };
+    console.error = (value: unknown) => {
+      outputs.push(`error:${String(value)}`);
+    };
+    try {
+      const logger = createLogger({ settings: { level: 'trace', mode: 'json' } });
+      logger.trace('trace me');
+      logger.fatal('fatal me');
+      const filtered = createLogger({ settings: { level: 'error', mode: 'json' } });
+      filtered.trace('hidden trace');
+      filtered.debug('hidden debug');
+      filtered.fatal('kept fatal');
+    } finally {
+      console.log = original;
+      console.error = originalError;
+    }
+    expect(outputs.some((out) => out.includes('trace me'))).toBe(true);
+    expect(outputs.some((out) => out.includes('fatal me') && out.startsWith('error:'))).toBe(true);
+    expect(outputs.some((out) => out.includes('hidden trace'))).toBe(false);
+    expect(outputs.some((out) => out.includes('kept fatal'))).toBe(true);
+  });
+
+  test('addTransport writes to global transports for every logger', () => {
+    const received: LogEntry[] = [];
+    const transport: Transport = {
+      write(entry: LogEntry) {
+        received.push(entry);
+      },
+    };
+    Logger.addTransport(transport);
+    try {
+      const logger = createLogger({ settings: { level: 'debug', mode: 'json' } });
+      logger.info('hello global');
+    } finally {
+      Logger.removeTransport(transport);
+    }
+    expect(received.some((entry) => entry.message === 'hello global')).toBe(true);
   });
 
 });

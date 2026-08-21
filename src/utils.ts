@@ -4,9 +4,13 @@ import type { ContextFormat, LogContext, LogEntry, LogLevel, TimestampFormat } f
 const BEARER_PATTERN = /bearer\s+[^\s]+/giu;
 const KEY_VALUE_PATTERN = /(?<key>password|token|secret|authorization|cookie)=?[^\s,;]+/giu;
 
-const serializeError = (error: Error): Record<string, string> => {
-  const result: Record<string, string> = { message: error.message, name: error.name };
+const serializeError = (error: Error): Record<string, unknown> => {
+  const result: Record<string, unknown> = { message: error.message, name: error.name };
   if (error.stack) result.stack = error.stack;
+  if (error.cause !== undefined) {
+    result.cause =
+      error.cause instanceof Error ? serializeError(error.cause) : error.cause;
+  }
   return result;
 };
 
@@ -85,3 +89,8 @@ export const resolveEnvLevel = (
   const value = env.LOG_LEVEL;
   return value && value in LOG_LEVELS ? (value as LogLevel) : 'info';
 };
+
+export const formatDuration = (durationMs: number): string =>
+  durationMs >= 1000
+    ? `${(durationMs / 1000).toFixed(2)}s`
+    : `${Math.round(durationMs)}ms`;

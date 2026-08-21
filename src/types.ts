@@ -1,11 +1,13 @@
-export type LogLevel = 'debug' | 'info' | 'success' | 'warn' | 'error';
+export type LogLevel = 'trace' | 'debug' | 'info' | 'success' | 'warn' | 'error' | 'fatal';
 
 export const LOG_LEVELS: Record<LogLevel, number> = {
-  debug: 0,
-  error: 4,
-  info: 1,
-  success: 2,
-  warn: 3,
+  debug: 1,
+  error: 5,
+  fatal: 6,
+  info: 2,
+  success: 3,
+  trace: 0,
+  warn: 4,
 } as const;
 
 export type LogContext = Record<string, unknown>;
@@ -96,6 +98,13 @@ export interface LoggerSettings {
   showTimestamp?: boolean;
 }
 
+/**
+ * Message or metadata can be a lazy thunk: it is only evaluated when the
+ * entry passes the level check. Returns nothing when disabled.
+ */
+export type LazyMessage = string | (() => string);
+export type LazyContext = LogContext | (() => LogContext);
+
 export interface ResolvedSettings {
   async: AsyncSettings | false;
   colors: false | LevelColors;
@@ -139,6 +148,16 @@ export interface LoggerConfig {
 export const DEFAULT_REDACT_KEYS =
   /(?<secret>password|token|secret|authorization|cookie|drawing|replay|chat|payload)/iu;
 
+/**
+ * Adaptive mode: TTY gets colored pretty output, pipes/files get JSON.
+ * Only applies when the caller did not set `mode` explicitly.
+ */
+export const defaultMode = (): 'pretty' | 'json' => {
+  if (typeof process === 'undefined') return 'json';
+  if (!process.stdout.isTTY) return 'json';
+  return 'pretty';
+};
+
 export const resolveSettings = (
   settings: LoggerSettings = {}
 ): ResolvedSettings => ({
@@ -152,7 +171,7 @@ export const resolveSettings = (
   formatTimestamp: settings.formatTimestamp ?? 'iso',
   level: settings.level ?? 'info',
   maxMessageLength: settings.maxMessageLength ?? 2000,
-  mode: settings.mode ?? 'pretty',
+  mode: settings.mode ?? defaultMode(),
   redactDepth: settings.redactDepth ?? 2,
   redactKeys: settings.redactKeys ?? DEFAULT_REDACT_KEYS,
   showAuthor: settings.showAuthor ?? true,
