@@ -37,6 +37,15 @@ const cachedTimestamp = (): string => {
 cachedTimestamp.second = 0;
 cachedTimestamp.value = '';
 
+/** Numeric levels, inlined as constants in the hot path. */
+const LEVEL_TRACE = LOG_LEVELS.trace;
+const LEVEL_DEBUG = LOG_LEVELS.debug;
+const LEVEL_INFO = LOG_LEVELS.info;
+const LEVEL_SUCCESS = LOG_LEVELS.success;
+const LEVEL_WARN = LOG_LEVELS.warn;
+const LEVEL_ERROR = LOG_LEVELS.error;
+const LEVEL_FATAL = LOG_LEVELS.fatal;
+
 /** Numeric level of a named level, precomputed for the hot path. */
 const LEVEL_NUMBER = (level: LogLevel): number => LOG_LEVELS[level];
 
@@ -101,31 +110,43 @@ export class Logger {
     this.write(level, eventName, { event: eventName, ...context });
   }
 
+  // Level methods inline the numeric threshold check: a disabled level
+  // returns before the write() call, the LOG_LEVELS lookup and any argument
+  // work. `levelThreshold` is a number on the instance, updated by
+  // settings(), so the comparison stays dynamic.
+
   trace(message: LazyMessage, context?: LazyContext): void {
+    if (LEVEL_TRACE < this.levelThreshold) return;
     this.write('trace', message, context);
   }
 
   debug(message: LazyMessage, context?: LazyContext): void {
+    if (LEVEL_DEBUG < this.levelThreshold) return;
     this.write('debug', message, context);
   }
 
   info(message: LazyMessage, context?: LazyContext): void {
+    if (LEVEL_INFO < this.levelThreshold) return;
     this.write('info', message, context);
   }
 
   success(message: LazyMessage, context?: LazyContext): void {
+    if (LEVEL_SUCCESS < this.levelThreshold) return;
     this.write('success', message, context);
   }
 
   warn(message: LazyMessage, context?: LazyContext): void {
+    if (LEVEL_WARN < this.levelThreshold) return;
     this.write('warn', message, context);
   }
 
   error(message: LazyMessage, context?: LazyContext): void {
+    if (LEVEL_ERROR < this.levelThreshold) return;
     this.write('error', message, context);
   }
 
   fatal(message: LazyMessage, context?: LazyContext): void {
+    if (LEVEL_FATAL < this.levelThreshold) return;
     this.write('fatal', message, context);
   }
 
