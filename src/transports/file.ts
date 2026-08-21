@@ -1,10 +1,11 @@
+import { appendFile } from 'node:fs/promises';
+
 import type { ContextFormat, FileSettings, LogEntry, Transport } from '../types';
 import { formatEntry } from '../utils';
 
 export class FileTransport implements Transport {
   private buffer: string[] = [];
   private flushInterval: ReturnType<typeof setInterval> | null = null;
-  private readonly file: ReturnType<typeof Bun.file>;
   private readonly filepath: string;
   private readonly flushIntervalMs: number;
   private readonly contextFormat: ContextFormat;
@@ -16,7 +17,6 @@ export class FileTransport implements Transport {
     options: Omit<FileSettings, 'enabled'> & { contextFormat?: ContextFormat }
   ) {
     this.filepath = filepath;
-    this.file = Bun.file(filepath);
     this.contextFormat = options.contextFormat ?? 'json';
     this.maxBufferSize = options.maxBufferSize ?? 100;
     this.flushIntervalMs = options.flushIntervalMs ?? 1000;
@@ -35,8 +35,7 @@ export class FileTransport implements Transport {
     if (this.buffer.length === 0) return;
     const data = `${this.buffer.join('\n')}\n`;
     this.buffer = [];
-    // @ts-expect-error - Bun.write accepts BunFile with append option
-    await Bun.write(this.file, data, { append: true, create: true });
+    await appendFile(this.filepath, data);
   }
 
   private startFlushInterval(): void {

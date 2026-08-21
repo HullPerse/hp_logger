@@ -1,8 +1,13 @@
-import { mkdir, readdir } from 'node:fs/promises';
+import { appendFile, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ContextFormat, FileSettings, LogEntry, Transport } from '../types';
 import { formatEntry } from '../utils';
+
+// Общий путь файла на день для всех экземпляров транспорта с одним baseDir.
+// Без этого каждый логгер (SYSTEM, HTTP, ...) заводил бы свой файл и каждый
+// flush перескакивал на следующий индекс — в проде нужен один файл на день.
+const sharedFilepaths = new Map<string, string>();
 
 export class DateBasedFileTransport implements Transport {
   private buffer: string[] = [];
@@ -33,8 +38,7 @@ export class DateBasedFileTransport implements Transport {
     return path.join(this.baseDir, dateStr);
   }
 
-  private async getNextFilepath(): Promise<string> {
-    const dateDir = this.getDateDir();
+  private async getNextFilepath(dateDir: string): Promise<string> {
     await mkdir(dateDir, { recursive: true });
 
     const files = await readdir(dateDir);
@@ -53,9 +57,17 @@ export class DateBasedFileTransport implements Transport {
   }
 
   private async ensureFile(): Promise<void> {
-    const newFilepath = await this.getNextFilepath();
-    if (newFilepath !== this.currentFilepath) {
-      this.currentFilepath = newFilepath;
+    const dateDir = this.getDateDir();
+    const key = `${this.baseDir}::${dateDir}`;
+
+    let filepath = sharedFilepaths.get(key);
+    if (!filepath) {
+      filepath = await this.getNextFilepath(dateDir);
+      sharedFilepaths.set(key, filepath);
+    }
+
+    if (filepath !== this.currentFilepath) {
+      this.currentFilepath = filepath;
     }
   }
 
@@ -73,8 +85,7 @@ export class DateBasedFileTransport implements Transport {
     this.buffer = [];
     const filepath = this.currentFilepath;
     if (filepath) {
-      // @ts-expect-error - Bun.write accepts string path with append option
-      await Bun.write(filepath, data, { append: true, create: true });
+      await appendFile(filepath, data);
     }
   }
 

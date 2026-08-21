@@ -324,5 +324,33 @@ describe('Logger', () => {
       else process.env.LOG_LEVEL = previous;
     }
   });
+  test('daily rotation shares one file per day between loggers', async () => {
+    const dir = `/tmp/hp-logger-shared-${Date.now()}`;
+    const a = createLogger({
+      settings: {
+        file: { enabled: true, path: dir, rotation: 'daily' },
+        level: 'debug',
+      },
+    });
+    const b = createLogger({
+      settings: {
+        file: { enabled: true, path: dir, rotation: 'daily' },
+        level: 'debug',
+      },
+    });
+    a.info('from logger a');
+    b.info('from logger b');
+    await a.close();
+    await b.close();
+    const [dateStr] = new Date().toISOString().split('T');
+    const dateDir = `${dir}/${dateStr}`;
+    const lsOutput = await Bun.$`ls ${dateDir}`.text();
+    const files = lsOutput.trim().split('\n');
+    expect(files.filter((f) => f.startsWith('log_'))).toHaveLength(1);
+    const content = await Bun.file(`${dateDir}/${files[0]}`).text();
+    expect(content).toContain('from logger a');
+    expect(content).toContain('from logger b');
+    await Bun.$`rm -rf ${dir}`;
+  });
 
 });
