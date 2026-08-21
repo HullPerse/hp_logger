@@ -1,7 +1,7 @@
 import { mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { FileSettings, LogEntry, Transport } from '../types';
+import type { ContextFormat, FileSettings, LogEntry, Transport } from '../types';
 import { formatEntry } from '../utils';
 
 export class DateBasedFileTransport implements Transport {
@@ -10,12 +10,17 @@ export class DateBasedFileTransport implements Transport {
   private currentFilepath: string | null = null;
   private readonly baseDir: string;
   private readonly flushIntervalMs: number;
+  private readonly contextFormat: ContextFormat;
   private readonly maxBufferSize: number;
   private readonly maxFilesPerDay: number;
   private readonly mode: 'json' | 'pretty';
 
-  constructor(baseDir: string, options: Omit<FileSettings, 'enabled'>) {
+  constructor(
+    baseDir: string,
+    options: Omit<FileSettings, 'enabled'> & { contextFormat?: ContextFormat }
+  ) {
     this.baseDir = baseDir;
+    this.contextFormat = options.contextFormat ?? 'json';
     this.maxBufferSize = options.maxBufferSize ?? 100;
     this.flushIntervalMs = options.flushIntervalMs ?? 1000;
     this.maxFilesPerDay = options.maxFilesPerDay ?? 100;
@@ -55,7 +60,7 @@ export class DateBasedFileTransport implements Transport {
   }
 
   write(entry: LogEntry): void {
-    this.buffer.push(formatEntry(entry, this.mode));
+    this.buffer.push(formatEntry(entry, this.mode, this.contextFormat));
     if (this.buffer.length >= this.maxBufferSize) {
       void this.flush();
     }

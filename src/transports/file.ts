@@ -1,4 +1,4 @@
-import type { FileSettings, LogEntry, Transport } from '../types';
+import type { ContextFormat, FileSettings, LogEntry, Transport } from '../types';
 import { formatEntry } from '../utils';
 
 export class FileTransport implements Transport {
@@ -7,12 +7,17 @@ export class FileTransport implements Transport {
   private readonly file: ReturnType<typeof Bun.file>;
   private readonly filepath: string;
   private readonly flushIntervalMs: number;
+  private readonly contextFormat: ContextFormat;
   private readonly maxBufferSize: number;
   private readonly mode: 'json' | 'pretty';
 
-  constructor(filepath: string, options: Omit<FileSettings, 'enabled'>) {
+  constructor(
+    filepath: string,
+    options: Omit<FileSettings, 'enabled'> & { contextFormat?: ContextFormat }
+  ) {
     this.filepath = filepath;
     this.file = Bun.file(filepath);
+    this.contextFormat = options.contextFormat ?? 'json';
     this.maxBufferSize = options.maxBufferSize ?? 100;
     this.flushIntervalMs = options.flushIntervalMs ?? 1000;
     this.mode = options.mode ?? 'json';
@@ -20,7 +25,7 @@ export class FileTransport implements Transport {
   }
 
   write(entry: LogEntry): void {
-    this.buffer.push(formatEntry(entry, this.mode));
+    this.buffer.push(formatEntry(entry, this.mode, this.contextFormat));
     if (this.buffer.length >= this.maxBufferSize) {
       void this.flush();
     }

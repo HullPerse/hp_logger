@@ -25,6 +25,8 @@ export type LevelColors = Partial<Record<LogLevel, ColorName | false>>;
 
 export type TimestampFormat = 'iso' | 'local';
 
+export type ContextFormat = 'json' | 'kv';
+
 export interface AsyncSettings {
   batchSize?: number;
   flushIntervalMs?: number;
@@ -54,6 +56,8 @@ export interface LoggerSettings {
   file?: FileSettings | false;
   /** Filter entries before they reach any transport. */
   filters?: ((entry: LogEntry) => boolean)[];
+  /** How context renders in pretty mode: `json` object or `kv` key="value" pairs. */
+  formatContext?: ContextFormat;
   /** Timestamp format in pretty mode. */
   formatTimestamp?: TimestampFormat;
   /** Minimum level that gets logged. */
@@ -80,6 +84,7 @@ export interface ResolvedSettings {
   enabled: boolean;
   file: FileSettings | false;
   filters: ((entry: LogEntry) => boolean)[];
+  formatContext: ContextFormat;
   formatTimestamp: TimestampFormat;
   level: LogLevel;
   maxMessageLength: number;
@@ -121,6 +126,7 @@ export const resolveSettings = (
   enabled: settings.enabled ?? true,
   file: settings.file ?? false,
   filters: settings.filters ?? [],
+  formatContext: settings.formatContext ?? 'json',
   formatTimestamp: settings.formatTimestamp ?? 'iso',
   level: settings.level ?? 'info',
   maxMessageLength: settings.maxMessageLength ?? 2000,
@@ -141,6 +147,7 @@ export const mergeSettings = (
   enabled: patch.enabled ?? base.enabled,
   file: patch.file ?? base.file,
   filters: patch.filters ?? base.filters,
+  formatContext: patch.formatContext ?? base.formatContext,
   formatTimestamp: patch.formatTimestamp ?? base.formatTimestamp,
   level: patch.level ?? base.level,
   maxMessageLength: patch.maxMessageLength ?? base.maxMessageLength,
