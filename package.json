@@ -1,0 +1,91 @@
+{
+  "name": "hp_logger",
+  "version": "0.1.0",
+  "description": "Structured logger for Bun/Node with levels, redaction, colors, file output and server framework integrations",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./elysia": {
+      "types": "./dist/integrations/elysia.d.ts",
+      "import": "./dist/integrations/elysia.js"
+    },
+    "./bun": {
+      "types": "./dist/integrations/bun.d.ts",
+      "import": "./dist/integrations/bun.js"
+    },
+    "./node": {
+      "types": "./dist/integrations/node.d.ts",
+      "import": "./dist/integrations/node.js"
+    },
+    "./hono": {
+      "types": "./dist/integrations/hono.d.ts",
+      "import": "./dist/integrations/hono.js"
+    },
+    "./fastify": {
+      "types": "./dist/integrations/fastify.d.ts",
+      "import": "./dist/integrations/fastify.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --type-aware --deny-warnings -A unicorn/filename-case src/",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "logger",
+    "logging",
+    "bun",
+    "elysia",
+    "hono",
+    "fastify",
+    "structured"
+  ],
+  "license": "MIT",
+  "author": "HullPerse",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HullPerse/hp_logger"
+  },
+  "peerDependencies": {
+    "elysia": ">=1.0.0",
+    "fastify": ">=4.0.0",
+    "hono": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "elysia": {
+      "optional": true
+    },
+    "fastify": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "bun-types": "latest",
+    "elysia": "^1.4.29",
+    "fastify": "^5.0.0",
+    "hono": "^4.0.0",
+    "oxlint": "^1.79.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "typescript": "^5.9.0",
+    "ultracite": "7.10.6"
+  }
+}
