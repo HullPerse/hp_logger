@@ -33,6 +33,8 @@ export interface AsyncSettings {
 export interface FileSettings {
   /** Directory for log files. Required when enabled. */
   path?: string;
+  /** Entry format: `json` one line per entry, `pretty` readable text without colors. */
+  mode?: 'json' | 'pretty';
   /** Rotate files by day into `path/{yyyy-mm-dd}/log_NNN.log`. */
   rotation?: 'daily' | 'none';
   enabled: boolean;
@@ -46,10 +48,12 @@ export interface LoggerSettings {
   async?: AsyncSettings | false;
   /** Per-level colors in pretty mode. `false` disables all colors. */
   colors?: false | LevelColors;
-  /** Filter entries before they reach any transport. */
-  filters?: ((entry: LogEntry) => boolean)[];
+  /** Master switch: `false` skips every entry. */
+  enabled?: boolean;
   /** Write entries to a file in addition to the console. */
   file?: FileSettings | false;
+  /** Filter entries before they reach any transport. */
+  filters?: ((entry: LogEntry) => boolean)[];
   /** Timestamp format in pretty mode. */
   formatTimestamp?: TimestampFormat;
   /** Minimum level that gets logged. */
@@ -58,6 +62,8 @@ export interface LoggerSettings {
   maxMessageLength?: number;
   /** `pretty` colored console output, `json` single-line structured output. */
   mode?: 'pretty' | 'json';
+  /** Maximum nesting depth for redacting context values. */
+  redactDepth?: number;
   /** Keys that get redacted in messages and context. */
   redactKeys?: RegExp;
   /** Show the author/module tag in pretty output. */
@@ -69,12 +75,14 @@ export interface LoggerSettings {
 export interface ResolvedSettings {
   async: AsyncSettings | false;
   colors: false | LevelColors;
+  enabled: boolean;
   file: FileSettings | false;
   filters: ((entry: LogEntry) => boolean)[];
   formatTimestamp: TimestampFormat;
   level: LogLevel;
   maxMessageLength: number;
   mode: 'pretty' | 'json';
+  redactDepth: number;
   redactKeys: RegExp;
   showAuthor: boolean;
   showTimestamp: boolean;
@@ -107,12 +115,14 @@ export const resolveSettings = (
 ): ResolvedSettings => ({
   async: settings.async ?? false,
   colors: settings.colors ?? {},
+  enabled: settings.enabled ?? true,
   file: settings.file ?? false,
   filters: settings.filters ?? [],
   formatTimestamp: settings.formatTimestamp ?? 'iso',
   level: settings.level ?? 'info',
   maxMessageLength: settings.maxMessageLength ?? 2000,
   mode: settings.mode ?? 'pretty',
+  redactDepth: settings.redactDepth ?? 2,
   redactKeys: settings.redactKeys ?? DEFAULT_REDACT_KEYS,
   showAuthor: settings.showAuthor ?? true,
   showTimestamp: settings.showTimestamp ?? true,
@@ -124,12 +134,14 @@ export const mergeSettings = (
 ): ResolvedSettings => resolveSettings({
   async: patch.async ?? base.async,
   colors: patch.colors ?? base.colors,
+  enabled: patch.enabled ?? base.enabled,
   file: patch.file ?? base.file,
   filters: patch.filters ?? base.filters,
   formatTimestamp: patch.formatTimestamp ?? base.formatTimestamp,
   level: patch.level ?? base.level,
   maxMessageLength: patch.maxMessageLength ?? base.maxMessageLength,
   mode: patch.mode ?? base.mode,
+  redactDepth: patch.redactDepth ?? base.redactDepth,
   redactKeys: patch.redactKeys ?? base.redactKeys,
   showAuthor: patch.showAuthor ?? base.showAuthor,
   showTimestamp: patch.showTimestamp ?? base.showTimestamp,

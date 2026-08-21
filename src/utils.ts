@@ -1,5 +1,5 @@
 import { LOG_LEVELS } from './types';
-import type { LogLevel, TimestampFormat } from './types';
+import type { LogEntry, LogLevel, TimestampFormat } from './types';
 
 const BEARER_PATTERN = /bearer\s+[^\s]+/giu;
 const KEY_VALUE_PATTERN = /(?<key>password|token|secret|authorization|cookie)=?[^\s,;]+/giu;
@@ -39,6 +39,15 @@ export const redact = (
   }
 
   return value;
+};
+
+export const formatEntry = (entry: LogEntry, mode: 'json' | 'pretty'): string => {
+  if (mode === 'json') return JSON.stringify(entry);
+  const contextStr =
+    Object.keys(entry.context).length > 0
+      ? ` ${JSON.stringify(entry.context)}`
+      : '';
+  return `[${entry.timestamp}] [${entry.author}] [${entry.level.toUpperCase()}] ${entry.message}${contextStr}`;
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');

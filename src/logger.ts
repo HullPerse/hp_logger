@@ -80,15 +80,20 @@ export class Logger {
   }
 
   private write(level: LogLevel, message: string, context?: LogContext): void {
+    if (!this.currentSettings.enabled) return;
     if (!shouldLog(level, this.currentSettings.level)) return;
 
     const safeMessage = String(
-      redact(message, this.currentSettings.redactKeys)
+      redact(message, this.currentSettings.redactKeys, this.currentSettings.redactDepth)
     ).slice(0, this.currentSettings.maxMessageLength);
     const mergedContext = { ...this.context, ...context };
     const safeContext =
       Object.keys(mergedContext).length > 0
-        ? (redact(mergedContext, this.currentSettings.redactKeys) as LogContext)
+        ? (redact(
+            mergedContext,
+            this.currentSettings.redactKeys,
+            this.currentSettings.redactDepth
+          ) as LogContext)
         : {};
 
     const entry: LogEntry = {
