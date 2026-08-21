@@ -1,0 +1,64 @@
+import { LOG_LEVELS } from './types';
+import type { LogLevel, TimestampFormat } from './types';
+
+const BEARER_PATTERN = /bearer\s+[^\s]+/giu;
+const KEY_VALUE_PATTERN = /(?<key>password|token|secret|authorization|cookie)=?[^\s,;]+/giu;
+
+const serializeError = (error: Error): Record<string, string> => {
+  const result: Record<string, string> = { message: error.message, name: error.name };
+  if (error.stack) result.stack = error.stack;
+  return result;
+};
+
+export const redact = (
+  value: unknown,
+  secretKey: RegExp,
+  maxDepth = 2,
+  depth = 0
+): unknown => {
+  if (depth > maxDepth) return '[REDACTED]';
+
+  if (value instanceof Error) return serializeError(value);
+
+  if (typeof value === 'string') {
+    return value
+      .replaceAll(BEARER_PATTERN, 'Bearer [REDACTED]')
+      .replaceAll(KEY_VALUE_PATTERN, '$<key>=[REDACTED]');
+  }
+
+  if (Array.isArray(value)) return `[${value.length} items]`;
+
+  if (typeof value === 'object' && value !== null) {
+    const result: Record<string, unknown> = {};
+    for (const [key, nested] of Object.entries(value)) {
+      result[key] = secretKey.test(key)
+        ? '[REDACTED]'
+        : redact(nested, secretKey, maxDepth, depth + 1);
+    }
+    return result;
+  }
+
+  return value;
+};
+
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+export const formatTimestamp = (format: TimestampFormat): string => {
+  if (format === 'local') {
+    const now = new Date();
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  }
+  return new Date().toISOString().slice(0, 19).replace('T', ' ');
+};
+
+export const shouldLog = (
+  level: LogLevel,
+  configuredLevel: LogLevel
+): boolean => LOG_LEVELS[level] >= LOG_LEVELS[configuredLevel];
+
+export const resolveEnvLevel = (
+  env: Record<string, string | undefined> = process.env
+): LogLevel => {
+  const value = env.LOG_LEVEL;
+  return value && value in LOG_LEVELS ? (value as LogLevel) : 'info';
+};
