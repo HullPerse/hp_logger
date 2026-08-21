@@ -38,6 +38,10 @@ const asyncLogger = createLogger({
     mode: 'json',
   },
 });
+const disabledLogger = createLogger({
+  settings: { file: false, level: 'error', mode: 'json' },
+});
+
 const db = new Database(':memory:');
 const dbLogger = createLogger({
   settings: {
@@ -49,6 +53,9 @@ const dbLogger = createLogger({
 });
 
 const results = [
+  measure('disabled lazy write', ITERATIONS, () => {
+    disabledLogger.debug(() => 'skipped message', () => ({ expensive: true }));
+  }),
   measure('json write', ITERATIONS, () => {
     jsonLogger.info('message', { userId: 42, path: '/x' });
   }),

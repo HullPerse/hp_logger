@@ -34,7 +34,7 @@ Global settings are passed to `createLogger`; module settings via `.module(name,
 
 | Setting | Description | Default |
 | --- | --- | --- |
-| `level` | Minimum level: debug, info, success, warn, error | `info` (or `LOG_LEVEL` env var) |
+| `level` | Minimum level: trace, debug, info, success, warn, error, fatal | `info` (or `LOG_LEVEL` env var) |
 | `mode` | `pretty` colored output or `json` structured | `pretty` |
 | `colors` | Per-level colors or `false` to disable all | standard |
 | `enabled` | Master switch: `false` skips all entries | `true` |
@@ -134,6 +134,59 @@ const logger = createLogger({
 ```
 
 The level is written in its own level color (info - blue, error - red, etc.).
+
+### Lazy message and context
+
+Message and context can be functions: they are only evaluated when the entry passes the level check, so disabled levels cost almost nothing (no `JSON.stringify`, no template literals, no side effects).
+
+```ts
+logger.debug(() => `Processed ${expensiveCalculation()}`);
+logger.debug(() => ({ snapshot: buildExpensiveSnapshot() }));
+```
+
+### Measure
+
+Time a function and log its duration. Returns the function result.
+
+```ts
+const rows = await logger.measure("db.query", () => db.query(...));
+// success: db.query completed in 42ms { durationMs: 42, operation: "db.query" }
+```
+
+### once / throttle
+
+Prevent log flooding: `once` writes a key only once per process, `throttle` writes at most once per interval.
+
+```ts
+logger.once("db-down", "database connection lost");
+logger.throttle("connection-error", 1000, "connection failed", {}, "error");
+```
+
+### AsyncLocalStorage context
+
+`logger.run(context, fn)` runs a function with an async-local context merged into every entry inside it, including async continuations. Useful for request-scoped fields like `requestId` or `userId`.
+
+```ts
+await logger.run({ requestId: "abc" }, async () => {
+  logger.info("request started"); // includes requestId
+  await somethingAsync();
+  logger.info("request finished"); // still includes requestId
+});
+```
+
+### Global transports
+
+Register a transport that receives every entry from every logger in the process. The starting point for observability adapters (OTLP, Sentry, Loki) without making the core depend on them.
+
+```ts
+Logger.addTransport({ write: (entry) => sendToLoki(entry) });
+Logger.removeTransport(transport);
+Logger.clearTransports();
+```
+
+### Adaptive output
+
+When `mode` is not set, the default is adaptive: TTY gets colored `pretty`, pipes/files get `json`. Set `mode` explicitly to force either.
 
 ### Modules and context
 

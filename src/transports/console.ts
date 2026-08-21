@@ -51,9 +51,9 @@ export class ConsoleTransport implements Transport {
 
     const output = parts.join(' ');
 
-    if (entry.level === 'error') console.error(output);
+    if (entry.level === 'error' || entry.level === 'fatal') console.error(output);
     else if (entry.level === 'warn') console.warn(output);
-    else if (entry.level === 'debug') console.debug(output);
+    else if (entry.level === 'debug' || entry.level === 'trace') console.debug(output);
     else console.log(output);
   }
 
@@ -71,7 +71,7 @@ export class ConsoleTransport implements Transport {
       ...entry.context,
     });
 
-    if (entry.level === 'error') console.error(output);
+    if (entry.level === 'error' || entry.level === 'fatal') console.error(output);
     else if (entry.level === 'warn') console.warn(output);
     else console.log(output);
   }
