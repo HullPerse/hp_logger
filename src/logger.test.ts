@@ -232,6 +232,45 @@ describe('Logger', () => {
     expect(outputs.some((out) => out.includes('[INFO]'))).toBe(true);
   });
 
+  test('formatContext kv renders key="value" pairs in pretty output', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: {
+          colors: false,
+          formatContext: 'kv',
+          level: 'info',
+        },
+      });
+      logger.info('hello ctx', { name: 'vasya', userId: 42 });
+    } finally {
+      console.log = original;
+    }
+    expect(outputs.some((out) => out.includes('name="vasya" userId=42'))).toBe(true);
+    expect(outputs.some((out) => out.includes('{"name"'))).toBe(false);
+  });
+
+  test('formatContext json is default', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: { colors: false, level: 'info' },
+      });
+      logger.info('hello ctx', { userId: 42 });
+    } finally {
+      console.log = original;
+    }
+    expect(outputs.some((out) => out.includes('{"userId":42}'))).toBe(true);
+  });
+
   test('showLevel false hides level prefix', () => {
     const outputs: string[] = [];
     const original = console.log;

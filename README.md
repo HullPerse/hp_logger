@@ -44,6 +44,7 @@ auth.info("user registered", { userId: 42 });
 | `showTimestamp` | Показывать время в pretty-выводе | `true` |
 | `showAuthor` | Показывать имя модуля в pretty-выводе | `true` |
 | `showLevel` | Цветной префикс уровня `[INFO]`/`[ERROR]` в pretty-выводе | `false` |
+| `formatContext` | Как показывать контекст в pretty-выводе: `json` объект или `kv` пары `key="value"` | `json` |
 | `formatTimestamp` | `iso` или `local` формат времени | `iso` |
 | `file` | Запись в файл: `{ enabled, path, mode, rotation, ... }` или `false` | `false` |
 | `async` | Асинхронная запись с батчингом или `false` | `false` |
@@ -81,6 +82,18 @@ const logger = createLogger({
   },
 });
 ```
+
+### Формат контекста
+
+```ts
+const logger = createLogger({
+  settings: {
+    formatContext: "kv", // userId=42 name="vasya" вместо {"userId":42,"name":"vasya"}
+  },
+});
+```
+
+Применяется и в pretty-выводе консоли, и в файловом `mode: "pretty"`.
 
 ### Префикс уровня
 

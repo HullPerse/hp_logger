@@ -6,6 +6,7 @@ import type {
   Transport,
 } from '../types';
 import { applyColor, DEFAULT_LEVEL_COLORS } from '../colors.utils';
+import { formatContext } from '../utils';
 
 export class ConsoleTransport implements Transport {
   private readonly settings: ResolvedSettings;
@@ -41,10 +42,7 @@ export class ConsoleTransport implements Transport {
 
     const messageColor =
       this.settings.colors === false ? undefined : this.colorFor(entry.level);
-    const contextStr =
-      Object.keys(entry.context).length > 0
-        ? ` ${JSON.stringify(entry.context)}`
-        : '';
+    const contextStr = formatContext(entry.context, this.settings.formatContext);
     parts.push(applyColor(messageColor, `${entry.message}${contextStr}`));
 
     const output = parts.join(' ');
