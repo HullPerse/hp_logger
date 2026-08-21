@@ -43,6 +43,7 @@ auth.info("user registered", { userId: 42 });
 | `maxMessageLength` | Обрезание сообщения | `2000` |
 | `showTimestamp` | Показывать время в pretty-выводе | `true` |
 | `showAuthor` | Показывать имя модуля в pretty-выводе | `true` |
+| `showLevel` | Цветной префикс уровня `[INFO]`/`[ERROR]` в pretty-выводе | `false` |
 | `formatTimestamp` | `iso` или `local` формат времени | `iso` |
 | `file` | Запись в файл: `{ enabled, path, mode, rotation, ... }` или `false` | `false` |
 | `async` | Асинхронная запись с батчингом или `false` | `false` |
@@ -80,6 +81,18 @@ const logger = createLogger({
   },
 });
 ```
+
+### Префикс уровня
+
+```ts
+const logger = createLogger({
+  settings: {
+    showLevel: true, // [INFO] [auth] сообщение
+  },
+});
+```
+
+Уровень пишется цветом своего уровня (info - blue, error - red и так далее).
 
 ### Модули и контекст
 

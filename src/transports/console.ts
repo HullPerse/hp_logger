@@ -29,6 +29,11 @@ export class ConsoleTransport implements Transport {
       parts.push(`[${entry.timestamp}]`);
     }
 
+    if (this.settings.showLevel) {
+      const color = this.colorFor(entry.level);
+      parts.push(applyColor(color, `[${entry.level.toUpperCase()}]`));
+    }
+
     if (this.settings.showAuthor) {
       const color = this.colorFor(entry.level);
       parts.push(applyColor(color, `[${entry.author}]`));

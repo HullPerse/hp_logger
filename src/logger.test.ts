@@ -215,6 +215,40 @@ describe('Logger', () => {
     logger.info('deep context', { outer: { inner: { deepest: 'x' } } });
   });
 
+  test('showLevel renders level prefix in pretty output', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: { colors: false, level: 'info', showLevel: true },
+      });
+      logger.info('hello level');
+    } finally {
+      console.log = original;
+    }
+    expect(outputs.some((out) => out.includes('[INFO]'))).toBe(true);
+  });
+
+  test('showLevel false hides level prefix', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: { colors: false, level: 'info' },
+      });
+      logger.info('hello no level');
+    } finally {
+      console.log = original;
+    }
+    expect(outputs.some((out) => out.includes('[INFO]'))).toBe(false);
+  });
+
   test('settings can toggle enabled after creation', async () => {
     const logger = createLogger({
       settings: {

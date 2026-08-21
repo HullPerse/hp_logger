@@ -68,6 +68,8 @@ export interface LoggerSettings {
   redactKeys?: RegExp;
   /** Show the author/module tag in pretty output. */
   showAuthor?: boolean;
+  /** Show the level prefix like [INFO] in pretty output, colored per level. */
+  showLevel?: boolean;
   /** Show the timestamp in pretty output. */
   showTimestamp?: boolean;
 }
@@ -85,6 +87,7 @@ export interface ResolvedSettings {
   redactDepth: number;
   redactKeys: RegExp;
   showAuthor: boolean;
+  showLevel: boolean;
   showTimestamp: boolean;
 }
 
@@ -125,6 +128,7 @@ export const resolveSettings = (
   redactDepth: settings.redactDepth ?? 2,
   redactKeys: settings.redactKeys ?? DEFAULT_REDACT_KEYS,
   showAuthor: settings.showAuthor ?? true,
+  showLevel: settings.showLevel ?? false,
   showTimestamp: settings.showTimestamp ?? true,
 });
 
@@ -144,5 +148,6 @@ export const mergeSettings = (
   redactDepth: patch.redactDepth ?? base.redactDepth,
   redactKeys: patch.redactKeys ?? base.redactKeys,
   showAuthor: patch.showAuthor ?? base.showAuthor,
+  showLevel: patch.showLevel ?? base.showLevel,
   showTimestamp: patch.showTimestamp ?? base.showTimestamp,
 });
