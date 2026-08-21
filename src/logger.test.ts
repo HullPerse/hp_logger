@@ -560,6 +560,48 @@ describe('Logger', () => {
     expect(line.includes('\n')).toBe(true);
   });
 
+  test('custom format renders console pretty lines', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: {
+          colors: false,
+          format: (entry) => `${entry.level}:${entry.author}:${entry.message}`,
+          level: 'info',
+          mode: 'pretty',
+        },
+      });
+      logger.info('hello custom');
+    } finally {
+      console.log = original;
+    }
+    expect(outputs.some((out) => out.includes('info:ROOT:hello custom'))).toBe(true);
+  });
+
+  test('custom format renders file pretty lines', async () => {
+    const logger = createLogger({
+      settings: {
+        file: {
+          enabled: true,
+          mode: 'pretty',
+          path: '/tmp/hp-logger-format.log',
+        },
+        format: (entry) => `${entry.level}|${entry.message}`,
+        level: 'debug',
+        mode: 'json',
+      },
+    });
+    logger.info('to file');
+    await logger.close();
+    const content = await Bun.file('/tmp/hp-logger-format.log').text();
+    expect(content).toContain('info|to file');
+    await Bun.$`rm -f /tmp/hp-logger-format.log`;
+  });
+
   test('addTransport writes to global transports for every logger', () => {
     const received: LogEntry[] = [];
     const transport: Transport = {

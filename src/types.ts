@@ -76,6 +76,8 @@ export interface LoggerSettings {
   file?: FileSettings | false;
   /** Filter entries before they reach any transport. */
   filters?: ((entry: LogEntry) => boolean)[];
+  /** Custom pretty renderer for console and file output. */
+  format?: EntryFormatter;
   /** How context renders in pretty mode: `json` object or `kv` key="value" pairs. */
   formatContext?: ContextFormat;
   /** Timestamp format in pretty mode. */
@@ -109,6 +111,13 @@ export interface LoggerSettings {
 export type LazyMessage = string | (() => string);
 export type LazyContext = LogContext | (() => LogContext);
 
+/**
+ * Custom pretty renderer for console and file output. Receives the full
+ * entry and returns the line to write. Overrides the default
+ * `[time] [author] [LEVEL] message` rendering.
+ */
+export type EntryFormatter = (entry: LogEntry) => string;
+
 export interface ResolvedSettings {
   async: AsyncSettings | false;
   colors: false | LevelColors;
@@ -116,6 +125,7 @@ export interface ResolvedSettings {
   enabled: boolean;
   file: FileSettings | false;
   filters: ((entry: LogEntry) => boolean)[];
+  format: EntryFormatter | undefined;
   formatContext: ContextFormat;
   formatTimestamp: TimestampFormat;
   level: LogLevel;
@@ -167,6 +177,7 @@ export const resolveSettings = (
   enabled: settings.enabled ?? true,
   file: settings.file ?? false,
   filters: settings.filters ?? [],
+  format: settings.format,
   formatContext: settings.formatContext ?? 'json',
   formatTimestamp: settings.formatTimestamp ?? 'iso',
   level: settings.level ?? 'info',
@@ -191,6 +202,7 @@ export const mergeSettings = (
   enabled: patch.enabled ?? base.enabled,
   file: patch.file ?? base.file,
   filters: patch.filters ?? base.filters,
+  format: patch.format ?? base.format,
   formatContext: patch.formatContext ?? base.formatContext,
   formatTimestamp: patch.formatTimestamp ?? base.formatTimestamp,
   level: patch.level ?? base.level,

@@ -1,5 +1,5 @@
 import { LOG_LEVELS } from './types';
-import type { ContextFormat, LogContext, LogEntry, LogLevel, TimestampFormat } from './types';
+import type { ContextFormat, EntryFormatter, LogContext, LogEntry, LogLevel, TimestampFormat } from './types';
 
 const BEARER_PATTERN = /bearer\s+[^\s]+/giu;
 const KEY_VALUE_PATTERN = /(?<key>password|token|secret|authorization|cookie)=?[^\s,;]+/giu;
@@ -62,9 +62,11 @@ export const formatContext = (
 export const formatEntry = (
   entry: LogEntry,
   mode: 'json' | 'pretty',
-  contextFormat: ContextFormat = 'json'
+  contextFormat: ContextFormat = 'json',
+  formatter?: EntryFormatter
 ): string => {
   if (mode === 'json') return JSON.stringify(entry);
+  if (formatter) return formatter(entry);
   return `[${entry.timestamp}] [${entry.author}] [${entry.level.toUpperCase()}] ${entry.message}${formatContext(entry.context, contextFormat)}`;
 };
 

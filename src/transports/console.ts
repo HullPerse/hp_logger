@@ -30,6 +30,17 @@ export class ConsoleTransport implements Transport {
   }
 
   private writePretty(entry: LogEntry): void {
+    const output = this.settings.format
+      ? this.finalize(this.settings.format(entry))
+      : this.renderDefault(entry);
+
+    if (entry.level === 'error' || entry.level === 'fatal') console.error(output);
+    else if (entry.level === 'warn') console.warn(output);
+    else if (entry.level === 'debug' || entry.level === 'trace') console.debug(output);
+    else console.log(output);
+  }
+
+  private renderDefault(entry: LogEntry): string {
     const parts: string[] = [];
     const levelColor = this.colorFor(entry.level);
 
@@ -50,12 +61,7 @@ export class ConsoleTransport implements Transport {
     const contextStr = formatContext(entry.context, this.settings.formatContext);
     parts.push(applyColor(messageColor, `${entry.message}${contextStr}`));
 
-    const output = this.finalize(parts.join(' '));
-
-    if (entry.level === 'error' || entry.level === 'fatal') console.error(output);
-    else if (entry.level === 'warn') console.warn(output);
-    else if (entry.level === 'debug' || entry.level === 'trace') console.debug(output);
-    else console.log(output);
+    return this.finalize(parts.join(' '));
   }
 
   /** Apply prettyTruncate/prettyWrap to a rendered line, ANSI-safe on Bun. */

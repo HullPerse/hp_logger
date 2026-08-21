@@ -3,7 +3,7 @@ import type { WriteStream } from 'node:fs';
 import { once } from 'node:events';
 import { finished } from 'node:stream/promises';
 
-import type { ContextFormat, FileSettings, LogEntry, Transport } from '../types';
+import type { ContextFormat, EntryFormatter, FileSettings, LogEntry, Transport } from '../types';
 import { formatEntry } from '../utils';
 
 /** Common buffered file writing shared by fixed-path and daily-rotating transports. */
@@ -11,13 +11,15 @@ export abstract class BaseFileTransport implements Transport {
   protected buffer: string[] = [];
   protected readonly contextFormat: ContextFormat;
   protected readonly flushIntervalMs: number;
+  protected readonly format: EntryFormatter | undefined;
   protected readonly maxBufferSize: number;
   protected readonly mode: 'json' | 'pretty';
   private flushInterval: ReturnType<typeof setInterval> | null = null;
   private stream: WriteStream | null = null;
 
-  constructor(options: Omit<FileSettings, 'enabled' | 'path'> & { contextFormat?: ContextFormat }) {
+  constructor(options: Omit<FileSettings, 'enabled' | 'path'> & { contextFormat?: ContextFormat; format?: EntryFormatter }) {
     this.contextFormat = options.contextFormat ?? 'json';
+    this.format = options.format;
     this.maxBufferSize = options.maxBufferSize ?? 100;
     this.flushIntervalMs = options.flushIntervalMs ?? 1000;
     this.mode = options.mode ?? 'json';
@@ -37,7 +39,7 @@ export abstract class BaseFileTransport implements Transport {
 
   private pushEntries(entries: LogEntry[]): void {
     for (const entry of entries) {
-      this.buffer.push(formatEntry(entry, this.mode, this.contextFormat));
+      this.buffer.push(formatEntry(entry, this.mode, this.contextFormat, this.format));
     }
     if (this.buffer.length >= this.maxBufferSize) {
       void this.flush();
