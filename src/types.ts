@@ -94,8 +94,8 @@ export interface LoggerSettings {
   prettyTruncate?: number | false;
   /** Maximum nesting depth for redacting context values. */
   redactDepth?: number;
-  /** Keys that get redacted in messages and context. */
-  redactKeys?: RegExp;
+  /** Keys that get redacted in messages and context. `null` disables redaction. */
+  redactKeys?: RegExp | null;
   /** Show the author/module tag in pretty output. */
   showAuthor?: boolean;
   /** Show the level prefix like [INFO] in pretty output, colored per level. */
@@ -134,7 +134,7 @@ export interface ResolvedSettings {
   prettyTruncate: number | false;
   prettyWrap: number | false;
   redactDepth: number;
-  redactKeys: RegExp;
+  redactKeys: RegExp | null;
   showAuthor: boolean;
   showLevel: boolean;
   showTimestamp: boolean;
@@ -186,7 +186,7 @@ export const resolveSettings = (
   prettyTruncate: settings.prettyTruncate ?? false,
   prettyWrap: settings.prettyWrap ?? false,
   redactDepth: settings.redactDepth ?? 2,
-  redactKeys: settings.redactKeys ?? DEFAULT_REDACT_KEYS,
+  redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
   showAuthor: settings.showAuthor ?? true,
   showLevel: settings.showLevel ?? false,
   showTimestamp: settings.showTimestamp ?? true,

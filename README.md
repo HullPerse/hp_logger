@@ -38,7 +38,7 @@ Global settings are passed to `createLogger`; module settings via `.module(name,
 | `mode` | `pretty` colored output or `json` structured | `pretty` |
 | `colors` | Per-level colors or `false` to disable all | standard |
 | `enabled` | Master switch: `false` skips all entries | `true` |
-| `redactKeys` | Regex of keys to redact | standard (password, token, etc.) |
+| `redactKeys` | Regex of keys to redact, or `null` to disable redaction entirely | standard (password, token, etc.) |
 | `redactDepth` | Max context nesting depth when redacting | `2` |
 | `maxMessageLength` | Message truncation length | `2000` |
 | `showTimestamp` | Show time in pretty output | `true` |
@@ -67,6 +67,22 @@ const logger = createLogger({
 ```
 
 All colors can be disabled with `colors: false`.
+
+### Redaction
+
+By default every entry is scanned for secret keys (`password`, `token`, `secret`, `authorization`, `cookie`, ...) and bearer strings; matched values are replaced with `[REDACTED]`. The scan is a fast path: plain context objects are returned as-is unless a sensitive key is actually present, so the common case costs a single key check, not a copy.
+
+Disable redaction entirely for the raw pipeline speed:
+
+```ts
+const logger = createLogger({
+  settings: {
+    redactKeys: null, // no scanning, no copying; Error serialization still works
+  },
+});
+```
+
+`redactDepth` limits how deep context values are walked when redacting.
 
 ### File output
 
