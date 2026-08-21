@@ -186,6 +186,21 @@ Logger.removeTransport(transport);
 Logger.clearTransports();
 ```
 
+### Custom format
+
+Override the default pretty rendering for console and file output with a function that receives the full entry and returns the line to write.
+
+```ts
+const logger = createLogger({
+  settings: {
+    format: (entry) =>
+      `[${entry.timestamp}] ${entry.level.toUpperCase()} ${entry.author}: ${entry.message}`,
+  },
+});
+```
+
+The default pretty format is `[time] [author] [LEVEL] message context`. Note that file pretty output always includes time, author and level by default - a file has no colors, so the level tag is the only way to tell severity apart when reading it later. The `showTimestamp`/`showAuthor`/`showLevel` settings only affect console output; use `format` to change the file layout.
+
 ### Bun 1.4 pretty output
 
 On Bun 1.4+, `prettyWrap` and `prettyTruncate` use Bun's ANSI-aware `wrapAnsi`/`sliceAnsi`: long lines wrap to the configured terminal columns and overlong lines are cut with `…`, both preserving colors, emoji and CJK width. On Node the same settings fall back to plain text truncation.
