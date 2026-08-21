@@ -37,12 +37,14 @@ auth.info("user registered", { userId: 42 });
 | `level` | Минимальный уровень: debug, info, success, warn, error | `info` (или `LOG_LEVEL` из env) |
 | `mode` | `pretty` цветной вывод или `json` структурированный | `pretty` |
 | `colors` | Цвета по уровням или `false` чтобы выключить все | стандартные |
+| `enabled` | Мастер-выключатель: `false` пропускает все записи | `true` |
 | `redactKeys` | Регулярка ключей, которые маскируются | стандартная (password, token и т.д.) |
+| `redactDepth` | Максимальная глубина вложенности контекста при маскировке | `2` |
 | `maxMessageLength` | Обрезание сообщения | `2000` |
 | `showTimestamp` | Показывать время в pretty-выводе | `true` |
 | `showAuthor` | Показывать имя модуля в pretty-выводе | `true` |
 | `formatTimestamp` | `iso` или `local` формат времени | `iso` |
-| `file` | Запись в файл: `{ enabled, path, rotation, ... }` или `false` | `false` |
+| `file` | Запись в файл: `{ enabled, path, mode, rotation, ... }` или `false` | `false` |
 | `async` | Асинхронная запись с батчингом или `false` | `false` |
 | `filters` | Функции фильтрации записей | `[]` |
 
@@ -70,6 +72,7 @@ const logger = createLogger({
     file: {
       enabled: true,
       path: "logs/app.log",      // или "logs" с rotation: "daily"
+      mode: "json",              // "json" по умолчанию или "pretty" (читаемый текст без цветов)
       rotation: "daily",         // файлы по дням: logs/{yyyy-mm-dd}/log_NNN.log
       flushIntervalMs: 1000,
       maxBufferSize: 100,

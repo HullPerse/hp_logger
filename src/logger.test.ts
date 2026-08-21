@@ -179,6 +179,60 @@ describe('Logger', () => {
     expect(result).toBe(long);
   });
 
+  test('enabled false skips all entries', async () => {
+    const logger = createLogger({
+      settings: {
+        enabled: false,
+        file: { enabled: true, path: '/tmp/hp-logger-disabled.log' },
+        level: 'debug',
+      },
+    });
+    logger.info('should not appear');
+    await logger.close();
+    expect(await Bun.file('/tmp/hp-logger-disabled.log').exists()).toBe(false);
+  });
+
+  test('file mode pretty writes readable lines', async () => {
+    const logger = createLogger({
+      settings: {
+        file: { enabled: true, mode: 'pretty', path: '/tmp/hp-logger-pretty.log' },
+        level: 'debug',
+      },
+    });
+    logger.info('hello pretty');
+    await logger.close();
+    const content = await Bun.file('/tmp/hp-logger-pretty.log').text();
+    expect(content).toContain('[INFO]');
+    expect(content).toContain('hello pretty');
+    expect(content).not.toContain('"level"');
+    await Bun.$`rm -f /tmp/hp-logger-pretty.log`;
+  });
+
+  test('redactDepth limits nested context serialization', () => {
+    const logger = createLogger({
+      settings: { level: 'debug', redactDepth: 1 },
+    });
+    logger.info('deep context', { outer: { inner: { deepest: 'x' } } });
+  });
+
+  test('settings can toggle enabled after creation', async () => {
+    const logger = createLogger({
+      settings: {
+        file: { enabled: true, path: '/tmp/hp-logger-toggle.log' },
+        level: 'debug',
+      },
+    });
+    logger.settings({ enabled: false });
+    logger.info('suppressed');
+    logger.settings({ enabled: true });
+    logger.info('visible again');
+    await logger.close();
+    const content = await Bun.file('/tmp/hp-logger-toggle.log').text();
+    expect(content).toContain('visible again');
+    expect(content).not.toContain('suppressed');
+    await Bun.$`rm -f /tmp/hp-logger-toggle.log`;
+  });
+
   test('resolveEnvLevel reads LOG_LEVEL from env', () => {
     expect(resolveEnvLevel({ LOG_LEVEL: 'warn' })).toBe('warn');
     expect(resolveEnvLevel({ LOG_LEVEL: 'debug' })).toBe('debug');

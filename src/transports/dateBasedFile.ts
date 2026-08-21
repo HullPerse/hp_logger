@@ -2,6 +2,7 @@ import { mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { FileSettings, LogEntry, Transport } from '../types';
+import { formatEntry } from '../utils';
 
 export class DateBasedFileTransport implements Transport {
   private buffer: string[] = [];
@@ -11,12 +12,14 @@ export class DateBasedFileTransport implements Transport {
   private readonly flushIntervalMs: number;
   private readonly maxBufferSize: number;
   private readonly maxFilesPerDay: number;
+  private readonly mode: 'json' | 'pretty';
 
   constructor(baseDir: string, options: Omit<FileSettings, 'enabled'>) {
     this.baseDir = baseDir;
     this.maxBufferSize = options.maxBufferSize ?? 100;
     this.flushIntervalMs = options.flushIntervalMs ?? 1000;
     this.maxFilesPerDay = options.maxFilesPerDay ?? 100;
+    this.mode = options.mode ?? 'json';
     this.startFlushInterval();
   }
 
@@ -52,9 +55,9 @@ export class DateBasedFileTransport implements Transport {
   }
 
   write(entry: LogEntry): void {
-    this.buffer.push(JSON.stringify(entry));
+    this.buffer.push(formatEntry(entry, this.mode));
     if (this.buffer.length >= this.maxBufferSize) {
-      this.flush();
+      void this.flush();
     }
   }
 
@@ -66,20 +69,22 @@ export class DateBasedFileTransport implements Transport {
     const filepath = this.currentFilepath;
     if (filepath) {
       // @ts-expect-error - Bun.write accepts string path with append option
-      Bun.write(filepath, data, { append: true, create: true });
+      await Bun.write(filepath, data, { append: true, create: true });
     }
   }
 
   private startFlushInterval(): void {
-    this.flushInterval = setInterval(() => this.flush(), this.flushIntervalMs);
+    this.flushInterval = setInterval(() => {
+      this.flush();
+    }, this.flushIntervalMs);
     this.flushInterval.unref();
   }
 
-  close(): void {
+  async close(): Promise<void> {
     if (this.flushInterval) {
       clearInterval(this.flushInterval);
       this.flushInterval = null;
     }
-    this.flush();
+    await this.flush();
   }
 }
