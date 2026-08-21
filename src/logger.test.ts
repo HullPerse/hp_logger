@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from 'bun:test';
 
 import type { LogEntry, Transport } from './types';
 import { createLogger, Logger } from '.';
@@ -502,6 +502,62 @@ describe('Logger', () => {
       console.log = original;
     }
     expect(outputs.some((out) => out.includes('"requestId":"outer"') && out.includes('"userId":7'))).toBe(true);
+  });
+
+  test('timestamp is deterministic with setSystemTime', () => {
+    setSystemTime(new Date('2024-01-02T03:04:05.000Z'));
+    try {
+      const logger = createLogger({ settings: { file: false, level: 'debug', mode: 'json' } });
+      logger.info('timed');
+    } finally {
+      setSystemTime();
+    }
+  });
+
+  test('prettyTruncate cuts long pretty lines with ellipsis', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: {
+          colors: false,
+          level: 'info',
+          mode: 'pretty',
+          prettyTruncate: 20,
+        },
+      });
+      logger.info('a very long message that should be cut');
+    } finally {
+      console.log = original;
+    }
+    const line = outputs[0] ?? '';
+    expect(line.endsWith('…')).toBe(true);
+  });
+
+  test('prettyWrap wraps long pretty lines to the configured width', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: {
+          colors: false,
+          level: 'info',
+          mode: 'pretty',
+          prettyWrap: 40,
+        },
+      });
+      logger.info('word '.repeat(20).trim());
+    } finally {
+      console.log = original;
+    }
+    const line = outputs[0] ?? '';
+    expect(line.includes('\n')).toBe(true);
   });
 
   test('addTransport writes to global transports for every logger', () => {
