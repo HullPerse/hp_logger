@@ -5,3 +5,13 @@ export const levelForStatus = (
   if (status >= 400) return 'warn';
   return 'info';
 };
+
+export const DEFAULT_SKIP_PATHS = ['/health', '/metrics'];
+
+export const resolveCorrelationId = (
+  header: string | string[] | undefined
+): string =>
+  (Array.isArray(header) ? header[0] : header)?.trim() ?? crypto.randomUUID();
+
+export const pathFromUrl = (url: string): string =>
+  new URL(url, 'http://localhost').pathname;

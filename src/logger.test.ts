@@ -486,6 +486,24 @@ describe('Logger', () => {
     expect(outputs.some((out) => out.includes('kept fatal'))).toBe(true);
   });
 
+  test('nested run merges outer async-local context', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({ settings: { level: 'debug', mode: 'json' } });      logger.run({ requestId: 'outer' }, () => {
+        logger.run({ userId: 7 }, () => {
+          logger.info('nested');
+        });
+      });
+    } finally {
+      console.log = original;
+    }
+    expect(outputs.some((out) => out.includes('"requestId":"outer"') && out.includes('"userId":7'))).toBe(true);
+  });
+
   test('addTransport writes to global transports for every logger', () => {
     const received: LogEntry[] = [];
     const transport: Transport = {

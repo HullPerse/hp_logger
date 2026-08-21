@@ -139,12 +139,6 @@ export interface Transport {
   writeBatch?: (entries: LogEntry[]) => void | Promise<void>;
 }
 
-export interface LoggerConfig {
-  settings: ResolvedSettings;
-  author: string;
-  context?: LogContext;
-}
-
 export const DEFAULT_REDACT_KEYS =
   /(?<secret>password|token|secret|authorization|cookie|drawing|replay|chat|payload)/iu;
 

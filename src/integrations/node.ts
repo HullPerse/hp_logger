@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import type { Logger } from '../logger';
-import { levelForStatus } from './shared';
+import { DEFAULT_SKIP_PATHS, levelForStatus, pathFromUrl, resolveCorrelationId } from './shared';
 import type { RequestInfo, RequestLogOptions } from './types';
 
 type NodeHandler = (
@@ -14,21 +14,16 @@ export const nodeServer = (
   logger: Logger,
   options: RequestLogOptions = {}
 ): NodeHandler => {
-  const skip = new Set(options.skipPaths ?? ['/health', '/metrics']);
+  const skip = new Set(options.skipPaths ?? DEFAULT_SKIP_PATHS);
 
   return (request, response) => {
-    const headerCorrelationId = request.headers['x-correlation-id'];
-    const correlationId =
-      (Array.isArray(headerCorrelationId)
-        ? headerCorrelationId[0]
-        : headerCorrelationId)?.trim() ?? crypto.randomUUID();
+    const correlationId = resolveCorrelationId(
+      request.headers['x-correlation-id']
+    );
     const startedAt = performance.now();
 
     response.on('finish', () => {
-      const path = new URL(
-        request.url ?? '/',
-        'http://localhost'
-      ).pathname;
+      const path = pathFromUrl(request.url ?? '/');
       const durationMs = Math.max(0, performance.now() - startedAt);
       const info: RequestInfo = {
         correlationId,
