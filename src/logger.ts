@@ -18,11 +18,7 @@ const asyncStorage = new AsyncLocalStorage<LogContext>();
 
 const globalTransports: Transport[] = [];
 
-interface RateLimitEntry {
-  lastLogAt: number;
-}
-
-const rateLimits = new Map<string, RateLimitEntry>();
+const rateLimits = new Map<string, number>();
 const onceKeys = new Set<string>();
 
 const resolveLazy = <T>(value: T | (() => T)): T =>
@@ -75,7 +71,11 @@ export class Logger {
 
   /** Run a function with an async-local context merged into every entry. */
   run<T>(context: LogContext, fn: () => T): T {
-    return asyncStorage.run({ ...this.context, ...context }, fn);
+    const inherited = asyncStorage.getStore();
+    return asyncStorage.run(
+      { ...inherited, ...this.context, ...context },
+      fn
+    );
   }
 
   event(level: LogLevel, eventName: string, context: LogContext = {}): void {
@@ -140,9 +140,9 @@ export class Logger {
     level: LogLevel = 'warn'
   ): void {
     const now = Date.now();
-    const entry = rateLimits.get(key);
-    if (entry && now - entry.lastLogAt < ms) return;
-    rateLimits.set(key, { lastLogAt: now });
+    const lastLogAt = rateLimits.get(key);
+    if (lastLogAt !== undefined && now - lastLogAt < ms) return;
+    rateLimits.set(key, now);
     this.write(level, message, context);
   }
 
@@ -220,7 +220,11 @@ export const createLogger = (options: CreateLoggerOptions = {}): Logger => {
   return new Logger(options.author ?? 'ROOT', settings);
 };
 
+let globalErrorHandlersInstalled = false;
+
 export const installGlobalErrorHandlers = (logger: Logger): void => {
+  if (globalErrorHandlersInstalled) return;
+  globalErrorHandlersInstalled = true;
   process.on('unhandledRejection', (reason) => {
     logger.error('unhandledRejection', { reason });
   });

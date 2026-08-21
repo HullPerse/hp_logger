@@ -29,23 +29,22 @@ export class ConsoleTransport implements Transport {
 
   private writePretty(entry: LogEntry): void {
     const parts: string[] = [];
+    const levelColor = this.colorFor(entry.level);
 
     if (this.settings.showTimestamp) {
       parts.push(`[${entry.timestamp}]`);
     }
 
     if (this.settings.showLevel) {
-      const color = this.colorFor(entry.level);
-      parts.push(applyColor(color, `[${entry.level.toUpperCase()}]`));
+      parts.push(applyColor(levelColor, `[${entry.level.toUpperCase()}]`));
     }
 
     if (this.settings.showAuthor) {
-      const color = this.colorFor(entry.level);
-      parts.push(applyColor(color, `[${entry.author}]`));
+      parts.push(applyColor(levelColor, `[${entry.author}]`));
     }
 
     const messageColor =
-      this.settings.colors === false ? undefined : this.colorFor(entry.level);
+      this.settings.colors === false ? undefined : levelColor;
     const contextStr = formatContext(entry.context, this.settings.formatContext);
     parts.push(applyColor(messageColor, `${entry.message}${contextStr}`));
 

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import type { Logger } from '../logger';
-import { levelForStatus } from './shared';
+import { DEFAULT_SKIP_PATHS, levelForStatus, pathFromUrl, resolveCorrelationId } from './shared';
 import type { RequestLogOptions } from './types';
 
 interface RequestMeta {
@@ -14,16 +14,12 @@ export const fastifyPlugin = (
   logger: Logger,
   options: RequestLogOptions = {}
 ): void => {
-  const skip = new Set(options.skipPaths ?? ['/health', '/metrics']);
+  const skip = new Set(options.skipPaths ?? DEFAULT_SKIP_PATHS);
   const requests = new WeakMap<object, RequestMeta>();
 
   fastify.addHook('onRequest', (request, _reply, done) => {
-    const headerCorrelationId = request.headers['x-correlation-id'];
     requests.set(request, {
-      correlationId:
-        (Array.isArray(headerCorrelationId)
-          ? headerCorrelationId[0]
-          : headerCorrelationId)?.trim() ?? crypto.randomUUID(),
+      correlationId: resolveCorrelationId(request.headers['x-correlation-id']),
       startedAt: performance.now(),
     });
     done();
@@ -32,7 +28,7 @@ export const fastifyPlugin = (
   fastify.addHook('onResponse', (request, reply, done) => {
     const meta = requests.get(request);
     if (meta) {
-      const path = new URL(request.url, 'http://localhost').pathname;
+      const path = pathFromUrl(request.url);
       const durationMs = Math.max(0, performance.now() - meta.startedAt);
       if (!skip.has(path)) {
         logger.event(levelForStatus(reply.statusCode), 'request', {

@@ -51,11 +51,8 @@ export class Histogram extends BaseMetric {
     }
   }
 
-  toText: () => string = () => {
-    const lines = [
-      `# HELP ${this.name} ${this.help}`,
-      `# TYPE ${this.name} histogram`,
-    ];
+  toText(): string {
+    const lines = this.headerLines();
     for (const [key, entry] of this.sortedEntries()) {
       const labels = key ? `,${key}` : '';
       const bucketLines = this.buckets.map(
@@ -65,18 +62,14 @@ export class Histogram extends BaseMetric {
       lines.push(
         ...bucketLines,
         `${this.name}_bucket{le="+Inf"${labels}} ${entry.count}`,
-        `${this.name}_sum${Histogram.renderLabels(key)} ${entry.sum}`,
-        `${this.name}_count${Histogram.renderLabels(key)} ${entry.count}`
+        `${this.name}_sum${BaseMetric.renderLabels(key)} ${entry.sum}`,
+        `${this.name}_count${BaseMetric.renderLabels(key)} ${entry.count}`
       );
     }
     return lines.join('\n');
-  };
+  }
 
   private sortedEntries(): [string, HistogramEntry][] {
     return [...this.entries.entries()].toSorted(([a], [b]) => a.localeCompare(b));
-  }
-
-  private static renderLabels(key: string): string {
-    return key ? `{${key}}` : '';
   }
 }

@@ -14,5 +14,3 @@ export interface RequestInfo extends LogContext {
   path: string;
   status: number;
 }
-
-export type RequestLogger = (info: RequestInfo) => void;

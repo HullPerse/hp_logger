@@ -24,22 +24,15 @@ export class Counter extends BaseMetric {
     return this.values.get(this.labelKey(labels)) ?? 0;
   }
 
-  toText: () => string = () => {
-    const lines = [
-      `# HELP ${this.name} ${this.help}`,
-      `# TYPE ${this.name} counter`,
-    ];
+  toText(): string {
+    const lines = this.headerLines();
     for (const [key, value] of this.sortedValues()) {
-      lines.push(`${this.name}${Counter.renderLabels(key)} ${value}`);
+      lines.push(`${this.name}${BaseMetric.renderLabels(key)} ${value}`);
     }
     return lines.join('\n');
-  };
+  }
 
   private sortedValues(): [string, number][] {
     return [...this.values.entries()].toSorted(([a], [b]) => a.localeCompare(b));
-  }
-
-  private static renderLabels(key: string): string {
-    return key ? `{${key}}` : '';
   }
 }

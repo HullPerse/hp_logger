@@ -1,5 +1,5 @@
 import type { Logger } from '../logger';
-import { levelForStatus } from './shared';
+import { DEFAULT_SKIP_PATHS, levelForStatus, pathFromUrl, resolveCorrelationId } from './shared';
 import type { RequestInfo, RequestLogOptions } from './types';
 
 type BunHandler = (request: Request) => Response | Promise<Response>;
@@ -9,15 +9,16 @@ export const bunServe = (
   logger: Logger,
   options: RequestLogOptions = {}
 ): BunHandler => {
-  const skip = new Set(options.skipPaths ?? ['/health', '/metrics']);
+  const skip = new Set(options.skipPaths ?? DEFAULT_SKIP_PATHS);
 
   return async (request) => {
-    const correlationId =
-      request.headers.get('x-correlation-id')?.trim() ?? crypto.randomUUID();
+    const correlationId = resolveCorrelationId(
+      request.headers.get('x-correlation-id') ?? undefined
+    );
     const startedAt = performance.now();
 
     const response = await handler(request);
-    const path = new URL(request.url).pathname;
+    const path = pathFromUrl(request.url);
     const durationMs = Math.max(0, performance.now() - startedAt);
     const info: RequestInfo = {
       correlationId,

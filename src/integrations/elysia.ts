@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia';
 
 import type { Logger } from '../logger';
-import { levelForStatus } from './shared';
+import { DEFAULT_SKIP_PATHS, levelForStatus, pathFromUrl, resolveCorrelationId } from './shared';
 import type { RequestInfo, RequestLogOptions } from './types';
 
 interface RequestMeta {
@@ -23,7 +23,7 @@ export const elysiaPlugin = (
   options: RequestLogOptions = {}
 ): Elysia => {
   const requests = new WeakMap<Request, RequestMeta>();
-  const skip = new Set(options.skipPaths ?? ['/health', '/metrics']);
+  const skip = new Set(options.skipPaths ?? DEFAULT_SKIP_PATHS);
 
   const finish = (
     request: Request,
@@ -34,7 +34,7 @@ export const elysiaPlugin = (
       correlationId: correlationId ?? 'unknown',
       startedAt: performance.now(),
     };
-    const path = new URL(request.url).pathname;
+    const path = pathFromUrl(request.url);
     const durationMs = Math.max(0, performance.now() - meta.startedAt);
     const info: RequestInfo = {
       correlationId: meta.correlationId,
@@ -53,8 +53,9 @@ export const elysiaPlugin = (
 
   return new Elysia({ name: 'hp-logger' })
     .onRequest(({ request }) => {
-      const correlationId =
-        request.headers.get('x-correlation-id')?.trim() ?? crypto.randomUUID();
+      const correlationId = resolveCorrelationId(
+        request.headers.get('x-correlation-id') ?? undefined
+      );
       requests.set(request, { correlationId, startedAt: performance.now() });
     })
     .onAfterHandle({ as: 'global' }, ({ request, set }) => {
