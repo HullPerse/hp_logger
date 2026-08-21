@@ -4,9 +4,9 @@ import path from 'node:path';
 import type { ContextFormat, FileSettings, LogEntry, Transport } from '../types';
 import { formatEntry } from '../utils';
 
-// Общий путь файла на день для всех экземпляров транспорта с одним baseDir.
-// Без этого каждый логгер (SYSTEM, HTTP, ...) заводил бы свой файл и каждый
-// flush перескакивал на следующий индекс — в проде нужен один файл на день.
+// One file per day shared by all transport instances with the same baseDir.
+// Without this every logger (SYSTEM, HTTP, ...) would open its own file and
+// each flush could jump to the next index - production needs one file per day.
 const sharedFilepaths = new Map<string, string>();
 
 export class DateBasedFileTransport implements Transport {
