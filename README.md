@@ -76,6 +76,7 @@ const logger = createLogger({
       path: "logs/app.log",      // или "logs" с rotation: "daily"
       mode: "json",              // "json" по умолчанию или "pretty" (читаемый текст без цветов)
       rotation: "daily",         // файлы по дням: logs/{yyyy-mm-dd}/log_NNN.log
+      // один файл на день для всех логгеров с одним path (общий в рамках процесса)
       flushIntervalMs: 1000,
       maxBufferSize: 100,
     },
