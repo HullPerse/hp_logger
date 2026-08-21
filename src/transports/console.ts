@@ -1,3 +1,5 @@
+import type { sliceAnsi, wrapAnsi } from 'bun';
+
 import type {
   ColorName,
   LogEntry,
@@ -48,12 +50,40 @@ export class ConsoleTransport implements Transport {
     const contextStr = formatContext(entry.context, this.settings.formatContext);
     parts.push(applyColor(messageColor, `${entry.message}${contextStr}`));
 
-    const output = parts.join(' ');
+    const output = this.finalize(parts.join(' '));
 
     if (entry.level === 'error' || entry.level === 'fatal') console.error(output);
     else if (entry.level === 'warn') console.warn(output);
     else if (entry.level === 'debug' || entry.level === 'trace') console.debug(output);
     else console.log(output);
+  }
+
+  /** Apply prettyTruncate/prettyWrap to a rendered line, ANSI-safe on Bun. */
+  private finalize(line: string): string {
+    const { prettyTruncate, prettyWrap } = this.settings;
+    if (prettyTruncate === false && prettyWrap === false) return line;
+
+    const bunRuntime = (globalThis as Record<string, unknown>).Bun as
+      | { sliceAnsi?: typeof sliceAnsi; wrapAnsi?: typeof wrapAnsi }
+      | undefined;
+    if (bunRuntime?.sliceAnsi && bunRuntime.wrapAnsi) {
+      let result = line;
+      if (prettyTruncate !== false) {
+        result = bunRuntime.sliceAnsi(result, 0, prettyTruncate, '…');
+      }
+      if (prettyWrap !== false) {
+        result = bunRuntime.wrapAnsi(result, prettyWrap, { wordWrap: true });
+      }
+      return result;
+    }
+
+    let result = line;
+    if (prettyTruncate !== false) {
+      result = result.length > prettyTruncate
+        ? `${result.slice(0, prettyTruncate - 1)}…`
+        : result;
+    }
+    return result;
   }
 
   private colorFor(level: LogLevel): ColorName | false | undefined {

@@ -46,6 +46,8 @@ Global settings are passed to `createLogger`; module settings via `.module(name,
 | `showLevel` | Colored level prefix `[INFO]`/`[ERROR]` in pretty output | `false` |
 | `formatContext` | Context rendering in pretty output: `json` object or `kv` pairs `key="value"` | `json` |
 | `formatTimestamp` | `iso` or `local` time format | `iso` |
+| `prettyWrap` | Wrap pretty lines to this many terminal columns (Bun 1.4+, ANSI-safe). `false` disables. | `false` |
+| `prettyTruncate` | Truncate pretty lines to this many visible columns with `…` (Bun 1.4+, ANSI-safe). `false` disables. | `false` |
 | `file` | File output: `{ enabled, path, mode, rotation, ... }` or `false` | `false` |
 | `async` | Async batched writes or `false` | `false` |
 | `filters` | Entry filter functions | `[]` |
@@ -183,6 +185,24 @@ Logger.addTransport({ write: (entry) => sendToLoki(entry) });
 Logger.removeTransport(transport);
 Logger.clearTransports();
 ```
+
+### Bun 1.4 pretty output
+
+On Bun 1.4+, `prettyWrap` and `prettyTruncate` use Bun's ANSI-aware `wrapAnsi`/`sliceAnsi`: long lines wrap to the configured terminal columns and overlong lines are cut with `…`, both preserving colors, emoji and CJK width. On Node the same settings fall back to plain text truncation.
+
+```ts
+const logger = createLogger({
+  settings: {
+    mode: "pretty",
+    prettyWrap: 100,     // wrap lines longer than 100 columns
+    prettyTruncate: 240, // hard cut with … at 240 visible columns
+  },
+});
+```
+
+### Global error handlers
+
+`installGlobalErrorHandlers` also logs Bun's `memoryPressure` event (warning/critical) on Bun 1.4+, so low-memory situations are visible in the logs before the process is killed.
 
 ### Adaptive output
 

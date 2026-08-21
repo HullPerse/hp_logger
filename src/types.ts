@@ -86,6 +86,10 @@ export interface LoggerSettings {
   maxMessageLength?: number;
   /** `pretty` colored console output, `json` single-line structured output. */
   mode?: 'pretty' | 'json';
+  /** Wrap pretty lines to this many terminal columns (Bun only, ANSI-safe). `false` disables. */
+  prettyWrap?: number | false;
+  /** Truncate pretty lines to this many visible columns with `…` (Bun only, ANSI-safe). `false` disables. */
+  prettyTruncate?: number | false;
   /** Maximum nesting depth for redacting context values. */
   redactDepth?: number;
   /** Keys that get redacted in messages and context. */
@@ -117,6 +121,8 @@ export interface ResolvedSettings {
   level: LogLevel;
   maxMessageLength: number;
   mode: 'pretty' | 'json';
+  prettyTruncate: number | false;
+  prettyWrap: number | false;
   redactDepth: number;
   redactKeys: RegExp;
   showAuthor: boolean;
@@ -166,6 +172,8 @@ export const resolveSettings = (
   level: settings.level ?? 'info',
   maxMessageLength: settings.maxMessageLength ?? 2000,
   mode: settings.mode ?? defaultMode(),
+  prettyTruncate: settings.prettyTruncate ?? false,
+  prettyWrap: settings.prettyWrap ?? false,
   redactDepth: settings.redactDepth ?? 2,
   redactKeys: settings.redactKeys ?? DEFAULT_REDACT_KEYS,
   showAuthor: settings.showAuthor ?? true,
@@ -188,6 +196,8 @@ export const mergeSettings = (
   level: patch.level ?? base.level,
   maxMessageLength: patch.maxMessageLength ?? base.maxMessageLength,
   mode: patch.mode ?? base.mode,
+  prettyTruncate: patch.prettyTruncate ?? base.prettyTruncate,
+  prettyWrap: patch.prettyWrap ?? base.prettyWrap,
   redactDepth: patch.redactDepth ?? base.redactDepth,
   redactKeys: patch.redactKeys ?? base.redactKeys,
   showAuthor: patch.showAuthor ?? base.showAuthor,

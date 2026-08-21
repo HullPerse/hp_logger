@@ -231,4 +231,11 @@ export const installGlobalErrorHandlers = (logger: Logger): void => {
   process.on('uncaughtException', (error) => {
     logger.error('uncaughtException', { error });
   });
+  // Bun 1.4 emits memoryPressure when the OS runs low on memory.
+  // Log it before the process gets killed, so the last lines show why.
+  if (typeof process.versions.bun === 'string') {
+    process.on('memoryPressure' as never, (level: string) => {
+      logger.warn('memoryPressure', { level });
+    });
+  }
 };
