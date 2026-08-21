@@ -4,6 +4,14 @@ import type { ContextFormat, EntryFormatter, LogContext, LogEntry, LogLevel, Tim
 const BEARER_PATTERN = /bearer\s+[^\s]+/giu;
 const KEY_VALUE_PATTERN = /(?<key>password|token|secret|authorization|cookie)=?[^\s,;]+/giu;
 
+/**
+ * Fast pre-filter for redaction: keys containing any of these fragments
+ * can carry secrets. Used to skip the deep-copy scan when a context object
+ * has no candidate keys at all.
+ */
+const SENSITIVE_KEY_FRAGMENTS =
+  /(?:password|token|secret|authorization|cookie|drawing|replay|chat|payload)/iu;
+
 const serializeError = (error: Error): Record<string, unknown> => {
   const result: Record<string, unknown> = { message: error.message, name: error.name };
   if (error.stack) result.stack = error.stack;
@@ -16,7 +24,7 @@ const serializeError = (error: Error): Record<string, unknown> => {
 
 export const redact = (
   value: unknown,
-  secretKey: RegExp,
+  secretKey: RegExp | null,
   maxDepth = 2,
   depth = 0
 ): unknown => {
@@ -25,6 +33,7 @@ export const redact = (
   if (value instanceof Error) return serializeError(value);
 
   if (typeof value === 'string') {
+    if (secretKey === null) return value;
     return value
       .replaceAll(BEARER_PATTERN, 'Bearer [REDACTED]')
       .replaceAll(KEY_VALUE_PATTERN, '$<key>=[REDACTED]');
@@ -33,6 +42,18 @@ export const redact = (
   if (Array.isArray(value)) return `[${value.length} items]`;
 
   if (typeof value === 'object' && value !== null) {
+    // Fast path: no candidate keys and no nested objects/Errors to
+    // serialize -> nothing to mask, return as-is without copying.
+    if (secretKey === null) return value;
+    const keys = Object.keys(value);
+    const hasNested = keys.some((key) => {
+      const nested: unknown = (value as Record<string, unknown>)[key];
+      return typeof nested === 'object' && nested !== null;
+    });
+    if (!keys.some((key) => SENSITIVE_KEY_FRAGMENTS.test(key)) && !hasNested) {
+      return value;
+    }
+
     const result: Record<string, unknown> = {};
     for (const [key, nested] of Object.entries(value)) {
       result[key] = secretKey.test(key)

@@ -10,8 +10,8 @@ import type {
   ResolvedSettings,
   Transport,
 } from './types';
-import { mergeSettings, resolveSettings } from './types';
-import { formatDuration, formatTimestamp, redact, resolveEnvLevel, shouldLog } from './utils';
+import { LOG_LEVELS, mergeSettings, resolveSettings } from './types';
+import { formatDuration, formatTimestamp, redact, resolveEnvLevel } from './utils';
 import { buildTransports } from './transports/factory';
 
 const asyncStorage = new AsyncLocalStorage<LogContext>();
@@ -24,10 +24,27 @@ const onceKeys = new Set<string>();
 const resolveLazy = <T>(value: T | (() => T)): T =>
   typeof value === 'function' ? (value as () => T)() : value;
 
+const EMPTY_CONTEXT: LogContext = {};
+
+/** ISO timestamp, computed at most once per second (cheap in hot loops). */
+const cachedTimestamp = (): string => {
+  const now = Math.floor(Date.now() / 1000);
+  if (cachedTimestamp.second === now) return cachedTimestamp.value;
+  cachedTimestamp.second = now;
+  cachedTimestamp.value = new Date(now * 1000).toISOString().slice(0, 19).replace('T', ' ');
+  return cachedTimestamp.value;
+};
+cachedTimestamp.second = 0;
+cachedTimestamp.value = '';
+
+/** Numeric level of a named level, precomputed for the hot path. */
+const LEVEL_NUMBER = (level: LogLevel): number => LOG_LEVELS[level];
+
 export class Logger {
   private readonly author: string;
   private context: LogContext;
   private currentSettings: ResolvedSettings;
+  private levelThreshold: number;
   private transport: Transport;
 
   constructor(
@@ -38,12 +55,14 @@ export class Logger {
     this.author = author;
     this.context = context;
     this.currentSettings = currentSettings;
+    this.levelThreshold = LEVEL_NUMBER(currentSettings.level);
     this.transport = buildTransports(currentSettings);
   }
 
   /** Override settings for this logger and all its descendants. */
   settings(patch: LoggerSettings): this {
     this.currentSettings = mergeSettings(this.currentSettings, patch);
+    this.levelThreshold = LEVEL_NUMBER(this.currentSettings.level);
     this.transport = buildTransports(this.currentSettings);
     return this;
   }
@@ -147,37 +166,59 @@ export class Logger {
   }
 
   private write(level: LogLevel, message: LazyMessage, context?: LazyContext): void {
-    if (!this.currentSettings.enabled) return;
-    if (!shouldLog(level, this.currentSettings.level)) return;
+    const settings = this.currentSettings;
+    if (!settings.enabled) return;
+    if (LEVEL_NUMBER(level) < this.levelThreshold) return;
 
-    const lazyContext = resolveLazy(context ?? {});
-    const mergedContext = { ...this.context, ...lazyContext };
-    const safeMessage = String(
-      redact(resolveLazy(message), this.currentSettings.redactKeys, this.currentSettings.redactDepth)
-    ).slice(0, this.currentSettings.maxMessageLength);
+    const { maxMessageLength, redactDepth, redactKeys } = settings;
+
+    // Message: plain string fast path, skip regex scanning when redaction
+    // is disabled entirely.
+    let safeMessage: string;
+    const rawMessage = resolveLazy(message);
+    if (redactKeys === null && typeof rawMessage === 'string') {
+      safeMessage = rawMessage;
+    } else {
+      safeMessage = String(
+        redact(rawMessage, redactKeys, redactDepth)
+      ).slice(0, maxMessageLength);
+    }
+
+    // Context merge: skip spreading when there is nothing to merge.
+    const staticContext = this.context;
     const asyncContext = asyncStorage.getStore();
-    const finalContext =
-      asyncContext && Object.keys(asyncContext).length > 0
-        ? { ...asyncContext, ...mergedContext }
-        : mergedContext;
+    let finalContext: LogContext;
+    if (context === undefined && Object.keys(staticContext).length === 0 && asyncContext === undefined) {
+      finalContext = EMPTY_CONTEXT;
+    } else {
+      const lazyContext = context === undefined ? {} : resolveLazy(context);
+      const mergedContext =
+        Object.keys(staticContext).length === 0
+          ? lazyContext
+          : { ...staticContext, ...lazyContext };
+      finalContext =
+        asyncContext && Object.keys(asyncContext).length > 0
+          ? { ...asyncContext, ...mergedContext }
+          : mergedContext;
+    }
+
     const safeContext =
       Object.keys(finalContext).length > 0
-        ? (redact(
-            finalContext,
-            this.currentSettings.redactKeys,
-            this.currentSettings.redactDepth
-          ) as LogContext)
-        : {};
+        ? (redact(finalContext, redactKeys, redactDepth) as LogContext)
+        : EMPTY_CONTEXT;
 
     const entry: LogEntry = {
       author: this.author,
       context: safeContext,
       level,
       message: safeMessage,
-      timestamp: formatTimestamp(this.currentSettings.formatTimestamp),
+      timestamp:
+        settings.formatTimestamp === 'iso'
+          ? cachedTimestamp()
+          : formatTimestamp('local'),
     };
 
-    if (this.currentSettings.filters.some((filter) => !filter(entry))) return;
+    if (settings.filters.length > 0 && settings.filters.some((filter) => !filter(entry))) return;
 
     this.transport.write(entry);
     for (const transport of globalTransports) {
