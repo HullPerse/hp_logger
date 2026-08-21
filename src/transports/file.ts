@@ -1,4 +1,7 @@
-import { appendFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import type { WriteStream } from 'node:fs';
+import { once } from 'node:events';
+import { finished } from 'node:stream/promises';
 
 import type { ContextFormat, FileSettings, LogEntry, Transport } from '../types';
 import { formatEntry } from '../utils';
@@ -11,6 +14,7 @@ export class FileTransport implements Transport {
   private readonly contextFormat: ContextFormat;
   private readonly maxBufferSize: number;
   private readonly mode: 'json' | 'pretty';
+  private stream: WriteStream | null = null;
 
   constructor(
     filepath: string,
@@ -25,7 +29,17 @@ export class FileTransport implements Transport {
   }
 
   write(entry: LogEntry): void {
-    this.buffer.push(formatEntry(entry, this.mode, this.contextFormat));
+    this.pushEntries([entry]);
+  }
+
+  writeBatch(entries: LogEntry[]): void {
+    this.pushEntries(entries);
+  }
+
+  private pushEntries(entries: LogEntry[]): void {
+    for (const entry of entries) {
+      this.buffer.push(formatEntry(entry, this.mode, this.contextFormat));
+    }
     if (this.buffer.length >= this.maxBufferSize) {
       void this.flush();
     }
@@ -33,9 +47,16 @@ export class FileTransport implements Transport {
 
   private async flush(): Promise<void> {
     if (this.buffer.length === 0) return;
+    if (!this.stream) {
+      // Keep the file open between flushes instead of reopening per flush.
+      this.stream = createWriteStream(this.filepath, { flags: 'a' });
+    }
     const data = `${this.buffer.join('\n')}\n`;
     this.buffer = [];
-    await appendFile(this.filepath, data);
+    const { stream } = this;
+    if (!stream.write(data)) {
+      await once(stream, 'drain');
+    }
   }
 
   private startFlushInterval(): void {
@@ -51,5 +72,11 @@ export class FileTransport implements Transport {
       this.flushInterval = null;
     }
     await this.flush();
+    const { stream } = this;
+    if (stream) {
+      stream.end();
+      await finished(stream);
+      this.stream = null;
+    }
   }
 }

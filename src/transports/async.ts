@@ -1,4 +1,4 @@
-import type { Transport, LogEntry } from '../types';
+import type { LogEntry, Transport } from '../types';
 
 interface QueuedEntry {
   entry: LogEntry;
@@ -45,16 +45,23 @@ export class AsyncTransport implements Transport {
     }
 
     const batch = this.queue.splice(0, this.batchSize);
-    const promises = batch.map(async ({ entry, resolve }) => {
-      try {
-        await this.transport.write(entry);
-      } catch {
-        // Transport errors are non-fatal for logging
-      }
-      resolve();
-    });
+    const entries = batch.map(({ entry }) => entry);
+    const resolveAll = () => {
+      for (const { resolve } of batch) resolve();
+    };
 
-    await Promise.all(promises);
+    try {
+      if (this.transport.writeBatch) {
+        await this.transport.writeBatch(entries);
+      } else {
+        // Single await for the whole batch instead of one promise per entry.
+        const promises = entries.map((entry) => Promise.resolve(this.transport.write(entry)));
+        await Promise.all(promises);
+      }
+    } catch {
+      // Transport errors are non-fatal for logging
+    }
+    resolveAll();
 
     this.processing = false;
     if (this.queue.length > 0) {
@@ -63,18 +70,20 @@ export class AsyncTransport implements Transport {
   }
 
   async close(): Promise<void> {
-    // Process all remaining entries in a single batch to avoid await in loop
     if (this.queue.length > 0) {
       const batch = this.queue.splice(0);
-      const promises = batch.map(async ({ entry, resolve }) => {
-        try {
-          await this.transport.write(entry);
-        } catch {
-          // Transport errors are non-fatal for logging
+      const entries = batch.map(({ entry }) => entry);
+      try {
+        if (this.transport.writeBatch) {
+          await this.transport.writeBatch(entries);
+        } else {
+          const promises = entries.map((entry) => Promise.resolve(this.transport.write(entry)));
+          await Promise.all(promises);
         }
-        resolve();
-      });
-      await Promise.all(promises);
+      } catch {
+        // Transport errors are non-fatal for logging
+      }
+      for (const { resolve } of batch) resolve();
     }
     if (this.flushInterval) {
       clearInterval(this.flushInterval);

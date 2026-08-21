@@ -23,6 +23,10 @@ export class ConsoleTransport implements Transport {
     }
   }
 
+  writeBatch(entries: LogEntry[]): void {
+    for (const entry of entries) this.write(entry);
+  }
+
   private writePretty(entry: LogEntry): void {
     const parts: string[] = [];
 

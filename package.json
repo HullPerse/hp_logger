@@ -1,6 +1,6 @@
 {
   "name": "hp_logger",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Structured logger for Bun/Node with levels, redaction, colors, file output and server framework integrations",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,6 +37,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "bench": "bun run bench/logger.bench.ts",
     "build": "tsc -p tsconfig.build.json",
     "test": "bun test",
     "typecheck": "tsc --noEmit",

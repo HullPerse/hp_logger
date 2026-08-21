@@ -8,8 +8,14 @@ export class MultiTransport implements Transport {
   }
 
   async write(entry: LogEntry): Promise<void> {
-    const promises = this.transports.map((t) => Promise.resolve(t.write(entry)));
-    await Promise.all(promises);
+    await this.writeBatch([entry]);
+  }
+
+  async writeBatch(entries: LogEntry[]): Promise<void> {
+    const batches = this.transports.map((t) =>
+      Promise.resolve(t.writeBatch ? t.writeBatch(entries) : undefined)
+    );
+    await Promise.all(batches);
   }
 
   async close(): Promise<void> {
