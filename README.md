@@ -84,6 +84,33 @@ const logger = createLogger({
 });
 ```
 
+### Database output
+
+Persist entries to a database through an adapter. The package stays zero-dependency: you pass your own adapter, and a ready-made `createSqliteAdapter` (built on `bun:sqlite`) is included.
+
+```ts
+import { Database } from "bun:sqlite";
+import { createLogger } from "hp_logger";
+import { createSqliteAdapter } from "hp_logger";
+
+const db = new Database("logs.sqlite");
+
+const logger = createLogger({
+  settings: {
+    database: {
+      adapter: createSqliteAdapter(db), // creates table `logs` if missing
+      enabled: true,
+      level: "warn",                    // persist only warn/error
+    },
+  },
+});
+```
+
+- `createSqliteAdapter(db, { table? })` - adapter for `bun:sqlite` with batched inserts inside a transaction. The caller owns the `Database` instance.
+- Any other database works through a `DatabaseAdapter`: `{ write(entries), close?() }`.
+- `level` filters what gets persisted; entries are buffered and flushed on `maxBufferSize` or `flushIntervalMs`.
+- Disable with `database: false`.
+
 ### Context format
 
 ```ts
@@ -258,6 +285,7 @@ installGlobalErrorHandlers(logger);
 bun test            # tests
 bun run typecheck   # type checking
 bun run lint        # linting
+bun run bench       # micro benchmarks (ops/s per mode)
 bun run build       # build dist for publishing
 ```
 

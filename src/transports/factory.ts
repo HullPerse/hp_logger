@@ -1,8 +1,9 @@
 import type { ResolvedSettings, Transport } from '../types';
+import { AsyncTransport } from './async';
 import { ConsoleTransport } from './console';
+import { DatabaseTransport } from './database';
 import { DateBasedFileTransport } from './dateBasedFile';
 import { FileTransport } from './file';
-import { AsyncTransport } from './async';
 import { MultiTransport } from './multi';
 
 export const buildTransports = (settings: ResolvedSettings): Transport => {
@@ -22,6 +23,10 @@ export const buildTransports = (settings: ResolvedSettings): Transport => {
       ? new DateBasedFileTransport(fileSettings.path ?? 'logs', fileOptions)
       : new FileTransport(fileSettings.path ?? 'logs', fileOptions);
     transports.push(fileTransport);
+  }
+
+  if (settings.database) {
+    transports.push(new DatabaseTransport(settings.database));
   }
 
   if (transports.length === 0) {

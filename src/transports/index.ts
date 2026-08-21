@@ -3,4 +3,6 @@ export * from './file';
 export * from './dateBasedFile';
 export * from './async';
 export * from './multi';
+export * from './database';
+export * from './sqlite';
 export * from './factory';

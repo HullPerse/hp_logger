@@ -32,6 +32,22 @@ export interface AsyncSettings {
   flushIntervalMs?: number;
 }
 
+export interface DatabaseAdapter {
+  close?: () => void | Promise<void>;
+  /** Persist a batch of entries. Called by DatabaseTransport on flush. */
+  write: (entries: LogEntry[]) => void | Promise<void>;
+}
+
+export interface DatabaseSettings {
+  /** Adapter that persists entries (e.g. createSqliteAdapter). Required when enabled. */
+  adapter?: DatabaseAdapter;
+  enabled: boolean;
+  flushIntervalMs?: number;
+  /** Minimum level that gets persisted. Defaults to the logger level. */
+  level?: LogLevel;
+  maxBufferSize?: number;
+}
+
 export interface FileSettings {
   /** Directory for log files. Required when enabled. */
   path?: string;
@@ -50,6 +66,8 @@ export interface LoggerSettings {
   async?: AsyncSettings | false;
   /** Per-level colors in pretty mode. `false` disables all colors. */
   colors?: false | LevelColors;
+  /** Persist entries to a database through an adapter. `false` disables. */
+  database?: DatabaseSettings | false;
   /** Master switch: `false` skips every entry. */
   enabled?: boolean;
   /** Write entries to a file in addition to the console. */
@@ -81,6 +99,7 @@ export interface LoggerSettings {
 export interface ResolvedSettings {
   async: AsyncSettings | false;
   colors: false | LevelColors;
+  database: DatabaseSettings | false;
   enabled: boolean;
   file: FileSettings | false;
   filters: ((entry: LogEntry) => boolean)[];
@@ -107,6 +126,8 @@ export interface LogEntry {
 export interface Transport {
   close?: () => void | Promise<void>;
   write: (entry: LogEntry) => void | Promise<void>;
+  /** Batch write, used by AsyncTransport to avoid per-entry promises. */
+  writeBatch?: (entries: LogEntry[]) => void | Promise<void>;
 }
 
 export interface LoggerConfig {
@@ -123,6 +144,7 @@ export const resolveSettings = (
 ): ResolvedSettings => ({
   async: settings.async ?? false,
   colors: settings.colors ?? {},
+  database: settings.database ?? false,
   enabled: settings.enabled ?? true,
   file: settings.file ?? false,
   filters: settings.filters ?? [],
@@ -144,6 +166,7 @@ export const mergeSettings = (
 ): ResolvedSettings => resolveSettings({
   async: patch.async ?? base.async,
   colors: patch.colors ?? base.colors,
+  database: patch.database ?? base.database,
   enabled: patch.enabled ?? base.enabled,
   file: patch.file ?? base.file,
   filters: patch.filters ?? base.filters,

@@ -1,5 +1,9 @@
-import { appendFile, mkdir, readdir } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import type { WriteStream } from 'node:fs';
+import { once } from 'node:events';
+import { mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { finished } from 'node:stream/promises';
 
 import type { ContextFormat, FileSettings, LogEntry, Transport } from '../types';
 import { formatEntry } from '../utils';
@@ -19,6 +23,7 @@ export class DateBasedFileTransport implements Transport {
   private readonly maxBufferSize: number;
   private readonly maxFilesPerDay: number;
   private readonly mode: 'json' | 'pretty';
+  private stream: WriteStream | null = null;
 
   constructor(
     baseDir: string,
@@ -67,12 +72,29 @@ export class DateBasedFileTransport implements Transport {
     }
 
     if (filepath !== this.currentFilepath) {
+      // Day changed or first write: close the old file and open the new one.
+      if (this.stream) {
+        const oldStream = this.stream;
+        oldStream.end();
+        await finished(oldStream);
+        this.stream = null;
+      }
       this.currentFilepath = filepath;
     }
   }
 
   write(entry: LogEntry): void {
-    this.buffer.push(formatEntry(entry, this.mode, this.contextFormat));
+    this.pushEntries([entry]);
+  }
+
+  writeBatch(entries: LogEntry[]): void {
+    this.pushEntries(entries);
+  }
+
+  private pushEntries(entries: LogEntry[]): void {
+    for (const entry of entries) {
+      this.buffer.push(formatEntry(entry, this.mode, this.contextFormat));
+    }
     if (this.buffer.length >= this.maxBufferSize) {
       void this.flush();
     }
@@ -81,11 +103,17 @@ export class DateBasedFileTransport implements Transport {
   private async flush(): Promise<void> {
     if (this.buffer.length === 0) return;
     await this.ensureFile();
+    const filepath = this.currentFilepath;
+    if (!filepath) return;
+    if (!this.stream) {
+      // Keep the file open between flushes instead of reopening per flush.
+      this.stream = createWriteStream(filepath, { flags: 'a' });
+    }
     const data = `${this.buffer.join('\n')}\n`;
     this.buffer = [];
-    const filepath = this.currentFilepath;
-    if (filepath) {
-      await appendFile(filepath, data);
+    const { stream } = this;
+    if (!stream.write(data)) {
+      await once(stream, 'drain');
     }
   }
 
@@ -102,5 +130,11 @@ export class DateBasedFileTransport implements Transport {
       this.flushInterval = null;
     }
     await this.flush();
+    const { stream } = this;
+    if (stream) {
+      stream.end();
+      await finished(stream);
+      this.stream = null;
+    }
   }
 }
