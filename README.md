@@ -1,16 +1,16 @@
 # hp_logger
 
-Структурированный логгер для Bun/Node: уровни, redaction, настраиваемые цвета, запись в файл, глобальные и модульные настройки, интеграции с серверными фреймворками.
+Structured logger for Bun/Node: levels, redaction, configurable colors, file output, global and per-module settings, and server framework integrations.
 
-## Установка
+## Installation
 
 ```bash
 bun add hp_logger
-# или
+# or
 npm install hp_logger
 ```
 
-## Быстрый старт
+## Quick start
 
 ```ts
 import { createLogger } from "hp_logger";
@@ -22,61 +22,61 @@ const logger = createLogger({
   },
 });
 
-// модуль с собственными настройками
+// module with its own settings
 const auth = logger.module("auth", { level: "debug" });
 
 auth.info("user registered", { userId: 42 });
 ```
 
-## Настройки
+## Settings
 
-Глобальные настройки задаются при `createLogger`, модульные - через `.module(name, settings)` или изменяются на лету через `.settings(patch)`.
+Global settings are passed to `createLogger`; module settings via `.module(name, settings)` or changed at runtime via `.settings(patch)`.
 
-| Настройка | Описание | По умолчанию |
+| Setting | Description | Default |
 | --- | --- | --- |
-| `level` | Минимальный уровень: debug, info, success, warn, error | `info` (или `LOG_LEVEL` из env) |
-| `mode` | `pretty` цветной вывод или `json` структурированный | `pretty` |
-| `colors` | Цвета по уровням или `false` чтобы выключить все | стандартные |
-| `enabled` | Мастер-выключатель: `false` пропускает все записи | `true` |
-| `redactKeys` | Регулярка ключей, которые маскируются | стандартная (password, token и т.д.) |
-| `redactDepth` | Максимальная глубина вложенности контекста при маскировке | `2` |
-| `maxMessageLength` | Обрезание сообщения | `2000` |
-| `showTimestamp` | Показывать время в pretty-выводе | `true` |
-| `showAuthor` | Показывать имя модуля в pretty-выводе | `true` |
-| `showLevel` | Цветной префикс уровня `[INFO]`/`[ERROR]` в pretty-выводе | `false` |
-| `formatContext` | Как показывать контекст в pretty-выводе: `json` объект или `kv` пары `key="value"` | `json` |
-| `formatTimestamp` | `iso` или `local` формат времени | `iso` |
-| `file` | Запись в файл: `{ enabled, path, mode, rotation, ... }` или `false` | `false` |
-| `async` | Асинхронная запись с батчингом или `false` | `false` |
-| `filters` | Функции фильтрации записей | `[]` |
+| `level` | Minimum level: debug, info, success, warn, error | `info` (or `LOG_LEVEL` env var) |
+| `mode` | `pretty` colored output or `json` structured | `pretty` |
+| `colors` | Per-level colors or `false` to disable all | standard |
+| `enabled` | Master switch: `false` skips all entries | `true` |
+| `redactKeys` | Regex of keys to redact | standard (password, token, etc.) |
+| `redactDepth` | Max context nesting depth when redacting | `2` |
+| `maxMessageLength` | Message truncation length | `2000` |
+| `showTimestamp` | Show time in pretty output | `true` |
+| `showAuthor` | Show module name in pretty output | `true` |
+| `showLevel` | Colored level prefix `[INFO]`/`[ERROR]` in pretty output | `false` |
+| `formatContext` | Context rendering in pretty output: `json` object or `kv` pairs `key="value"` | `json` |
+| `formatTimestamp` | `iso` or `local` time format | `iso` |
+| `file` | File output: `{ enabled, path, mode, rotation, ... }` or `false` | `false` |
+| `async` | Async batched writes or `false` | `false` |
+| `filters` | Entry filter functions | `[]` |
 
-### Цвета
+### Colors
 
 ```ts
 const logger = createLogger({
   settings: {
     colors: {
-      info: "cyan",      // поменять цвет
+      info: "cyan",      // change a color
       error: "red",
-      warn: false,        // выключить цвет для warn
+      warn: false,        // disable color for warn
     },
   },
 });
 ```
 
-Все цвета выключаются через `colors: false`.
+All colors can be disabled with `colors: false`.
 
-### Запись в файл
+### File output
 
 ```ts
 const logger = createLogger({
   settings: {
     file: {
       enabled: true,
-      path: "logs/app.log",      // или "logs" с rotation: "daily"
-      mode: "json",              // "json" по умолчанию или "pretty" (читаемый текст без цветов)
-      rotation: "daily",         // файлы по дням: logs/{yyyy-mm-dd}/log_NNN.log
-      // один файл на день для всех логгеров с одним path (общий в рамках процесса)
+      path: "logs/app.log",      // or "logs" with rotation: "daily"
+      mode: "json",              // "json" by default or "pretty" (readable text without colors)
+      rotation: "daily",         // files by day: logs/{yyyy-mm-dd}/log_NNN.log
+      // one file per day shared by all loggers with the same path (process-wide)
       flushIntervalMs: 1000,
       maxBufferSize: 100,
     },
@@ -84,45 +84,45 @@ const logger = createLogger({
 });
 ```
 
-### Формат контекста
+### Context format
 
 ```ts
 const logger = createLogger({
   settings: {
-    formatContext: "kv", // userId=42 name="vasya" вместо {"userId":42,"name":"vasya"}
+    formatContext: "kv", // userId=42 name="vasya" instead of {"userId":42,"name":"vasya"}
   },
 });
 ```
 
-Применяется и в pretty-выводе консоли, и в файловом `mode: "pretty"`.
+Applies both to console pretty output and file `mode: "pretty"`.
 
-### Префикс уровня
+### Level prefix
 
 ```ts
 const logger = createLogger({
   settings: {
-    showLevel: true, // [INFO] [auth] сообщение
+    showLevel: true, // [INFO] [auth] message
   },
 });
 ```
 
-Уровень пишется цветом своего уровня (info - blue, error - red и так далее).
+The level is written in its own level color (info - blue, error - red, etc.).
 
-### Модули и контекст
+### Modules and context
 
 ```ts
 const logger = createLogger({ settings: { level: "info" } });
 
-const http = logger.module("http");                       // наследует глобальные
-const auth = logger.module("auth", { level: "debug" });   // переопределяет
-const child = auth.child({ requestId: "abc" });           // дополнительный контекст
+const http = logger.module("http");                       // inherits global
+const auth = logger.module("auth", { level: "debug" });   // overrides
+const child = auth.child({ requestId: "abc" });           // extra context
 
-logger.settings({ level: "warn" });                       // изменить на лету
+logger.settings({ level: "warn" });                       // change at runtime
 ```
 
-## Интеграции
+## Integrations
 
-Все интеграции логируют запросы: метод, путь, статус, длительность, correlation id. Уровень зависит от статуса: 2xx/3xx info, 4xx warn, 5xx error. `/health` и `/metrics` можно исключить через `skipPaths`.
+All integrations log requests: method, path, status, duration, correlation id. The level depends on the status: 2xx/3xx info, 4xx warn, 5xx error. `/health` and `/metrics` can be excluded via `skipPaths`.
 
 ### Elysia
 
@@ -198,9 +198,9 @@ await fastify.register(async (instance) => {
 });
 ```
 
-## Метрики (Prometheus)
+## Metrics (Prometheus)
 
-Zero-dependency метрики в формате Prometheus: `Counter`, `Gauge`, `Histogram`, `Registry`. Нужны для `/metrics` на сервере без внешних клиентских библиотек.
+Zero-dependency metrics in Prometheus format: `Counter`, `Gauge`, `Histogram`, `Registry`. Useful for a `/metrics` endpoint without external client libraries.
 
 ```ts
 import { Counter, Gauge, Histogram, Registry } from "hp_logger";
@@ -232,16 +232,16 @@ requests.inc({ method: "GET", status: "200" });
 duration.observe({ method: "GET" }, 12);
 clients.set(5);
 
-// Текст в формате Prometheus: # HELP, # TYPE, сэмплы, гистограммы с _bucket/_sum/_count
+// Prometheus text format: # HELP, # TYPE, samples, histograms with _bucket/_sum/_count
 const text = registry.metrics();
 ```
 
-- `Counter` - монотонно растущий счётчик, `inc(labels?, value = 1)`.
-- `Gauge` - значение вверх/вниз, `set`/`inc`/`dec`.
-- `Histogram` - распределение наблюдений по bucket'ам, `observe(labels, value)`.
-- `Registry` - собирает метрики, отдаёт текст; имена метрик должны быть уникальны, имя соответствует `[a-zA-Z_:][a-zA-Z0-9_:]*`.
+- `Counter` - monotonically increasing counter, `inc(labels?, value = 1)`.
+- `Gauge` - value that can go up and down, `set`/`inc`/`dec`.
+- `Histogram` - distribution of observations into buckets, `observe(labels, value)`.
+- `Registry` - collects metrics and produces text; metric names must be unique and match `[a-zA-Z_:][a-zA-Z0-9_:]*`.
 
-## Глобальные ошибки
+## Global error handlers
 
 ```ts
 import { createLogger, installGlobalErrorHandlers } from "hp_logger";
@@ -250,17 +250,17 @@ const logger = createLogger();
 installGlobalErrorHandlers(logger);
 ```
 
-`unhandledRejection` и `uncaughtException` пишутся через логгер.
+`unhandledRejection` and `uncaughtException` are logged through the logger.
 
-## Команды пакета
+## Package commands
 
 ```bash
-bun test            # тесты
-bun run typecheck   # проверка типов
-bun run lint        # линт
-bun run build       # сборка dist для публикации
+bun test            # tests
+bun run typecheck   # type checking
+bun run lint        # linting
+bun run build       # build dist for publishing
 ```
 
-## Лицензия
+## License
 
 MIT
