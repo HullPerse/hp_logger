@@ -150,12 +150,26 @@ Applies both to console pretty output and file `mode: "pretty"`.
 ```ts
 const logger = createLogger({
   settings: {
-    showLevel: true, // [INFO] [auth] message
+    showLevel: true, // [INFO] [AUTH] message
   },
 });
 ```
 
 The level color (info - blue, error - red, etc.) is applied to the tags before the message. The message and context are always plain text.
+
+### Tag case
+
+Author and level tags are uppercased in pretty output by default. Change it with `tagCase`:
+
+```ts
+const logger = createLogger({
+  settings: {
+    tagCase: "as-is", // "upper" (default) | "lower" | "as-is"
+  },
+});
+```
+
+JSON output and custom formatters always keep the raw author string.
 
 ### Lazy message and context
 

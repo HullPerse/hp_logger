@@ -5,10 +5,11 @@ import type {
   LogEntry,
   LogLevel,
   ResolvedSettings,
+  TagCase,
   Transport,
 } from '../types';
 import { applyColor, DEFAULT_LEVEL_COLORS } from '../colors.utils';
-import { formatContext } from '../utils';
+import { caseTag, formatContext } from '../utils';
 
 const LEVEL_NAMES: LogLevel[] = [
   'trace',
@@ -27,16 +28,19 @@ export class ConsoleTransport implements Transport {
   private readonly levelColors: LevelColorMap;
   private readonly levelTags: LevelTagMap;
   private readonly settings: ResolvedSettings;
+  private readonly tagCase: TagCase;
+  private authorTagCache: { raw: string; tag: string } | null = null;
 
   constructor(settings: ResolvedSettings) {
     this.settings = settings;
+    this.tagCase = settings.tagCase;
     this.levelColors = Object.fromEntries(
       LEVEL_NAMES.map((level) => [level, this.colorFor(level)])
     ) as LevelColorMap;
     this.levelTags = Object.fromEntries(
       LEVEL_NAMES.map((level) => [
         level,
-        applyColor(this.levelColors[level], `[${level.toUpperCase()}]`),
+        applyColor(this.levelColors[level], `[${caseTag(level, this.tagCase)}]`),
       ])
     ) as LevelTagMap;
   }
@@ -64,6 +68,14 @@ export class ConsoleTransport implements Transport {
     else console.log(output);
   }
 
+  /** Cased author text, memoized: authors repeat across entries. */
+  private authorName(raw: string): string {
+    if (this.authorTagCache?.raw === raw) return this.authorTagCache.tag;
+    const tag = caseTag(raw, this.tagCase);
+    this.authorTagCache = { raw, tag };
+    return tag;
+  }
+
   private renderDefault(entry: LogEntry): string {
     const levelColor = this.levelColors[entry.level];
     const tag = (value: string): string => applyColor(levelColor, `[${value}]`);
@@ -77,7 +89,7 @@ export class ConsoleTransport implements Transport {
     if (this.settings.showDate) output += `${tag(date)} `;
     if (this.settings.showYear) output += `${tag(year)} `;
     if (this.settings.showLevel) output += `${this.levelTags[entry.level]} `;
-    if (this.settings.showAuthor) output += `${tag(entry.author)} `;
+    if (this.settings.showAuthor) output += `${tag(this.authorName(entry.author))} `;
 
     // Keep the message and context readable; only the tags before it carry
     // the level color.

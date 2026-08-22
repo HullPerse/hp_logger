@@ -29,6 +29,8 @@ export type TimestampFormat = 'iso' | 'local';
 
 export type ContextFormat = 'json' | 'kv';
 
+export type TagCase = 'upper' | 'lower' | 'as-is';
+
 export interface AsyncSettings {
   batchSize?: number;
   flushIntervalMs?: number;
@@ -98,6 +100,8 @@ export interface LoggerSettings {
   redactKeys?: RegExp | null;
   /** Show the author/module tag in pretty output. */
   showAuthor?: boolean;
+  /** Case transform for author and level tags in pretty output. Defaults to 'upper'. */
+  tagCase?: TagCase;
   /** Show the level tag like [INFO] in pretty output, colored per level. */
   showLevel?: boolean;
   /** Show the time tag `[HH:mm:ss]` in pretty output. Defaults to true. */
@@ -146,6 +150,7 @@ export interface ResolvedSettings {
   showTime: boolean;
   showDate: boolean;
   showYear: boolean;
+  tagCase: TagCase;
   /** @deprecated Use showTime instead. */
   showTimestamp: boolean;
 }
@@ -180,7 +185,7 @@ export const defaultMode = (): 'pretty' | 'json' => {
 
 type ResolvedTagSettings = Pick<
   ResolvedSettings,
-  'showAuthor' | 'showDate' | 'showLevel' | 'showTime' | 'showTimestamp' | 'showYear'
+  'showAuthor' | 'showDate' | 'showLevel' | 'showTime' | 'showTimestamp' | 'showYear' | 'tagCase'
 >;
 
 const resolveTagSettings = (settings: LoggerSettings): ResolvedTagSettings => ({
@@ -190,6 +195,7 @@ const resolveTagSettings = (settings: LoggerSettings): ResolvedTagSettings => ({
   showTime: settings.showTime ?? settings.showTimestamp ?? true,
   showTimestamp: settings.showTimestamp ?? settings.showTime ?? true,
   showYear: settings.showYear ?? false,
+  tagCase: settings.tagCase ?? 'upper',
 });
 
 const mergeTagSettings = (
@@ -202,6 +208,7 @@ const mergeTagSettings = (
   showTime: patch.showTime ?? patch.showTimestamp ?? base.showTime,
   showTimestamp: patch.showTimestamp ?? patch.showTime ?? base.showTimestamp,
   showYear: patch.showYear ?? base.showYear,
+  tagCase: patch.tagCase ?? base.tagCase,
 });
 
 export const resolveSettings = (

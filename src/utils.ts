@@ -1,5 +1,5 @@
 import { LOG_LEVELS } from './types';
-import type { ContextFormat, EntryFormatter, LogContext, LogEntry, LogLevel, TimestampFormat } from './types';
+import type { ContextFormat, EntryFormatter, LogContext, LogEntry, LogLevel, TagCase, TimestampFormat } from './types';
 
 const BEARER_PATTERN = /bearer\s+[^\s]+/giu;
 const KEY_VALUE_PATTERN = /(?<key>password|token|secret|authorization|cookie)=?[^\s,;]+/giu;
@@ -106,15 +106,25 @@ export const formatContext = (
   return ` ${pairs.join(' ')}`;
 };
 
+const TAG_CASE_TRANSFORMS: Record<TagCase, (value: string) => string> = {
+  'as-is': (value) => value,
+  lower: (value) => value.toLowerCase(),
+  upper: (value) => value.toUpperCase(),
+};
+
+export const caseTag = (value: string, tagCase: TagCase): string =>
+  TAG_CASE_TRANSFORMS[tagCase](value);
+
 export const formatEntry = (
   entry: LogEntry,
   mode: 'json' | 'pretty',
   contextFormat: ContextFormat = 'json',
-  formatter?: EntryFormatter
+  formatter?: EntryFormatter,
+  tagCase: TagCase = 'upper'
 ): string => {
   if (mode === 'json') return JSON.stringify(entry);
   if (formatter) return formatter(entry);
-  return `[${entry.timestamp}] [${entry.author}] [${entry.level.toUpperCase()}] ${entry.message}${formatContext(entry.context, contextFormat)}`;
+  return `[${entry.timestamp}] [${caseTag(entry.author, tagCase)}] [${caseTag(entry.level, tagCase)}] ${entry.message}${formatContext(entry.context, contextFormat)}`;
 };
 
 const pad = (n: number): string => String(n).padStart(2, '0');
