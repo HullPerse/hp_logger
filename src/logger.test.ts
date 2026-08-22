@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from 'bun:test';
 
-import type { LogEntry, Transport } from './types';
+import type { LogEntry, LoggerSettings, Transport } from './types';
 import { createLogger, Logger } from '.';
-import { resolveEnvLevel, redact } from './utils';
+import { resolveEnvLevel, redact, formatEntry } from './utils';
 
 describe('Logger', () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -695,4 +695,83 @@ describe('Logger', () => {
     expect(received.some((entry) => entry.message === 'hello global')).toBe(true);
   });
 
+});
+
+const capturePrettyLine = (
+  patch: Partial<LoggerSettings>,
+  author: string
+): string => {
+  const outputs: string[] = [];
+  const original = console.log;
+  console.log = (value: unknown) => {
+    outputs.push(String(value));
+  };
+  try {
+    const logger = createLogger({
+      settings: {
+        colors: false,
+        mode: 'pretty',
+        showAuthor: true,
+        showLevel: true,
+        ...patch,
+      },
+    });
+    logger.module(author).info('tagged');
+  } finally {
+    console.log = original;
+  }
+  return outputs[0] ?? '';
+};
+
+describe('tagCase', () => {
+  test('uppercases author and level tags by default', () => {
+    const line = capturePrettyLine({}, 'auth');
+    expect(line).toContain('[AUTH]');
+    expect(line).toContain('[INFO]');
+    expect(line).not.toContain('[auth]');
+  });
+
+  test('as-is keeps the authored case', () => {
+    const line = capturePrettyLine({ tagCase: 'as-is' }, 'auth');
+    expect(line).toContain('[auth]');
+    expect(line).toContain('[info]');
+  });
+
+  test('lower lowercases author and level tags', () => {
+    const line = capturePrettyLine({ tagCase: 'lower' }, 'AUTH');
+    expect(line).toContain('[auth]');
+    expect(line).toContain('[info]');
+  });
+
+  test('json output keeps the raw author regardless of tagCase', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({ settings: { mode: 'json', tagCase: 'lower' } });
+      logger.module('MixedCase').info('raw');
+    } finally {
+      console.log = original;
+    }
+    const parsed = JSON.parse(outputs[0] ?? '{}') as { author: string };
+    expect(parsed.author).toBe('MixedCase');
+  });
+
+  test('formatEntry applies tagCase to file pretty lines', () => {
+    const entry = {
+      author: 'db',
+      context: {},
+      level: 'warn',
+      message: 'stored',
+      timestamp: '2026-08-21 10:00:00',
+    } as const;
+    expect(formatEntry(entry, 'pretty')).toBe(
+      '[2026-08-21 10:00:00] [DB] [WARN] stored'
+    );
+    expect(formatEntry(entry, 'pretty', 'json', undefined, 'as-is')).toBe(
+      '[2026-08-21 10:00:00] [db] [warn] stored'
+    );
+  });
 });

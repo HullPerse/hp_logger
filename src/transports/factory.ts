@@ -19,6 +19,7 @@ export const buildTransports = (settings: ResolvedSettings): Transport => {
       ...fileSettings,
       contextFormat: settings.formatContext,
       format: settings.format,
+      tagCase: settings.tagCase,
     };
     const fileTransport: Transport = fileSettings.rotation === 'daily'
       ? new DateBasedFileTransport(fileSettings.path ?? 'logs', fileOptions)
