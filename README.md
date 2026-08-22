@@ -35,15 +35,18 @@ Global settings are passed to `createLogger`; module settings via `.module(name,
 | Setting | Description | Default |
 | --- | --- | --- |
 | `level` | Minimum level: trace, debug, info, success, warn, error, fatal | `info` (or `LOG_LEVEL` env var) |
-| `mode` | `pretty` colored output or `json` structured | `pretty` |
+| `mode` | `pretty` tagged output or `json` structured | `pretty` |
 | `colors` | Per-level colors or `false` to disable all | standard |
 | `enabled` | Master switch: `false` skips all entries | `true` |
 | `redactKeys` | Regex of keys to redact, or `null` to disable redaction entirely | standard (password, token, etc.) |
 | `redactDepth` | Max context nesting depth when redacting | `2` |
 | `maxMessageLength` | Message truncation length | `2000` |
-| `showTimestamp` | Show time in pretty output | `true` |
+| `showTime` | Show the `[HH:mm:ss]` time tag in pretty output | `true` |
+| `showDate` | Show the `[MM-DD]` date tag in pretty output | `false` |
+| `showYear` | Show the `[YYYY]` year tag in pretty output | `false` |
 | `showAuthor` | Show module name in pretty output | `true` |
-| `showLevel` | Colored level prefix `[INFO]`/`[ERROR]` in pretty output | `false` |
+| `showLevel` | Show the colored level tag `[INFO]`/`[ERROR]` in pretty output | `false` |
+| `showTimestamp` | Deprecated alias for `showTime` | — |
 | `formatContext` | Context rendering in pretty output: `json` object or `kv` pairs `key="value"` | `json` |
 | `formatTimestamp` | `iso` or `local` time format | `iso` |
 | `prettyWrap` | Wrap pretty lines to this many terminal columns (Bun 1.4+, ANSI-safe). `false` disables. | `false` |
@@ -127,6 +130,7 @@ const logger = createLogger({
 - `createSqliteAdapter(db, { table? })` - adapter for `bun:sqlite` with batched inserts inside a transaction. The caller owns the `Database` instance.
 - Any other database works through a `DatabaseAdapter`: `{ write(entries), close?() }`.
 - `level` filters what gets persisted; entries are buffered and flushed on `maxBufferSize` or `flushIntervalMs`.
+- Writes run through a sequential pipeline: one batch in flight at a time, strict FIFO order, batches capped at `maxBufferSize`. A failed write puts its batch back at the head and is retried on the next trigger; `close()` drains everything but gives up instead of hanging if the adapter keeps failing.
 - Disable with `database: false`.
 
 ### Context format
@@ -151,7 +155,7 @@ const logger = createLogger({
 });
 ```
 
-The level is written in its own level color (info - blue, error - red, etc.).
+The level color (info - blue, error - red, etc.) is applied to the tags before the message. The message and context are always plain text.
 
 ### Lazy message and context
 
@@ -215,11 +219,11 @@ const logger = createLogger({
 });
 ```
 
-The default pretty format is `[time] [author] [LEVEL] message context`. Note that file pretty output always includes time, author and level by default - a file has no colors, so the level tag is the only way to tell severity apart when reading it later. The `showTimestamp`/`showAuthor`/`showLevel` settings only affect console output; use `format` to change the file layout.
+The default console pretty format is `[time] [author] message context`; time is `[HH:mm:ss]` by default. Enable `showDate` for `[MM-DD]`, `showYear` for `[YYYY]`, or `showLevel` for `[LEVEL]`. Only tags before the message are colored; the message and context stay plain. File pretty output keeps its complete timestamp and stable layout by default; use `format` to change the file layout.
 
 ### Bun 1.4 pretty output
 
-On Bun 1.4+, `prettyWrap` and `prettyTruncate` use Bun's ANSI-aware `wrapAnsi`/`sliceAnsi`: long lines wrap to the configured terminal columns and overlong lines are cut with `…`, both preserving colors, emoji and CJK width. On Node the same settings fall back to plain text truncation.
+On Bun 1.4+, `prettyWrap` and `prettyTruncate` use Bun's ANSI-aware `wrapAnsi`/`sliceAnsi`: long lines wrap to the configured terminal columns and overlong lines are cut with `…`, preserving tag colors, emoji and CJK width. On Node the same settings fall back to plain text truncation.
 
 ```ts
 const logger = createLogger({
@@ -237,7 +241,7 @@ const logger = createLogger({
 
 ### Adaptive output
 
-When `mode` is not set, the default is adaptive: TTY gets colored `pretty`, pipes/files get `json`. Set `mode` explicitly to force either.
+When `mode` is not set, the default is adaptive: TTY gets tagged `pretty` output, pipes/files get `json`. Set `mode` explicitly to force either.
 
 ### Modules and context
 
@@ -389,7 +393,11 @@ installGlobalErrorHandlers(logger);
 bun test            # tests
 bun run typecheck   # type checking
 bun run lint        # linting
-bun run bench       # micro benchmarks (ops/s per mode)
+bun run bench       # repeatable benchmark matrix (median ops/s)
+# optional: BENCH_RUNS=9 BENCH_ITERATIONS=200000 bun run bench
+# machine-readable: BENCH_JSON=1 bun run bench
+# enforce disabled/json floors: BENCH_GATE=1 bun run bench
+# keep console output in the benchmark stream: BENCH_SILENT=0 bun run bench
 bun run build       # build dist for publishing
 ```
 

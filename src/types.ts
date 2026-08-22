@@ -86,7 +86,7 @@ export interface LoggerSettings {
   level?: LogLevel;
   /** Truncate message and context to this many characters. */
   maxMessageLength?: number;
-  /** `pretty` colored console output, `json` single-line structured output. */
+  /** `pretty` tagged console output, `json` single-line structured output. */
   mode?: 'pretty' | 'json';
   /** Wrap pretty lines to this many terminal columns (Bun only, ANSI-safe). `false` disables. */
   prettyWrap?: number | false;
@@ -98,9 +98,15 @@ export interface LoggerSettings {
   redactKeys?: RegExp | null;
   /** Show the author/module tag in pretty output. */
   showAuthor?: boolean;
-  /** Show the level prefix like [INFO] in pretty output, colored per level. */
+  /** Show the level tag like [INFO] in pretty output, colored per level. */
   showLevel?: boolean;
-  /** Show the timestamp in pretty output. */
+  /** Show the time tag `[HH:mm:ss]` in pretty output. Defaults to true. */
+  showTime?: boolean;
+  /** Show the month/day tag `[MM-DD]` in pretty output. Defaults to false. */
+  showDate?: boolean;
+  /** Show the year tag `[YYYY]` in pretty output. Defaults to false. */
+  showYear?: boolean;
+  /** @deprecated Use showTime instead. */
   showTimestamp?: boolean;
 }
 
@@ -114,7 +120,7 @@ export type LazyContext = LogContext | (() => LogContext);
 /**
  * Custom pretty renderer for console and file output. Receives the full
  * entry and returns the line to write. Overrides the default
- * `[time] [author] [LEVEL] message` rendering.
+ * `[time] [author] [LEVEL] message` rendering and its tag settings.
  */
 export type EntryFormatter = (entry: LogEntry) => string;
 
@@ -137,6 +143,10 @@ export interface ResolvedSettings {
   redactKeys: RegExp | null;
   showAuthor: boolean;
   showLevel: boolean;
+  showTime: boolean;
+  showDate: boolean;
+  showYear: boolean;
+  /** @deprecated Use showTime instead. */
   showTimestamp: boolean;
 }
 
@@ -159,7 +169,7 @@ export const DEFAULT_REDACT_KEYS =
   /(?<secret>password|token|secret|authorization|cookie|drawing|replay|chat|payload)/iu;
 
 /**
- * Adaptive mode: TTY gets colored pretty output, pipes/files get JSON.
+ * Adaptive mode: TTY gets tagged pretty output, pipes/files get JSON.
  * Only applies when the caller did not set `mode` explicitly.
  */
 export const defaultMode = (): 'pretty' | 'json' => {
@@ -167,6 +177,32 @@ export const defaultMode = (): 'pretty' | 'json' => {
   if (!process.stdout.isTTY) return 'json';
   return 'pretty';
 };
+
+type ResolvedTagSettings = Pick<
+  ResolvedSettings,
+  'showAuthor' | 'showDate' | 'showLevel' | 'showTime' | 'showTimestamp' | 'showYear'
+>;
+
+const resolveTagSettings = (settings: LoggerSettings): ResolvedTagSettings => ({
+  showAuthor: settings.showAuthor ?? true,
+  showDate: settings.showDate ?? false,
+  showLevel: settings.showLevel ?? false,
+  showTime: settings.showTime ?? settings.showTimestamp ?? true,
+  showTimestamp: settings.showTimestamp ?? settings.showTime ?? true,
+  showYear: settings.showYear ?? false,
+});
+
+const mergeTagSettings = (
+  base: ResolvedSettings,
+  patch: LoggerSettings
+): ResolvedTagSettings => ({
+  showAuthor: patch.showAuthor ?? base.showAuthor,
+  showDate: patch.showDate ?? base.showDate,
+  showLevel: patch.showLevel ?? base.showLevel,
+  showTime: patch.showTime ?? patch.showTimestamp ?? base.showTime,
+  showTimestamp: patch.showTimestamp ?? patch.showTime ?? base.showTimestamp,
+  showYear: patch.showYear ?? base.showYear,
+});
 
 export const resolveSettings = (
   settings: LoggerSettings = {}
@@ -187,9 +223,7 @@ export const resolveSettings = (
   prettyWrap: settings.prettyWrap ?? false,
   redactDepth: settings.redactDepth ?? 2,
   redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
-  showAuthor: settings.showAuthor ?? true,
-  showLevel: settings.showLevel ?? false,
-  showTimestamp: settings.showTimestamp ?? true,
+  ...resolveTagSettings(settings),
 });
 
 export const mergeSettings = (
@@ -211,8 +245,6 @@ export const mergeSettings = (
   prettyTruncate: patch.prettyTruncate ?? base.prettyTruncate,
   prettyWrap: patch.prettyWrap ?? base.prettyWrap,
   redactDepth: patch.redactDepth ?? base.redactDepth,
-  redactKeys: patch.redactKeys ?? base.redactKeys,
-  showAuthor: patch.showAuthor ?? base.showAuthor,
-  showLevel: patch.showLevel ?? base.showLevel,
-  showTimestamp: patch.showTimestamp ?? base.showTimestamp,
+  redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
+  ...mergeTagSettings(base, patch),
 });

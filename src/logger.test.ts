@@ -89,8 +89,36 @@ describe('Logger', () => {
   });
 
   test('redacts bearer tokens', () => {
-    const logger = createLogger({ settings: { level: 'debug' } });
-    logger.info('auth', { auth: 'Bearer secret-token-here' });
+    const result = redact(
+      { auth: 'Bearer secret-token-here' },
+      /token/iu
+    );
+    expect(result).toEqual({ auth: 'Bearer [REDACTED]' });
+  });
+
+  test('redacts custom key patterns without losing the fast path', () => {
+    const result = redact(
+      { apiKey: 'secret-value', requestId: 'req-1' },
+      /apiKey/iu
+    );
+    expect(result).toEqual({ apiKey: '[REDACTED]', requestId: 'req-1' });
+  });
+
+  test('settings can explicitly disable redaction after creation', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({ settings: { mode: 'json' } });
+      logger.settings({ redactKeys: null });
+      logger.info('token=visible');
+    } finally {
+      console.log = original;
+    }
+    expect(outputs.some((output) => output.includes('token=visible'))).toBe(true);
+    expect(outputs.some((output) => output.includes('[REDACTED]'))).toBe(false);
   });
 
   test('addContext adds persistent context', () => {
@@ -222,6 +250,54 @@ describe('Logger', () => {
       settings: { level: 'debug', redactDepth: 1 },
     });
     logger.info('deep context', { outer: { inner: { deepest: 'x' } } });
+  });
+
+  test('pretty output uses separate time/date/year tags by defaulting to time only', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: {
+          colors: false,
+          level: 'info',
+          mode: 'pretty',
+          showAuthor: false,
+          showDate: true,
+          showLevel: true,
+          showYear: true,
+        },
+      });
+      logger.info('hello tags');
+    } finally {
+      console.log = original;
+    }
+    const output = outputs[0] ?? '';
+    expect(output.startsWith("[")).toBe(true);
+    expect(output).toContain("] [");
+    expect(output).toContain("[INFO] hello tags");
+  });
+
+  test('pretty output colors tags but not the message', () => {
+    const outputs: string[] = [];
+    const original = console.log;
+    console.log = (value: unknown) => {
+      outputs.push(String(value));
+    };
+    try {
+      const logger = createLogger({
+        settings: { level: 'info', mode: 'pretty', showAuthor: false },
+      });
+      logger.info('plain message');
+    } finally {
+      console.log = original;
+    }
+    const output = outputs[0] ?? '';
+    expect(output).toContain('plain message');
+    expect(output.endsWith('plain message')).toBe(true);
+    expect(output.includes(String.fromCodePoint(27))).toBe(true);
   });
 
   test('showLevel renders level prefix in pretty output', () => {
