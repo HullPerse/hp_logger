@@ -16,7 +16,9 @@ export class AsyncTransport implements Transport {
     this.transport = transport;
     this.batchSize = options.batchSize ?? 50;
     if (options.flushIntervalMs) {
-      this.flushInterval = setInterval(() => this.flush(), options.flushIntervalMs);
+      this.flushInterval = setInterval(() => {
+        this.flush();
+      }, options.flushIntervalMs);
       this.flushInterval.unref();
     }
   }
@@ -35,7 +37,9 @@ export class AsyncTransport implements Transport {
   private scheduleFlush(): void {
     if (this.processing || this.queue.length === 0) return;
     this.processing = true;
-    queueMicrotask(() => this.flush());
+    queueMicrotask(() => {
+      this.flush();
+    });
   }
 
   private async flush(): Promise<void> {
