@@ -10,11 +10,35 @@ import type {
 import { applyColor, DEFAULT_LEVEL_COLORS } from '../colors.utils';
 import { formatContext } from '../utils';
 
+const LEVEL_NAMES: LogLevel[] = [
+  'trace',
+  'debug',
+  'info',
+  'success',
+  'warn',
+  'error',
+  'fatal',
+];
+
+type LevelTagMap = Record<LogLevel, string>;
+type LevelColorMap = Record<LogLevel, ColorName | false | undefined>;
+
 export class ConsoleTransport implements Transport {
+  private readonly levelColors: LevelColorMap;
+  private readonly levelTags: LevelTagMap;
   private readonly settings: ResolvedSettings;
 
   constructor(settings: ResolvedSettings) {
     this.settings = settings;
+    this.levelColors = Object.fromEntries(
+      LEVEL_NAMES.map((level) => [level, this.colorFor(level)])
+    ) as LevelColorMap;
+    this.levelTags = Object.fromEntries(
+      LEVEL_NAMES.map((level) => [
+        level,
+        applyColor(this.levelColors[level], `[${level.toUpperCase()}]`),
+      ])
+    ) as LevelTagMap;
   }
 
   write(entry: LogEntry): void {
@@ -41,27 +65,26 @@ export class ConsoleTransport implements Transport {
   }
 
   private renderDefault(entry: LogEntry): string {
-    const parts: string[] = [];
-    const levelColor = this.colorFor(entry.level);
+    const levelColor = this.levelColors[entry.level];
+    const tag = (value: string): string => applyColor(levelColor, `[${value}]`);
+    let output = '';
 
-    if (this.settings.showTimestamp) {
-      parts.push(`[${entry.timestamp}]`);
-    }
+    const time = entry.timestamp.slice(11, 19);
+    const date = entry.timestamp.slice(5, 10);
+    const year = entry.timestamp.slice(0, 4);
 
-    if (this.settings.showLevel) {
-      parts.push(applyColor(levelColor, `[${entry.level.toUpperCase()}]`));
-    }
+    if (this.settings.showTime) output += `${tag(time)} `;
+    if (this.settings.showDate) output += `${tag(date)} `;
+    if (this.settings.showYear) output += `${tag(year)} `;
+    if (this.settings.showLevel) output += `${this.levelTags[entry.level]} `;
+    if (this.settings.showAuthor) output += `${tag(entry.author)} `;
 
-    if (this.settings.showAuthor) {
-      parts.push(applyColor(levelColor, `[${entry.author}]`));
-    }
-
-    const messageColor =
-      this.settings.colors === false ? undefined : levelColor;
+    // Keep the message and context readable; only the tags before it carry
+    // the level color.
     const contextStr = formatContext(entry.context, this.settings.formatContext);
-    parts.push(applyColor(messageColor, `${entry.message}${contextStr}`));
+    output += `${entry.message}${contextStr}`;
 
-    return this.finalize(parts.join(' '));
+    return this.finalize(output);
   }
 
   /** Apply prettyTruncate/prettyWrap to a rendered line, ANSI-safe on Bun. */

@@ -3,6 +3,9 @@ import type { ContextFormat, EntryFormatter, LogContext, LogEntry, LogLevel, Tim
 
 const BEARER_PATTERN = /bearer\s+[^\s]+/giu;
 const KEY_VALUE_PATTERN = /(?<key>password|token|secret|authorization|cookie)=?[^\s,;]+/giu;
+const MESSAGE_REDACTION_PATTERN = /bearer\s+|password|token|secret|authorization|cookie/iu;
+
+export const EMPTY_CONTEXT: LogContext = {};
 
 /**
  * Fast pre-filter for redaction: keys containing any of these fragments
@@ -11,6 +14,27 @@ const KEY_VALUE_PATTERN = /(?<key>password|token|secret|authorization|cookie)=?[
  */
 const SENSITIVE_KEY_FRAGMENTS =
   /(?:password|token|secret|authorization|cookie|drawing|replay|chat|payload)/iu;
+
+const matchesPattern = (pattern: RegExp, value: string): boolean => {
+  // Custom expressions may be stateful (`g`/`y`). Keep repeated redaction
+  // calls deterministic instead of letting lastIndex leak between entries.
+  pattern.lastIndex = 0;
+  const matched = pattern.test(value);
+  pattern.lastIndex = 0;
+  return matched;
+};
+
+const needsRedactionScan = (
+  key: string,
+  value: unknown,
+  secretKey: RegExp
+): boolean => {
+  if (SENSITIVE_KEY_FRAGMENTS.test(key) || matchesPattern(secretKey, key)) return true;
+  if (typeof value === 'string') {
+    return matchesPattern(MESSAGE_REDACTION_PATTERN, value);
+  }
+  return typeof value === 'object' && value !== null;
+};
 
 const serializeError = (error: Error): Record<string, unknown> => {
   const result: Record<string, unknown> = { message: error.message, name: error.name };
@@ -33,7 +57,7 @@ export const redact = (
   if (value instanceof Error) return serializeError(value);
 
   if (typeof value === 'string') {
-    if (secretKey === null) return value;
+    if (secretKey === null || !MESSAGE_REDACTION_PATTERN.test(value)) return value;
     return value
       .replaceAll(BEARER_PATTERN, 'Bearer [REDACTED]')
       .replaceAll(KEY_VALUE_PATTERN, '$<key>=[REDACTED]');
@@ -46,17 +70,19 @@ export const redact = (
     // serialize -> nothing to mask, return as-is without copying.
     if (secretKey === null) return value;
     const keys = Object.keys(value);
-    const hasNested = keys.some((key) => {
+    let needsCopy = false;
+    for (const key of keys) {
       const nested: unknown = (value as Record<string, unknown>)[key];
-      return typeof nested === 'object' && nested !== null;
-    });
-    if (!keys.some((key) => SENSITIVE_KEY_FRAGMENTS.test(key)) && !hasNested) {
-      return value;
+      if (needsRedactionScan(key, nested, secretKey)) {
+        needsCopy = true;
+        break;
+      }
     }
+    if (!needsCopy) return value;
 
     const result: Record<string, unknown> = {};
     for (const [key, nested] of Object.entries(value)) {
-      result[key] = secretKey.test(key)
+      result[key] = matchesPattern(secretKey, key)
         ? '[REDACTED]'
         : redact(nested, secretKey, maxDepth, depth + 1);
     }
@@ -70,7 +96,7 @@ export const formatContext = (
   context: LogContext,
   format: ContextFormat
 ): string => {
-  if (Object.keys(context).length === 0) return '';
+  if (context === EMPTY_CONTEXT || Object.keys(context).length === 0) return '';
   if (format === 'json') return ` ${JSON.stringify(context)}`;
   const pairs = Object.entries(context).map(([key, value]) => {
     const rendered =
