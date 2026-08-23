@@ -102,6 +102,11 @@ export interface LoggerSettings {
   showAuthor?: boolean;
   /** Case transform for author and level tags in pretty output. Defaults to 'upper'. */
   tagCase?: TagCase;
+  /**
+   * Endpoint or custom probe to poll for availability. Attached only to the
+   * logger it is declared on: module() and child() do not inherit it.
+   */
+  watch?: WatchOptions | false;
   /** Show the level tag like [INFO] in pretty output, colored per level. */
   showLevel?: boolean;
   /** Show the time tag `[HH:mm:ss]` in pretty output. Defaults to true. */
@@ -168,6 +173,37 @@ export interface Transport {
   write: (entry: LogEntry) => void | Promise<void>;
   /** Batch write, used by AsyncTransport to avoid per-entry promises. */
   writeBatch?: (entries: LogEntry[]) => void | Promise<void>;
+}
+
+export type WatchReason = 'timeout' | 'dns' | 'refused' | 'status';
+
+export interface WatchOptions {
+  /** Custom availability check: return falsy or throw to mark the target down. */
+  probe?: () => unknown;
+  intervalMs?: number;
+  logProbes?: boolean;
+  method?: string;
+  expectStatus?: (status: number) => boolean;
+  timeoutMs?: number;
+  /** HTTP(S) endpoint to poll. Omit when `probe` is provided. */
+  url?: string;
+}
+
+export interface WatchHooks {
+  /** Edge down -> up, including the very first successful probe. */
+  onConnect?: (info: { latencyMs: number; status: number }) => void;
+  /** Edge up -> down. Not fired when the very first probe fails. */
+  onDisconnect?: (info: { reason: WatchReason; error?: Error }) => void;
+  /** Every successful probe. */
+  onSuccess?: (info: { latencyMs: number; status: number }) => void;
+  /** Every failed probe with a classified reason. */
+  onError?: (info: { reason: WatchReason; error?: Error }) => void;
+}
+
+export interface WatchHandle {
+  stop: () => void;
+  /** null until the first probe completes. */
+  readonly up: boolean | null;
 }
 
 export const DEFAULT_REDACT_KEYS =

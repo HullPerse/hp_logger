@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { Elysia } from 'elysia';
 
 import { createLogger } from '../logger';
-import { elysiaPlugin } from './elysia';
+import { elysiaPlugin } from '../integrations/elysia';
 
 describe('elysia integration', () => {
   test('plugin logs requests with status', async () => {

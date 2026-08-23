@@ -4,3 +4,4 @@ export * from './colors.utils';
 export * from './transports';
 export * from './logger';
 export * from './metrics';
+export * from './watch';

@@ -9,10 +9,14 @@ import type {
   LogLevel,
   ResolvedSettings,
   Transport,
+  WatchHandle,
+  WatchHooks,
+  WatchOptions,
 } from './types';
 import { LOG_LEVELS, mergeSettings, resolveSettings } from './types';
 import { EMPTY_CONTEXT, formatDuration, formatTimestamp, redact, resolveEnvLevel } from './utils';
 import { buildTransports } from './transports/factory';
+import { startWatcher } from './watch';
 
 const asyncStorage = new AsyncLocalStorage<LogContext>();
 let asyncContextUsed = false;
@@ -81,14 +85,17 @@ export class Logger {
   private readonly author: string;
   private context: LogContext;
   private currentSettings: ResolvedSettings;
+  private declarativeWatch: WatchHandle | null = null;
   private hasStaticContext: boolean;
   private levelThreshold: number;
+  private watchHandles: WatchHandle[] = [];
   private transport: Transport;
 
   constructor(
     author: string,
     currentSettings: ResolvedSettings,
-    context: LogContext = {}
+    context: LogContext = {},
+    declarativeWatch?: WatchOptions | false
   ) {
     this.author = author;
     this.context = context;
@@ -96,6 +103,7 @@ export class Logger {
     this.currentSettings = currentSettings;
     this.levelThreshold = LEVEL_NUMBER(currentSettings.level);
     this.transport = buildTransports(currentSettings);
+    if (declarativeWatch) this.rebindWatch(declarativeWatch);
   }
 
   /** Override settings for this logger and all its descendants. */
@@ -103,7 +111,40 @@ export class Logger {
     this.currentSettings = mergeSettings(this.currentSettings, patch);
     this.levelThreshold = LEVEL_NUMBER(this.currentSettings.level);
     this.transport = buildTransports(this.currentSettings);
+    if (patch.watch !== undefined) this.rebindWatch(patch.watch);
     return this;
+  }
+
+  /**
+   * Poll a url or a custom probe and log availability edges. Transitions are
+   * logged automatically (success/warn); single probes stay silent unless
+   * options.logProbes is set. Watchers are stopped by close().
+   */
+  watch(options: WatchOptions, hooks: WatchHooks = {}): WatchHandle {
+    const handle = startWatcher(
+      (level, message, context) => {
+        if (level === 'success') this.success(message, context);
+        else if (level === 'warn') this.warn(message, context);
+        else this.debug(message, context);
+      },
+      options,
+      hooks
+    );
+    this.watchHandles.push(handle);
+    return handle;
+  }
+
+  /** Replace or clear the watcher declared through settings on this logger. */
+  private rebindWatch(config: WatchOptions | false): void {
+    if (this.declarativeWatch) {
+      const index = this.watchHandles.indexOf(this.declarativeWatch);
+      if (index !== -1) this.watchHandles.splice(index, 1);
+      this.declarativeWatch.stop();
+      this.declarativeWatch = null;
+    }
+    if (config && (config.url || config.probe)) {
+      this.declarativeWatch = this.watch(config);
+    }
   }
 
   /** Create a named child module with optional settings override. */
@@ -288,6 +329,8 @@ export class Logger {
   }
 
   async close(): Promise<void> {
+    for (const handle of this.watchHandles.splice(0)) handle.stop();
+    this.declarativeWatch = null;
     await this.transport.close?.();
   }
 }
@@ -304,7 +347,7 @@ export const createLogger = (options: CreateLoggerOptions = {}): Logger => {
     ...options.settings,
     level: options.settings?.level ?? resolveEnvLevel(),
   });
-  return new Logger(options.author ?? 'ROOT', settings);
+  return new Logger(options.author ?? 'ROOT', settings, {}, options.settings?.watch);
 };
 
 let globalErrorHandlersInstalled = false;

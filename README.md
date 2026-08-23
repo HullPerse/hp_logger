@@ -171,6 +171,43 @@ const logger = createLogger({
 
 JSON output and custom formatters always keep the raw author string.
 
+### Watch
+
+Poll an endpoint or a custom probe and log availability edges. Transitions are logged automatically - `success` on connect, `warn` on disconnect; single probes stay silent unless `logProbes` is set.
+
+```ts
+const stop = logger.watch(
+  {
+    url: "https://api.example.com/health",
+    intervalMs: 15_000,
+    timeoutMs: 3_000,
+    method: "HEAD",
+    logProbes: false,
+  },
+  {
+    onConnect: ({ latencyMs }) => {},
+    onDisconnect: ({ reason }) => {}, // "timeout" | "dns" | "refused" | "status"
+    onSuccess: ({ latencyMs, status }) => {},
+    onError: ({ reason, error }) => {},
+  }
+);
+
+stop(); // or rely on logger.close()
+```
+
+Any module can be watched instead of a url with a custom probe:
+
+```ts
+logger.watch({ probe: async () => (await db.ping()).success });
+```
+
+Declarative form attaches to the logger it is declared on (`module()` and `child()` do not inherit it) and can be replaced or cleared through settings:
+
+```ts
+const logger = createLogger({ settings: { watch: { url: "https://api.example.com/health" } } });
+logger.settings({ watch: false }); // stop it
+```
+
 ### Lazy message and context
 
 Message and context can be functions: they are only evaluated when the entry passes the level check, so disabled levels cost almost nothing (no `JSON.stringify`, no template literals, no side effects).

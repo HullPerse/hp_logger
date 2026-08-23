@@ -3,8 +3,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { createLogger } from '../logger';
 import type { LogEntry } from '../types';
-import { DatabaseTransport } from './database';
-import { createSqliteAdapter } from './sqlite';
+import { DatabaseTransport } from '../transports/database';
+import { createSqliteAdapter } from '../transports/sqlite';
 
 const entry = (message: string): LogEntry => ({
   author: 'TEST',

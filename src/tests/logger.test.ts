@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from 'bun:test';
 
-import type { LogEntry, LoggerSettings, Transport } from './types';
-import { createLogger, Logger } from '.';
-import { resolveEnvLevel, redact, formatEntry } from './utils';
+import type { LogEntry, LoggerSettings, Transport } from '../types';
+import { createLogger, Logger } from '..';
+import { resolveEnvLevel, redact, formatEntry } from '../utils';
 
 describe('Logger', () => {
   let originalEnv: NodeJS.ProcessEnv;
