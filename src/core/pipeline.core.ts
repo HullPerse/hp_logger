@@ -43,6 +43,13 @@ export const writeEntry = (
   }
   if (entry === null) return;
   state.blackbox?.push(entry);
+  // Sampling sits after the black box: the flight recorder keeps everything,
+  // only the transports are sampled. error/fatal always pass.
+  const sampledIn =
+    state.sampler === undefined || entry.level === "error" || entry.level === "fatal"
+      ? true
+      : state.sampler(entry);
+  if (!sampledIn) return;
   dispatchSafely(state.transport, entry);
   if (globalTransports.length > 0) {
     for (const transport of globalTransports) dispatchSafely(transport, entry);

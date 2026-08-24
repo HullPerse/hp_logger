@@ -69,6 +69,12 @@ export interface TimeOptions {
   level?: LogLevel;
   /** When the measurement exceeds this many ms, the entry is logged as warn with slow: true. */
   maxMs?: number;
+  /**
+   * Continue a trace that started in another service: pass the ids parsed
+   * from a W3C `traceparent` header (`parseTraceparent`).
+   */
+  traceId?: string;
+  parentSpanId?: string;
 }
 
 /** Handle returned by logger.span(). */
@@ -199,6 +205,12 @@ export interface LoggerSettings {
    * serializer masks the key with `[SERIALIZER ERROR]`.
    */
   serializers?: Record<string, (value: unknown) => unknown>;
+  /**
+   * Trace-coherent sampling: `rate` 0..1. Entries sharing a traceId are
+   * kept or dropped as a whole trace; entries without a traceId are sampled
+   * individually. error and fatal entries always pass.
+   */
+  sampling?: { perTrace?: boolean; rate: number } | false;
   /** Show the author/module tag in pretty output. */
   showAuthor?: boolean;
   /** Case transform for author and level tags in pretty output. Defaults to 'upper'. */
@@ -279,6 +291,7 @@ export interface ResolvedSettings {
   redactKeys: RegExp | null;
   redactPaths: string[];
   serializers: Record<string, (value: unknown) => unknown> | undefined;
+  sampling: { perTrace: boolean; rate: number } | false;
   repeat: RepeatSettings | false;
   autoCounters: boolean;
   showAuthor: boolean;
@@ -328,4 +341,6 @@ export interface LoggerState {
   readonly blackbox?: { push: (entry: LogEntry) => void } | undefined;
   /** Per-key context transformers, applied before redaction. */
   readonly serializers?: Record<string, (value: unknown) => unknown> | undefined;
+  /** Sampling decision for a built entry; undefined disables sampling. */
+  readonly sampler?: ((entry: LogEntry) => boolean) | undefined;
 }

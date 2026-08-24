@@ -127,6 +127,9 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
   prettyWrap: settings.prettyWrap ?? false,
   ...resolveRedactionSettings(settings),
   repeat: settings.repeat ?? false,
+  sampling: settings.sampling
+    ? { perTrace: settings.sampling.perTrace ?? true, rate: settings.sampling.rate }
+    : false,
   serializers: settings.serializers,
   task: resolveTaskSettings(settings),
   ...resolveTagSettings(settings),
@@ -142,6 +145,16 @@ const mergeFormatSettings = (base: ResolvedSettings, patch: LoggerSettings) => (
   prettyTruncate: patch.prettyTruncate ?? base.prettyTruncate,
   prettyWrap: patch.prettyWrap ?? base.prettyWrap,
 });
+
+const mergeSamplingSettings = (
+  base: ResolvedSettings["sampling"],
+  patch: LoggerSettings,
+): ResolvedSettings["sampling"] => {
+  const incoming = patch.sampling;
+  if (incoming === undefined) return base;
+  if (incoming === false) return false;
+  return { perTrace: incoming.perTrace ?? true, rate: incoming.rate };
+};
 
 const mergeRedactionSettings = (base: ResolvedSettings, patch: LoggerSettings) => ({
   redactDepth: patch.redactDepth ?? base.redactDepth,
@@ -162,6 +175,7 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
   ...mergeFormatSettings(base, patch),
   ...mergeRedactionSettings(base, patch),
   repeat: patch.repeat ?? base.repeat,
+  sampling: mergeSamplingSettings(base.sampling, patch),
   serializers: patch.serializers ?? base.serializers,
   task: mergeTaskSettings(base.task, patch),
   ...mergeTagSettings(base, patch),

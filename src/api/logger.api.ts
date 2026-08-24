@@ -18,6 +18,7 @@ import { renderSpanTree } from "../format/span.format";
 import { renderTable } from "../format/table.format";
 import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
 import { attemptAsync } from "../lib/result.utils";
+import { createSampler } from "../lib/sampling.utils";
 import { mergeSettings, resolveEnvLevel, resolveEnvModules, resolveSettings } from "../lib/settings.utils";
 import { redact } from "../redact/index.redact";
 import { writeFile } from "node:fs/promises";
@@ -78,6 +79,7 @@ export class Logger implements LoggerState {
   hasStaticContext: boolean;
   needsRedaction!: boolean;
   redactValue!: (value: unknown) => unknown;
+  sampler!: ((entry: LogEntry) => boolean) | undefined;
   serializers!: Record<string, (value: unknown) => unknown> | undefined;
   private currentSettings: ResolvedSettings;
   private readonly envModuleLevels: Map<string, LogLevel> | undefined;
@@ -120,6 +122,9 @@ export class Logger implements LoggerState {
     this.hasFilters = settings.filters.length > 0;
     this.needsRedaction = settings.redactKeys !== null || settings.redactPaths.length > 0;
     this.serializers = settings.serializers;
+    this.sampler = settings.sampling
+      ? createSampler(settings.sampling.rate, settings.sampling.perTrace)
+      : undefined;
     const { redactKeys } = settings;
     this.redactValue =
       redactKeys === null && settings.redactPaths.length === 0
@@ -394,20 +399,31 @@ export class Logger implements LoggerState {
    * inside the callback (including child spans) carry the span and trace ids.
    */
   span<T>(name: string, callback: (span: SpanHandle) => T | Promise<T>): Promise<T>;
+  span<T>(name: string, options: TimeOptions, callback: (span: SpanHandle) => T | Promise<T>): Promise<T>;
   span(name: string, options?: TimeOptions): SpanHandle;
   span<T>(
     name: string,
-    optionsOrCallback?: TimeOptions | ((span: SpanHandle) => T | Promise<T>),
+    optionsOrCallback?:
+      | TimeOptions
+      | ((span: SpanHandle) => T | Promise<T>),
+    maybeCallback?: (span: SpanHandle) => T | Promise<T>,
   ): SpanHandle | Promise<T> {
+    const thirdIsCallback = typeof maybeCallback === "function";
     const isCallback = typeof optionsOrCallback === "function";
     const options: TimeOptions = isCallback ? {} : (optionsOrCallback ?? {});
-    const callback = isCallback
-      ? (optionsOrCallback as (span: SpanHandle) => T | Promise<T>)
-      : undefined;
+    let callback: ((span: SpanHandle) => T | Promise<T>) | undefined;
+    if (thirdIsCallback) {
+      callback = maybeCallback;
+    } else if (isCallback) {
+      callback = optionsOrCallback as (span: SpanHandle) => T | Promise<T>;
+    }
     const inherited = getAsyncContext();
     const traceId =
-      inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string);
-    const parentId = inherited?.spanId === undefined ? undefined : (inherited.spanId as string);
+      options.traceId ??
+      (inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string));
+    const parentId =
+      options.parentSpanId ??
+      (inherited?.spanId === undefined ? undefined : (inherited.spanId as string));
     const spanId = nextSpanId();
     const spanContext = { parentId, spanId, traceId };
     const startedAt = performance.now();

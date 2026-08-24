@@ -37,6 +37,10 @@
     "./test": {
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker/thread.transport.d.ts",
+      "import": "./dist/worker/thread.transport.js"
     }
   },
   "files": [

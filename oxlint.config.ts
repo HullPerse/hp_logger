@@ -29,6 +29,14 @@ export default defineConfig({
         "promise/prefer-await-to-callbacks": "off",
       },
     },
+    {
+      files: ["src/worker/worker.transport.ts"],
+      rules: {
+        // The rule targets the DOM window API. Bun worker threads take
+        // postMessage(data) - a targetOrigin argument would break the call.
+        "unicorn/require-post-message-target-origin": "off",
+      },
+    },
   ],
   options: {
     typeAware: true,
