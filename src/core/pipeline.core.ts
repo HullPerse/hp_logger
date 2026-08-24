@@ -17,7 +17,7 @@ export const clearGlobalTransports = (): void => {
   globalTransports.length = 0;
 };
 
-/** Route one entry through the pipeline: build, filter, dispatch. */
+/** Route one entry through the pipeline: build, filter, black box, dispatch. */
 export const writeEntry = (
   state: LoggerState,
   level: LogLevel,
@@ -27,6 +27,7 @@ export const writeEntry = (
   if (!state.enabled) return;
   const entry = buildEntry(state, level, message, context);
   if (entry === null) return;
+  state.blackbox?.push(entry);
   state.transport.write(entry);
   if (globalTransports.length > 0) {
     for (const transport of globalTransports) transport.write(entry);

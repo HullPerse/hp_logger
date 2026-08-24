@@ -63,7 +63,8 @@ export abstract class BaseFileTransport implements Transport {
     }
   }
 
-  protected async flush(): Promise<void> {
+  /** Write buffered lines to the target file; safe to call directly. */
+  async flush(): Promise<void> {
     if (this.buffer.length === 0) return;
     const filepath = await this.targetFilepath();
     if (!filepath) return;

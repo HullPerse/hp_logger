@@ -195,6 +195,11 @@ export class DatabaseTransport implements Transport {
     };
   }
 
+  /** Trigger a delivery pass without closing; respects a pending backoff wait. */
+  flush(): void {
+    this.pump();
+  }
+
   close(): Promise<void> {
     if (this.closing) return this.closing;
     this.closing = this.finishClose();

@@ -1,5 +1,6 @@
 import { LOG_LEVELS } from "../config/levels.config";
 import { DEFAULT_AUTHOR } from "../config/logger.config";
+import { RingBuffer } from "../brain/ring.utils";
 import { getAsyncContext, runWithContext } from "../core/context.core";
 import { getSpanRegistry, nextSpanId, nextTraceId } from "../core/span.core";
 import { Counter } from "../metrics/counter.metric";
@@ -19,6 +20,7 @@ import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
 import { attemptAsync } from "../lib/result.utils";
 import { mergeSettings, resolveEnvLevel, resolveSettings } from "../lib/settings.utils";
 import { redact } from "../redact/index.redact";
+import { writeFile } from "node:fs/promises";
 import type {
   CreateLoggerOptions,
   LazyContext,
@@ -75,6 +77,7 @@ export class Logger implements LoggerState {
   needsRedaction!: boolean;
   redactValue!: (value: unknown) => unknown;
   private currentSettings: ResolvedSettings;
+  private blackboxRing: RingBuffer<LogEntry> | null = null;
   private declarativeWatch: WatchHandle | null = null;
   private metricsRegistryInstance: Registry | null = null;
   private autoCounter: Counter | null = null;
@@ -113,6 +116,17 @@ export class Logger implements LoggerState {
     const { redactKeys } = settings;
     this.redactValue =
       redactKeys === null ? identity : (value) => redact(value, redactKeys, settings.redactDepth);
+    // The ring survives toggles; its capacity is fixed at creation time.
+    if (settings.blackbox) {
+      this.blackboxRing ??= new RingBuffer(settings.blackbox.size);
+    } else {
+      this.blackboxRing = null;
+    }
+  }
+
+  /** Flight-recorder ring read by the write pipeline; undefined when disabled. */
+  get blackbox(): { push: (entry: LogEntry) => void } | undefined {
+    return this.blackboxRing ?? undefined;
   }
 
   /** Override settings for this logger and all its descendants. */
@@ -581,6 +595,34 @@ export class Logger implements LoggerState {
     return this.transport.stats?.() ?? EMPTY_STATS;
   }
 
+  /**
+   * Deliver buffered entries (batching queues, file buffers, database queue)
+   * without closing. A flushed logger keeps logging.
+   */
+  async flush(): Promise<void> {
+    await this.transport.flush?.();
+  }
+
+  /**
+   * Write the black box ring to its JSONL file (or the given path) as a
+   * snapshot - each dump replaces the file - and flush all transports.
+   * Returns the path written, or null when the black box is disabled, empty
+   * or has no path.
+   */
+  async dump(path?: string): Promise<string | null> {
+    const target =
+      path ?? (this.currentSettings.blackbox ? this.currentSettings.blackbox.path : undefined);
+    const ring = this.blackboxRing;
+    if (target === undefined || ring === null || ring.size === 0) return null;
+    const lines = ring
+      .toArray()
+      .map((entry) => JSON.stringify(entry))
+      .join("\n");
+    await writeFile(target, `${lines}\n`, "utf-8");
+    await this.transport.flush?.();
+    return target;
+  }
+
   /** Register a transport for every logger in the process. */
   static addTransport(transport: Transport): void {
     addGlobalTransport(transport);
@@ -615,11 +657,31 @@ let globalErrorHandlersInstalled = false;
 export const installErrorHandlers = (logger: Logger): void => {
   if (globalErrorHandlersInstalled) return;
   globalErrorHandlersInstalled = true;
+  // Post-mortem: black box dump first, then flush every transport, so
+  // buffered entries reach disk before the process goes down. Failures here
+  // must never mask the original crash, so everything is swallowed.
+  const postMortem = async (): Promise<void> => {
+    try {
+      await logger.dump();
+    } catch {
+      // Dying processes do not report their own reporter's failures.
+    }
+    try {
+      await logger.flush();
+    } catch {
+      // Same: flush errors stay silent on the crash path.
+    }
+  };
+  const onCrash = (message: string, error: unknown): void => {
+    logger.error(message, { error });
+    // Fire-and-forget on purpose: the crash path must not await anything.
+    postMortem();
+  };
   process.on("unhandledRejection", (reason) => {
-    logger.error("unhandledRejection", { reason });
+    onCrash("unhandledRejection", reason);
   });
   process.on("uncaughtException", (error) => {
-    logger.error("uncaughtException", { error });
+    onCrash("uncaughtException", error);
   });
   // Bun 1.4 emits memoryPressure when the OS runs low on memory.
   // Log it before the process gets killed, so the last lines show why.

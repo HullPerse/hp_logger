@@ -105,6 +105,18 @@ export interface TaskSettings {
   progress?: boolean;
 }
 
+/** Black box flight recorder: a ring of recent entries dumped on crash or demand. */
+export interface BlackboxSettings {
+  /** Ring capacity in entries. Defaults to 1000. */
+  size?: number;
+  /**
+   * JSONL file written as a snapshot by `logger.dump()` and by crash handlers
+   * installed via `installErrorHandlers` (each dump replaces the file).
+   * Without a path, dump() only flushes transports and writes no file.
+   */
+  path?: string;
+}
+
 /** Options for a single `logger.task()` call. */
 export interface TaskOptions {
   /** Overrides settings.task.level for every entry of this task. */
@@ -202,6 +214,8 @@ export interface LoggerSettings {
   showYear?: boolean;
   /** Pending-task entries via `logger.task()`. */
   task?: TaskSettings;
+  /** Flight recorder ring dumped on crash or via `logger.dump()`. `false` disables. */
+  blackbox?: BlackboxSettings | false;
 }
 
 /**
@@ -261,6 +275,7 @@ export interface ResolvedSettings {
   showYear: boolean;
   tagCase: TagCase;
   task: { level: LogLevel; progress: boolean };
+  blackbox: { path: string | undefined; size: number } | false;
 }
 
 export interface LogEntry {
@@ -295,4 +310,6 @@ export interface LoggerState {
   redactKeys: RegExp | null;
   timestamp: () => string;
   transport: Transport;
+  /** Flight-recorder ring; entries are pushed post-filter, post-redaction. */
+  readonly blackbox?: { push: (entry: LogEntry) => void } | undefined;
 }

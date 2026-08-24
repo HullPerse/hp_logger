@@ -49,6 +49,23 @@ const mergeTaskSettings = (
   progress: patch.task?.progress ?? base.progress,
 });
 
+const DEFAULT_BLACKBOX_SIZE = 1000;
+
+const resolveBlackbox = (settings: LoggerSettings): ResolvedSettings["blackbox"] => {
+  const box = settings.blackbox;
+  return box ? { path: box.path, size: Math.max(1, box.size ?? DEFAULT_BLACKBOX_SIZE) } : false;
+};
+
+const mergeBlackbox = (
+  base: ResolvedSettings["blackbox"],
+  patch: LoggerSettings,
+): ResolvedSettings["blackbox"] => {
+  const box = patch.blackbox;
+  if (box === false) return false;
+  if (box === undefined) return base;
+  return { path: box.path, size: Math.max(1, box.size ?? DEFAULT_BLACKBOX_SIZE) };
+};
+
 const mergeTagSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedTagSettings => ({
   colorizeContext: patch.colorizeContext ?? base.colorizeContext,
   emoji: patch.emoji ?? base.emoji,
@@ -66,6 +83,7 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
   adaptive: settings.adaptive ?? false,
   autoCounters: settings.autoCounters ?? false,
   batching: settings.batching ?? false,
+  blackbox: resolveBlackbox(settings),
   colors: settings.colors ?? {},
   database: settings.database ?? false,
   enabled: settings.enabled ?? true,
@@ -90,6 +108,7 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
   adaptive: patch.adaptive ?? base.adaptive,
   autoCounters: patch.autoCounters ?? base.autoCounters,
   batching: patch.batching ?? base.batching,
+  blackbox: mergeBlackbox(base.blackbox, patch),
   colors: patch.colors ?? base.colors,
   database: patch.database ?? base.database,
   enabled: patch.enabled ?? base.enabled,

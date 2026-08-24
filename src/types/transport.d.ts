@@ -65,6 +65,11 @@ export interface Transport {
   write: (entry: LogEntry) => void | Promise<void>;
   /** Batch write, used by AsyncTransport to avoid per-entry promises. */
   writeBatch?: (entries: LogEntry[]) => void | Promise<void>;
+  /**
+   * Deliver buffered entries without closing; a flushed transport stays
+   * usable. Used by Logger.flush() and crash handlers.
+   */
+  flush?: () => void | Promise<void>;
   /** Optional delivery counters exposed through Logger.stats(). */
   stats?: () => TransportStats;
 }

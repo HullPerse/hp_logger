@@ -64,6 +64,12 @@ export class RepeatTransport implements Transport {
     await this.inner.close?.();
   }
 
+  async flush(): Promise<void> {
+    // Snapshot the keys: flushGroup deletes from the cache while iterating.
+    for (const key of this.groups.keys()) this.flushGroup(key);
+    await this.inner.flush?.();
+  }
+
   private pushEntries(entries: LogEntry[]): void {
     if (this.closed) return;
     for (const entry of entries) {

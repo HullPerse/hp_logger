@@ -70,6 +70,11 @@ export class AdaptiveTransport implements Transport {
     await this.inner.close?.();
   }
 
+  async flush(): Promise<void> {
+    this.flushGroupSummaries();
+    await this.inner.flush?.();
+  }
+
   private pushEntries(entries: LogEntry[]): void {
     const now = performance.now();
     const stormStarted = this.observe(now, entries);

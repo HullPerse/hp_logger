@@ -33,4 +33,8 @@ export class MultiTransport implements Transport {
   async close(): Promise<void> {
     await Promise.all(this.transports.map((t) => t.close?.() ?? Promise.resolve()));
   }
+
+  async flush(): Promise<void> {
+    await Promise.all(this.transports.map((t) => t.flush?.() ?? Promise.resolve()));
+  }
 }

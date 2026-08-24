@@ -62,7 +62,7 @@ describe("AsyncTransport flushOn", () => {
     );
 
     const errorEntry = { ...entry("no flush"), level: "error" } as LogEntry;
-    void asyncTransport.write(errorEntry);
+    asyncTransport.write(errorEntry);
     expect(batches).toBe(0);
     return asyncTransport.close();
   });

@@ -35,6 +35,14 @@ export default defineConfig({
         "oxc/no-barrel-file": "off",
       },
     },
+    {
+      files: ["src/writer/buffer.writer.ts"],
+      rules: {
+        // Batches are delivered strictly in FIFO order: parallel awaits
+        // would let a later batch overtake an earlier one.
+        "no-await-in-loop": "off",
+      },
+    },
   ],
   options: {
     typeAware: true,
