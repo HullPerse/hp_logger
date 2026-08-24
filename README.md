@@ -37,17 +37,19 @@ logger.info("server started", { port: 3000 });
 ## What is inside
 
 - **Levels** - trace to fatal, per-module loggers, runtime setting patches.
-- **Redaction** - passwords, tokens and bearer strings are masked before any transport sees them.
-- **Output modes** - tagged pretty output on TTY, JSON lines in pipes and files, custom formatters.
-- **File output** - single file or daily rotation, buffered writes.
-- **Database output** - ready-made SQLite adapter plus a generic adapter interface for any database.
-- **Batching** - async batched writes with a bounded queue and delivery stats.
+- **Redaction** - passwords, tokens and bearer strings are masked before any transport sees them; `redactPaths` targets exact dot paths like `user.password`.
+- **Output modes** - tagged pretty output on TTY, JSON lines in pipes and files, template-based custom lines, custom formatters.
+- **File output** - single file, daily rotation, or size-based rotation with retention and optional gzip; optional per-level files (`app.error.log`).
+- **Database output** - ready-made SQLite adapter plus a generic adapter interface; self-healing rebuilds a dead adapter from a factory and drains the backlog.
+- **Batching** - async batched writes with a bounded queue, delivery stats and severity-triggered flushes.
 - **Flood control** - collapse repeats, once/throttle keys, adaptive sampling during error storms.
 - **Spans and traces** - manual and callback spans with AsyncLocalStorage propagation and a trace tree renderer.
+- **Black box** - a ring of recent entries dumped to a JSONL file and flushed on crash, so buffered logs survive process death.
 - **Watch** - poll endpoints or custom probes and log availability edges.
 - **Metrics** - zero-dependency Counter, Gauge, Histogram and Registry in Prometheus text format.
 - **Web viewer** - optional HTTP endpoint serving the last N entries from memory.
 - **Integrations** - Elysia, Bun.serve, Node http, Hono and Fastify middlewares with correlation ids.
+- **Env-driven tuning** - `LOG_LEVEL` for the root level, `LOG_MODULES="auth:debug,http:warn"` per module.
 
 Full guides, the complete settings reference and integration recipes live on the documentation site linked in this repository's GitHub description.
 
