@@ -78,6 +78,7 @@ export class Logger implements LoggerState {
   hasStaticContext: boolean;
   needsRedaction!: boolean;
   redactValue!: (value: unknown) => unknown;
+  serializers!: Record<string, (value: unknown) => unknown> | undefined;
   private currentSettings: ResolvedSettings;
   private readonly envModuleLevels: Map<string, LogLevel> | undefined;
   private blackboxRing: RingBuffer<LogEntry> | null = null;
@@ -118,6 +119,7 @@ export class Logger implements LoggerState {
     this.filters = settings.filters;
     this.hasFilters = settings.filters.length > 0;
     this.needsRedaction = settings.redactKeys !== null || settings.redactPaths.length > 0;
+    this.serializers = settings.serializers;
     const { redactKeys } = settings;
     this.redactValue =
       redactKeys === null && settings.redactPaths.length === 0
@@ -606,7 +608,33 @@ export class Logger implements LoggerState {
     if (this.autoCounter !== null) {
       this.autoCounter.inc({ author: this.author, level });
     }
-    writeEntry(this, level, message, context);
+    let merged: LazyContext | undefined = context;
+    if (this.groupStack.length > 0) {
+      const groupPrefix = { group: this.groupStack.join(".") };
+      merged =
+        typeof context === "function"
+          ? (): LogContext => ({ ...groupPrefix, ...context() })
+          : { ...groupPrefix, ...context };
+    }
+    writeEntry(this, level, message, merged);
+  }
+
+  private groupStack: string[] = [];
+
+  /** Open an indentation group for subsequent entries; nests like console.group. */
+  group(name: string): void {
+    this.groupStack.push(name);
+  }
+
+  /** Close the innermost open group created by group(). */
+  groupEnd(): void {
+    this.groupStack.pop();
+  }
+
+  /** Log an error when the condition is falsy; silent when it is truthy. */
+  assert(condition: unknown, message?: string): void {
+    if (condition) return;
+    this.error(message === undefined ? "Assertion failed" : `Assertion failed: ${message}`);
   }
 
   stats(): LoggerStats {

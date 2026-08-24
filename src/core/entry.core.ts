@@ -35,6 +35,25 @@ const sanitizeContext = (
   return redactValue(context) as LogContext;
 };
 
+/** Per-key transformers (pino-style serializers), applied before redaction. */
+const applySerializers = (
+  context: LogContext,
+  serializers: Record<string, (value: unknown) => unknown> | undefined,
+): LogContext => {
+  if (serializers === undefined) return context;
+  const result: LogContext = { ...context };
+  for (const [key, transform] of Object.entries(serializers)) {
+    if (key in result) {
+      try {
+        result[key] = transform(result[key]);
+      } catch {
+        result[key] = "[SERIALIZER ERROR]";
+      }
+    }
+  }
+  return result;
+};
+
 /** Memory and uptime snapshot appended to every fatal entry. */
 const attachFatalSnapshot = (context: LogContext): LogContext => {
   const usage = process.memoryUsage();
@@ -82,7 +101,7 @@ export const buildEntry = (
   }
   let safeContext: LogContext;
   try {
-    safeContext = sanitizeContext(finalContext, needsRedaction, redactValue);
+    safeContext = sanitizeContext(applySerializers(finalContext, state.serializers), needsRedaction, redactValue);
   } catch {
     safeContext = { contextError: "unserializable context" };
   }

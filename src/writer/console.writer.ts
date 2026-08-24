@@ -21,12 +21,29 @@ type LevelColorMap = Record<LogLevel, ColorName | false | undefined>;
  * JSON output keeps trace/debug/info on console.log (legacy); pretty
  * output sends debug/trace to console.debug.
  */
+// Re-entrancy counter: console capture (console.api) routes console calls
+// into a logger, and this counter tells it when a call comes from the
+// logger's own write - those print natively instead of re-entering.
+let activeWrites = 0;
+
+/** True while the logger itself is writing, so console capture can step aside. */
+export const isLoggerWriting = (): boolean => activeWrites > 0;
+
 const consoleWrite = (level: LogLevel, output: string, debugTraceToConsoleDebug = true): void => {
-  if (level === "error" || level === "fatal") console.error(output);
-  else if (level === "warn") console.warn(output);
-  else if (debugTraceToConsoleDebug && (level === "debug" || level === "trace"))
-    console.debug(output);
-  else console.log(output);
+  activeWrites += 1;
+  try {
+    if (level === "error" || level === "fatal") console.error(output);
+    else if (level === "warn") console.warn(output);
+    else if (debugTraceToConsoleDebug && (level === "debug" || level === "trace"))
+      console.debug(output);
+    else console.log(output);
+  } finally {
+    activeWrites -= 1;
+  }
+};
+
+const writeTracked = (level: LogLevel, output: string, debugTraceToConsoleDebug = true): void => {
+  consoleWrite(level, output, debugTraceToConsoleDebug);
 };
 
 export class ConsoleTransport implements Transport {
@@ -83,7 +100,7 @@ export class ConsoleTransport implements Transport {
         tagCase: this.tagCase,
       });
     }
-    consoleWrite(entry.level, output, true);
+    writeTracked(entry.level, output, true);
   }
 
   /** Cased author text, memoized: authors repeat across entries. */
@@ -188,6 +205,6 @@ export class ConsoleTransport implements Transport {
       timestamp: entry.timestamp,
       ...entry.context,
     });
-    consoleWrite(entry.level, output, false);
+    writeTracked(entry.level, output, false);
   }
 }

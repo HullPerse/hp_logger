@@ -127,6 +127,7 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
   prettyWrap: settings.prettyWrap ?? false,
   ...resolveRedactionSettings(settings),
   repeat: settings.repeat ?? false,
+  serializers: settings.serializers,
   task: resolveTaskSettings(settings),
   ...resolveTagSettings(settings),
 });
@@ -161,6 +162,7 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
   ...mergeFormatSettings(base, patch),
   ...mergeRedactionSettings(base, patch),
   repeat: patch.repeat ?? base.repeat,
+  serializers: patch.serializers ?? base.serializers,
   task: mergeTaskSettings(base.task, patch),
   ...mergeTagSettings(base, patch),
 });

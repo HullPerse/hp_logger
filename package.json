@@ -33,6 +33,10 @@
     "./http": {
       "types": "./dist/http/log.server.d.ts",
       "import": "./dist/http/log.server.js"
+    },
+    "./test": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
     }
   },
   "files": [

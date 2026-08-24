@@ -193,6 +193,12 @@ export interface LoggerSettings {
    * `redactKeys` is null. Arrays are summarized and not path-addressable.
    */
   redactPaths?: string[];
+  /**
+   * Per-key context transformers (pino-style serializers), applied before
+   * redaction: `serializers: { user: (u) => ({ id: u.id }) }`. A throwing
+   * serializer masks the key with `[SERIALIZER ERROR]`.
+   */
+  serializers?: Record<string, (value: unknown) => unknown>;
   /** Show the author/module tag in pretty output. */
   showAuthor?: boolean;
   /** Case transform for author and level tags in pretty output. Defaults to 'upper'. */
@@ -272,6 +278,7 @@ export interface ResolvedSettings {
   redactDepth: number;
   redactKeys: RegExp | null;
   redactPaths: string[];
+  serializers: Record<string, (value: unknown) => unknown> | undefined;
   repeat: RepeatSettings | false;
   autoCounters: boolean;
   showAuthor: boolean;
@@ -319,4 +326,6 @@ export interface LoggerState {
   transport: Transport;
   /** Flight-recorder ring; entries are pushed post-filter, post-redaction. */
   readonly blackbox?: { push: (entry: LogEntry) => void } | undefined;
+  /** Per-key context transformers, applied before redaction. */
+  readonly serializers?: Record<string, (value: unknown) => unknown> | undefined;
 }

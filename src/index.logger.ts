@@ -5,6 +5,8 @@ export type * from "./types/index.types";
 export {
   Logger,
   createLogger,
+  captureConsole,
+  fromEnv,
   formatContext,
   formatDuration,
   installErrorHandlers,
