@@ -1,4 +1,4 @@
-# hp_logger
+# hp_logger [![Socket Badge](https://badge.socket.dev/npm/package/hp_logger/0.5.0)](https://badge.socket.dev/npm/package/hp_logger/0.5.0)
 
 Structured logger for Bun and Node.js. One dependency-free package for leveled logging, secret redaction, file and database output, flood control, tracing spans, Prometheus-style metrics and web framework integrations.
 
