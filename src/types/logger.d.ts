@@ -30,6 +30,8 @@ export interface BatchingSettings {
   maxQueueSize?: number;
   /** Flush interval in milliseconds. */
   flushInterval?: number;
+  /** Levels that flush the pending batch immediately, bypassing batchSize. */
+  flushOn?: LogLevel[];
 }
 
 /** Options for adaptive throttling during error storms (`logger.adaptive`). */

@@ -6,6 +6,23 @@ export interface DatabaseAdapter {
   write: (entries: LogEntry[]) => void | Promise<void>;
 }
 
+/** Retry policy for failed adapter writes (`database.retry`). */
+export interface RetrySettings {
+  /**
+   * Maximum write attempts per batch (the first try included) before the
+   * batch is dropped and counted in `stats().dropped`. Defaults to unlimited.
+   */
+  attempts?: number;
+  /** Delay growth between retries. Defaults to `exponential`. */
+  backoff?: "exponential" | "linear" | "fixed";
+  /** First wait in milliseconds and the base for growth. Defaults to 1000. */
+  baseMs?: number;
+  /** Upper bound of a single wait in milliseconds. Defaults to 30000. */
+  maxMs?: number;
+  /** Random share (0-1) of a wait added and subtracted to avoid herds. Defaults to 0. */
+  jitter?: number;
+}
+
 export interface DatabaseSettings {
   /** Adapter that persists entries (e.g. createSqliteAdapter). Required when enabled. */
   adapter?: DatabaseAdapter;
@@ -15,6 +32,13 @@ export interface DatabaseSettings {
   /** Minimum level that gets persisted. Defaults to the logger level. */
   level?: LogLevel;
   maxBufferSize?: number;
+  /**
+   * Backoff schedule for failed writes: the batch stays at the head of the
+   * queue and is retried after an increasing delay instead of on the next
+   * trigger. Without it, retries stay immediate (previous behavior).
+   * Ignored during close(), which never waits.
+   */
+  retry?: RetrySettings | false;
 }
 
 export interface FileSettings {

@@ -29,6 +29,12 @@ export default defineConfig({
         "promise/prefer-await-to-callbacks": "off",
       },
     },
+    {
+      files: ["src/index.logger.ts"],
+      rules: {
+        "oxc/no-barrel-file": "off",
+      },
+    },
   ],
   options: {
     typeAware: true,

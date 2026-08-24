@@ -25,3 +25,17 @@ export const startUnrefInterval = (
 export const stopInterval = (handle: ReturnType<typeof setInterval> | null): void => {
   if (handle) clearInterval(handle);
 };
+
+/** setTimeout that does not keep the process alive; the handle must be stopped on close. */
+export const startUnrefTimeout = (
+  fn: () => void,
+  timeoutMs: number,
+): ReturnType<typeof setTimeout> => {
+  const handle = setTimeout(fn, Math.max(0, timeoutMs));
+  handle.unref();
+  return handle;
+};
+
+export const stopTimeout = (handle: ReturnType<typeof setTimeout> | null): void => {
+  if (handle) clearTimeout(handle);
+};

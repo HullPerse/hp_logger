@@ -291,3 +291,132 @@ describe("DatabaseTransport", () => {
     ).toThrow("requires an adapter");
   });
 });
+
+const sleep = (ms: number): Promise<void> => Bun.sleep(ms);
+
+describe("DatabaseTransport retry backoff", () => {
+  test("a failed batch waits out the backoff instead of retrying on the next trigger", async () => {
+    const calls: string[][] = [];
+    let failFirstCall = true;
+    const transport = new DatabaseTransport({
+      adapter: {
+        write(entries) {
+          calls.push(entries.map((item) => item.message));
+          if (failFirstCall) {
+            failFirstCall = false;
+            throw new Error("boom");
+          }
+        },
+      },
+      enabled: true,
+      flushInterval: 60_000,
+      maxBufferSize: 1,
+      retry: { backoff: "fixed", baseMs: 30 },
+    });
+
+    transport.write(entry("delayed"));
+    await Promise.resolve();
+    expect(calls).toEqual([["delayed"]]);
+
+    // A fresh trigger while the backoff is due must not redeliver the batch.
+    transport.writeBatch([]);
+    expect(calls).toHaveLength(1);
+    expect(transport.stats().queued).toBe(1);
+
+    await sleep(150);
+    expect(calls).toEqual([["delayed"], ["delayed"]]);
+    expect(transport.stats().queued).toBe(0);
+    await transport.close();
+  });
+
+  test("a successful write resets the attempt counter for later failures", async () => {
+    const calls: string[][] = [];
+    const delivered: string[] = [];
+    let failureMode: "first" | "second" | null = "first";
+    const transport = new DatabaseTransport({
+      adapter: {
+        write(entries) {
+          calls.push(entries.map((item) => item.message));
+          if (failureMode !== null) {
+            const mode = failureMode;
+            failureMode = mode === "first" ? "second" : null;
+            throw new Error(`fail ${mode}`);
+          }
+          for (const item of entries) delivered.push(item.message);
+        },
+      },
+      enabled: true,
+      flushInterval: 60_000,
+      maxBufferSize: 1,
+      retry: { backoff: "fixed", baseMs: 20 },
+    });
+
+    transport.write(entry("one"));
+    transport.write(entry("two"));
+    await sleep(200);
+
+    // Each transient failure gets a fresh unlimited attempt budget.
+    expect(delivered).toEqual(["one", "two"]);
+    expect(calls).toHaveLength(4);
+    await transport.close();
+  });
+
+  test("exhausted attempts drop the batch and count it as dropped", async () => {
+    let calls = 0;
+    const delivered: string[] = [];
+    const transport = new DatabaseTransport({
+      adapter: {
+        write(entries) {
+          calls += 1;
+          if (calls <= 2) throw new Error("still down");
+          for (const item of entries) delivered.push(item.message);
+        },
+      },
+      enabled: true,
+      flushInterval: 60_000,
+      maxBufferSize: 1,
+      retry: { attempts: 2, backoff: "fixed", baseMs: 15 },
+    });
+
+    transport.write(entry("lost"));
+    await sleep(150);
+    expect(transport.stats().dropped).toBe(1);
+    expect(transport.stats().queued).toBe(0);
+    expect(calls).toBe(2);
+
+    // The queue keeps flowing after a dropped batch.
+    transport.write(entry("kept"));
+    await sleep(80);
+    expect(delivered).toEqual(["kept"]);
+    await transport.close();
+  });
+
+  test("close drains immediately and ignores a pending backoff wait", async () => {
+    const calls: string[][] = [];
+    let failFirstCall = true;
+    const transport = new DatabaseTransport({
+      adapter: {
+        write(entries) {
+          calls.push(entries.map((item) => item.message));
+          if (failFirstCall) {
+            failFirstCall = false;
+            throw new Error("boom");
+          }
+        },
+      },
+      enabled: true,
+      flushInterval: 60_000,
+      maxBufferSize: 1,
+      retry: { backoff: "fixed", baseMs: 60_000 },
+    });
+
+    transport.write(entry("shutdown"));
+    await Promise.resolve();
+    expect(calls).toEqual([["shutdown"]]);
+
+    const startedAt = Date.now();
+    await transport.close();
+    expect(Date.now() - startedAt).toBeLessThan(5000);
+    expect(calls).toEqual([["shutdown"], ["shutdown"]]);
+  });
+});

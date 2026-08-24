@@ -13,6 +13,61 @@ const entry = (message: string): LogEntry => ({
   timestamp: "2024-01-02 03:04:05",
 });
 
+describe("AsyncTransport flushOn", () => {
+  test("a configured level flushes the pending batch before batchSize is reached", async () => {
+    const batched: LogEntry[][] = [];
+    const transport: Transport = {
+      write() {
+        throw new Error("write should not be called when writeBatch exists");
+      },
+      writeBatch(entries: LogEntry[]) {
+        batched.push([...entries]);
+      },
+    };
+
+    const asyncTransport = new AsyncTransport(transport, {
+      batchSize: 10,
+      flushOn: ["error", "fatal"],
+    });
+    const infoWrite = asyncTransport.write(entry("queued"));
+    const errorEntry = { ...entry("critical"), level: "error" } as LogEntry;
+    const errorWrite = asyncTransport.write(errorEntry);
+
+    // The error entry's own completion proves the flush happened.
+    await errorWrite;
+    await asyncTransport.close();
+    await infoWrite;
+
+    expect(batched.flat().map((item) => item.message)).toEqual(["queued", "critical"]);
+  });
+
+  test("levels outside flushOn keep waiting for batchSize or the interval", () => {
+    let batches = 0;
+    const asyncTransport = new AsyncTransport(
+      { write() {}, writeBatch() { batches += 1; } },
+      { batchSize: 10, flushOn: ["fatal"] },
+    );
+
+    asyncTransport.write(entry("info stays queued"));
+    expect(batches).toBe(0);
+    expect(asyncTransport.stats().queued).toBe(1);
+    return asyncTransport.close();
+  });
+
+  test("without flushOn, entries below batchSize are not flushed", () => {
+    let batches = 0;
+    const asyncTransport = new AsyncTransport(
+      { write() {}, writeBatch() { batches += 1; } },
+      { batchSize: 10 },
+    );
+
+    const errorEntry = { ...entry("no flush"), level: "error" } as LogEntry;
+    void asyncTransport.write(errorEntry);
+    expect(batches).toBe(0);
+    return asyncTransport.close();
+  });
+});
+
 describe("AsyncTransport", () => {
   test("uses writeBatch when the wrapped transport provides it", async () => {
     const batched: LogEntry[][] = [];

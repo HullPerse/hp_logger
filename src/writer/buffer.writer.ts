@@ -1,11 +1,12 @@
 import { DEFAULT_BATCH_SIZE, DEFAULT_MAX_QUEUE_SIZE } from "../config/writer.config";
 import { attemptAsync } from "../lib/result.utils";
 import { dispatchBatch, startUnrefInterval, stopInterval } from "../lib/transport.utils";
-import type { BatchingSettings, LogEntry } from "../types/logger";
+import type { BatchingSettings, LogEntry, LogLevel } from "../types/logger";
 import type { QueuedEntry, Transport, TransportStats } from "../types/transport";
 
 export class AsyncTransport implements Transport {
   private readonly batchSize: number;
+  private readonly flushOn: LogLevel[];
   private readonly maxQueueSize: number;
   private readonly flushTimer: ReturnType<typeof setInterval> | null = null;
   private flushPromise: Promise<void> | null = null;
@@ -21,6 +22,7 @@ export class AsyncTransport implements Transport {
   constructor(transport: Transport, options: BatchingSettings = {}) {
     this.transport = transport;
     this.batchSize = Math.max(1, options.batchSize ?? DEFAULT_BATCH_SIZE);
+    this.flushOn = options.flushOn ?? [];
     this.maxQueueSize = Math.max(1, options.maxQueueSize ?? DEFAULT_MAX_QUEUE_SIZE);
     if (options.flushInterval) {
       this.flushTimer = startUnrefInterval(() => {
@@ -42,7 +44,7 @@ export class AsyncTransport implements Transport {
 
     this.pending += 1;
     this.queue.push({ entry, resolve });
-    if (this.queue.length >= this.batchSize) {
+    if (this.queue.length >= this.batchSize || this.flushOn.includes(entry.level)) {
       this.flush();
     } else {
       this.scheduleFlush();
