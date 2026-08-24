@@ -9,6 +9,7 @@ import { DateBasedFileTransport } from "./dateBased.writer";
 import { FileTransport } from "./file.writer";
 import { MultiTransport } from "./group.writer";
 import { RepeatTransport } from "./repeat.writer";
+import { SizeBasedFileTransport } from "./sizeBased.writer";
 
 export const buildTransports = (settings: ResolvedSettings): Transport => {
   const transports: Transport[] = [new ConsoleTransport(settings)];
@@ -22,10 +23,16 @@ export const buildTransports = (settings: ResolvedSettings): Transport => {
       stripControl: settings.stripControl,
       tagCase: settings.tagCase,
     };
-    const fileTransport: Transport =
-      fileSettings.rotation === "daily"
-        ? new DateBasedFileTransport(fileSettings.path ?? DEFAULT_LOG_DIR, fileOptions)
-        : new FileTransport(fileSettings.path ?? DEFAULT_LOG_DIR, fileOptions);
+    const { rotation } = fileSettings;
+    const logDir = fileSettings.path ?? DEFAULT_LOG_DIR;
+    let fileTransport: Transport;
+    if (rotation === "daily") {
+      fileTransport = new DateBasedFileTransport(logDir, fileOptions);
+    } else if (rotation === "size") {
+      fileTransport = new SizeBasedFileTransport(logDir, fileOptions);
+    } else {
+      fileTransport = new FileTransport(logDir, fileOptions);
+    }
     transports.push(fileTransport);
   }
 

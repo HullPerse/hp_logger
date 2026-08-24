@@ -1,7 +1,7 @@
-import { once } from "node:events";
 import { createWriteStream } from "node:fs";
 import type { WriteStream } from "node:fs";
 import { finished } from "node:stream/promises";
+import { promisify } from "node:util";
 
 import { DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_BUFFER_SIZE } from "../config/writer.config";
 import { formatEntry } from "../format/entry.format";
@@ -83,11 +83,10 @@ export abstract class BaseFileTransport implements Transport {
     const { stream } = this;
     const data = `${this.buffer.join("\n")}\n`;
     this.buffer = [];
-    const outcome = await attemptAsync(async () => {
-      if (!stream.write(data)) {
-        await once(stream, "drain");
-      }
-    });
+    // The write callback fires after the chunk reaches the file descriptor,
+    // so callers (size rotation) can stat the file right after the flush.
+    const writeChunk = promisify(stream.write.bind(stream)) as (chunk: string) => Promise<void>;
+    const outcome = await attemptAsync(() => writeChunk(data));
     // File write errors are non-fatal for logging; the buffer is already
     // cleared. The stream is destroyed and re-created on the next flush:
     // a broken stream (deleted file, full disk, revoked handle) stays

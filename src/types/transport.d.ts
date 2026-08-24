@@ -65,13 +65,19 @@ export interface FileSettings {
   path?: string;
   /** Entry format: `json` one line per entry, `pretty` readable text without colors. */
   mode?: "json" | "pretty";
-  /** Rotate files by day into `path/{yyyy-mm-dd}/log_NNN.log`. */
-  rotation?: "daily" | "none";
+  /** Rotate by day into `path/{yyyy-mm-dd}/log_NNN.log` or by size into `app.N.log` segments. */
+  rotation?: "daily" | "size" | "none";
   enabled: boolean;
   /** Flush interval in milliseconds. */
   flushInterval?: number;
   maxBufferSize?: number;
   maxFilesPerDay?: number;
+  /** Size rotation: rotate when the active file reaches this many bytes. Defaults to 10485760. */
+  maxBytes?: number;
+  /** Size rotation: number of rotated segments to keep. Defaults to 5. */
+  maxFiles?: number;
+  /** Size rotation: gzip rotated segments. Defaults to false. */
+  gzip?: boolean;
 }
 
 /** Options shared by FileTransport and DateBasedFileTransport. */
