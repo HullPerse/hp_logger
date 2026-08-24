@@ -461,7 +461,7 @@ export class Logger implements LoggerState {
     const taskLevel: LogLevel = options.level ?? this.currentSettings.task.level;
     const progressEnabled = this.currentSettings.task.progress;
     const startedAt = performance.now();
-    const state = { open: true };
+    const state = { frame: 0, open: true };
 
     const finish = (ok: boolean, detail?: string | Error): void => {
       if (state.open) {
@@ -509,11 +509,13 @@ export class Logger implements LoggerState {
       update: (text: string, context?: LogContext): void => {
         if (progressEnabled && state.open) {
           this.write(taskLevel, text, {
+            frame: state.frame,
             group: childGroup,
             status: "progress",
             task: name,
             ...context,
           });
+          state.frame += 1;
         }
       },
     };

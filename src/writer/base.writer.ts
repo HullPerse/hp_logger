@@ -7,7 +7,7 @@ import { DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_BUFFER_SIZE } from "../config/write
 import { formatEntry } from "../format/entry.format";
 import { attemptAsync } from "../lib/result.utils";
 import { startUnrefInterval, stopInterval } from "../lib/transport.utils";
-import type { ContextFormat, EntryFormatter, LogEntry, TagCase } from "../types/logger";
+import type { ContextFormat, EntryFormatter, FormatSettings, LogEntry, TagCase } from "../types/logger";
 import type { FileTransportOptions, Transport, TransportStats } from "../types/transport";
 
 /** Common buffered file writing shared by fixed-path and daily-rotating transports. */
@@ -15,7 +15,7 @@ export abstract class BaseFileTransport implements Transport {
   protected buffer: string[] = [];
   protected readonly contextFormat: ContextFormat;
   protected readonly flushInterval: number;
-  protected readonly format: EntryFormatter | undefined;
+  protected readonly format: EntryFormatter | FormatSettings | undefined;
   protected readonly maxBufferSize: number;
   protected readonly mode: "json" | "pretty";
   protected readonly stripControl: boolean;
@@ -26,7 +26,7 @@ export abstract class BaseFileTransport implements Transport {
 
   constructor(
     options: Omit<FileTransportOptions, "path"> & {
-      format?: EntryFormatter;
+      format?: EntryFormatter | FormatSettings;
       stripControl?: boolean;
       tagCase?: TagCase;
     },

@@ -11,6 +11,7 @@ import { applyColor } from "../lib/color.utils";
 import { stripControlCharacters } from "../lib/json.utils";
 import type { ColorName, LogEntry, LogLevel, ResolvedSettings, TagCase } from "../types/logger";
 import type { Transport } from "../types/transport";
+import { renderTemplateSettings } from "../format/template.format";
 
 type LevelTagMap = Record<LogLevel, string>;
 type LevelColorMap = Record<LogLevel, ColorName | false | undefined>;
@@ -65,9 +66,24 @@ export class ConsoleTransport implements Transport {
   }
 
   private writePretty(entry: LogEntry): void {
-    const output = this.settings.format
-      ? this.finalize(this.settings.format(entry))
-      : this.renderDefault(entry);
+    const { format } = this.settings;
+    let output: string;
+    if (format === undefined) {
+      output = this.renderDefault(entry);
+    } else if (typeof format === "function") {
+      output = this.finalize(format(entry));
+    } else {
+      // Templates color themselves per token, so no finalize-time pass is needed.
+      output = renderTemplateSettings(format, entry, {
+        authorName: (author) => this.authorName(author),
+        colorize: true,
+        contextFormat: this.settings.formatContext,
+        elapsedMs: () => performance.now() - this.startedAt,
+        levelColor: (level) => this.levelColors[level],
+        stripControl: this.settings.stripControl,
+        tagCase: this.tagCase,
+      });
+    }
     consoleWrite(entry.level, output, true);
   }
 

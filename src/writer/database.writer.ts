@@ -9,13 +9,16 @@ import {
   stopInterval,
   stopTimeout,
 } from "../lib/transport.utils";
-import type { LogEntry, LogLevel } from "../types/logger";
+import type { LogContext, LogEntry, LogLevel } from "../types/logger";
 import type {
   DatabaseAdapter,
   DatabaseSettings,
   Transport,
   TransportStats,
 } from "../types/transport";
+
+/** Author of retry/drop notices so they never re-enter this transport. */
+const NOTICE_AUTHOR = "database";
 
 /**
  * Buffers entries and hands them to the adapter in strict FIFO order,
@@ -39,12 +42,13 @@ export class DatabaseTransport implements Transport {
   private idleWaiters: (() => void)[] = [];
   private inflight = 0;
   private readonly retry: ResolvedRetry | null;
+  private readonly notices: Transport | null;
   private retryAttempt = 0;
   private retryDueAt = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private transportErrors = 0;
 
-  constructor(settings: DatabaseSettings) {
+  constructor(settings: DatabaseSettings, notices?: Transport) {
     if (!settings.adapter) {
       throw new Error("DatabaseTransport requires an adapter when enabled");
     }
@@ -53,12 +57,15 @@ export class DatabaseTransport implements Transport {
     this.level = settings.level ?? "debug";
     this.batchSize = Math.max(1, settings.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE);
     this.retry = resolveRetry(settings.retry);
+    this.notices = notices ?? null;
     this.flushTimer = startUnrefInterval(() => {
       this.pump();
     }, this.flushInterval);
   }
 
   write(entry: LogEntry): void {
+    // Our own notices must never re-enter the write pipeline.
+    if (entry.author === NOTICE_AUTHOR) return;
     if (this.closed || LOG_LEVELS[entry.level] < LOG_LEVELS[this.level]) return;
     this.buffer.push(entry);
     if (this.buffer.length >= this.batchSize) this.pump();
@@ -106,7 +113,7 @@ export class DatabaseTransport implements Transport {
         return;
       }
       if (!this.closed && this.retry !== null) {
-        this.scheduleRetry();
+        this.scheduleRetry(outcome.error.message);
       }
       this.notifyIdle();
       return;
@@ -115,13 +122,33 @@ export class DatabaseTransport implements Transport {
     this.pump();
   }
 
+  /** Emit a retry/drop notice to the sibling transports (never to ourselves). */
+  private emitNotice(level: LogLevel, message: string, context: LogContext): void {
+    this.notices?.write({
+      author: NOTICE_AUTHOR,
+      context,
+      level,
+      message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   /** Count the failed head batch and arm its next attempt, or drop it at the cap. */
-  private scheduleRetry(): void {
+  private scheduleRetry(errorMessage: string): void {
     const { retry } = this;
     if (retry === null) return;
     this.retryAttempt += 1;
+    const attemptLabel = `${this.retryAttempt}/${Number.isFinite(retry.attempts) ? retry.attempts : "inf"}`;
     if (this.retryAttempt >= retry.attempts) {
-      this.dropped += this.takeBatch().length;
+      const droppedCount = this.takeBatch().length;
+      this.dropped += droppedCount;
+      this.emitNotice("warn", `write dropped after ${attemptLabel} attempts - ${errorMessage}`, {
+        attempt: this.retryAttempt,
+        attempts: Number.isFinite(retry.attempts) ? retry.attempts : undefined,
+        dropped: droppedCount,
+        error: errorMessage,
+        operation: "database.write",
+      });
       this.resetRetry();
       return;
     }
@@ -132,6 +159,17 @@ export class DatabaseTransport implements Transport {
       this.retryTimer = null;
       this.pump();
     }, waitMs);
+    this.emitNotice(
+      "debug",
+      `write failed - retrying in ${Math.round(waitMs)}ms (attempt ${attemptLabel}): ${errorMessage}`,
+      {
+        attempt: this.retryAttempt,
+        attempts: Number.isFinite(retry.attempts) ? retry.attempts : undefined,
+        error: errorMessage,
+        operation: "database.write",
+        waitMs: Math.round(waitMs),
+      },
+    );
   }
 
   private resetRetry(): void {

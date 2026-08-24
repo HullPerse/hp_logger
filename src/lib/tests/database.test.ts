@@ -394,21 +394,24 @@ describe("DatabaseTransport retry backoff", () => {
   test("close drains immediately and ignores a pending backoff wait", async () => {
     const calls: string[][] = [];
     let failFirstCall = true;
-    const transport = new DatabaseTransport({
-      adapter: {
-        write(entries) {
-          calls.push(entries.map((item) => item.message));
-          if (failFirstCall) {
-            failFirstCall = false;
-            throw new Error("boom");
-          }
+    const transport = new DatabaseTransport(
+      {
+        adapter: {
+          write(entries) {
+            calls.push(entries.map((item) => item.message));
+            if (failFirstCall) {
+              failFirstCall = false;
+              throw new Error("boom");
+            }
+          },
         },
+        enabled: true,
+        flushInterval: 60_000,
+        maxBufferSize: 1,
+        retry: { backoff: "fixed", baseMs: 60_000 },
       },
-      enabled: true,
-      flushInterval: 60_000,
-      maxBufferSize: 1,
-      retry: { backoff: "fixed", baseMs: 60_000 },
-    });
+      { write() {} },
+    );
 
     transport.write(entry("shutdown"));
     await Promise.resolve();
@@ -418,5 +421,142 @@ describe("DatabaseTransport retry backoff", () => {
     await transport.close();
     expect(Date.now() - startedAt).toBeLessThan(5000);
     expect(calls).toEqual([["shutdown"], ["shutdown"]]);
+  });
+});
+
+describe("DatabaseTransport retry notices", () => {
+  test("a failed batch emits an attempt notice to the sibling transport", async () => {
+    const notices: LogEntry[] = [];
+    let calls = 0;
+    const transport = new DatabaseTransport(
+      {
+        adapter: {
+          write() {
+            calls += 1;
+            if (calls === 1) throw new Error("disk full");
+          },
+        },
+        enabled: true,
+        flushInterval: 60_000,
+        maxBufferSize: 1,
+        retry: { backoff: "fixed", baseMs: 20 },
+      },
+      {
+        write: (notice) => {
+          notices.push(notice);
+        },
+      },
+    );
+
+    transport.write(entry("watched"));
+    await sleep(150);
+
+    expect(notices).toHaveLength(1);
+    const notice = notices[0] as LogEntry;
+    expect(notice.author).toBe("database");
+    expect(notice.level).toBe("debug");
+    expect(notice.message).toContain("retrying in");
+    expect(notice.message).toContain("attempt 1/5");
+    expect(notice.message).toContain("disk full");
+    expect(notice.context.attempt).toBe(1);
+    expect(notice.context.attempts).toBe(5);
+    expect(typeof notice.context.waitMs).toBe("number");
+    await transport.close();
+  });
+
+  test("exhausted attempts emit a drop warning with the dropped count", async () => {
+    const notices: LogEntry[] = [];
+    let calls = 0;
+    const transport = new DatabaseTransport(
+      {
+        adapter: {
+          write() {
+            calls += 1;
+            throw new Error("still down");
+          },
+        },
+        enabled: true,
+        flushInterval: 60_000,
+        maxBufferSize: 1,
+        retry: { attempts: 2, backoff: "fixed", baseMs: 15 },
+      },
+      {
+        write: (notice) => {
+          notices.push(notice);
+        },
+      },
+    );
+
+    transport.write(entry("doomed"));
+    await sleep(150);
+
+    const drop = notices.find((item) => item.level === "warn") as LogEntry | undefined;
+    expect(drop?.author).toBe("database");
+    expect(drop?.message).toContain("dropped after 2/2 attempts");
+    expect(drop?.message).toContain("still down");
+    expect(drop?.context.dropped).toBe(1);
+    expect(transport.stats().dropped).toBe(1);
+    expect(calls).toBe(2);
+  });
+
+  test("entries authored by the database transport never re-enter its queue", () => {
+    const transport = new DatabaseTransport({
+      adapter: { write() {} },
+      enabled: true,
+      flushInterval: 60_000,
+    });
+
+    transport.write({
+      author: "database",
+      context: {},
+      level: "debug",
+      message: "loop attempt",
+      timestamp: "2026-08-24T00:00:00.000Z",
+    });
+    expect(transport.stats().queued).toBe(0);
+  });
+
+  test("the default pipeline wires database notices into console and file transports", async () => {
+    const logger = createLogger({
+      settings: {
+        database: {
+          // A dead adapter makes every batch fail and drop after one attempt.
+          adapter: {
+            write() {
+              throw new Error("dead adapter");
+            },
+          },
+          enabled: true,
+          maxBufferSize: 1,
+          retry: { attempts: 1, backoff: "fixed", baseMs: 10 },
+        },
+        file: false,
+        mode: "json",
+      },
+    });
+
+    const outputs: string[] = [];
+    const capture = (value: unknown): void => {
+      outputs.push(String(value));
+    };
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    console.error = capture;
+    console.warn = capture;
+    try {
+      // attempts: 1 drops the first batch immediately and warns through the tap.
+      logger.info("will be dropped");
+      await Bun.sleep(80);
+    } finally {
+      console.error = originalError;
+      console.warn = originalWarn;
+      await withMutedConsole(async () => {
+        await logger.close();
+      });
+    }
+
+    expect(outputs.some((line) => line.includes("database") && line.includes("dropped"))).toBe(
+      true,
+    );
   });
 });

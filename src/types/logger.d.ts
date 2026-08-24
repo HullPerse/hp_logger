@@ -152,7 +152,7 @@ export interface LoggerSettings {
   /** Filter entries before they reach any transport. */
   filters?: ((entry: LogEntry) => boolean)[];
   /** Custom pretty renderer for console and file output. */
-  format?: EntryFormatter;
+  format?: EntryFormatter | FormatSettings;
   /** How context renders in pretty mode: `json` object or `kv` key="value" pairs. */
   formatContext?: ContextFormat;
   /** Collapse repeated identical entries into `message ×N` summaries. `false` disables. */
@@ -218,6 +218,18 @@ export type LazyContext = LogContext | (() => LogContext);
  */
 export type EntryFormatter = (entry: LogEntry) => string;
 
+/** Template-based alternative to an `EntryFormatter` function. */
+export interface FormatSettings {
+  /**
+   * Line template with `{token}` placeholders, e.g.
+   * `"[{timestamp.time}] [{level.tag}] {author}: {message}"`. Any context
+   * key works as a token; `{token:red}` forces a color, `{:green}text{:/}`
+   * colors literal spans, `\{` escapes a brace. Unknown dotted tokens are
+   * kept literally and warned about once; colors render in console only.
+   */
+  template: string;
+}
+
 export interface ResolvedSettings {
   adaptive: AdaptiveSettings | false;
   batching: BatchingSettings | false;
@@ -229,7 +241,7 @@ export interface ResolvedSettings {
   enabled: boolean;
   file: FileSettings | false;
   filters: ((entry: LogEntry) => boolean)[];
-  format: EntryFormatter | undefined;
+  format: EntryFormatter | FormatSettings | undefined;
   formatContext: ContextFormat;
   formatTimestamp: TimestampFormat;
   level: LogLevel;

@@ -20,3 +20,13 @@ export const LEVEL_EMOJIS: Record<LogLevel, string> = {
   trace: "🔍",
   warn: "⚠️",
 };
+
+/** Braille frames cycled by consecutive task progress entries ({task.frame}). */
+export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/** Glyph per task status, used by the {task.glyph} template token. */
+export const TASK_GLYPHS: Record<string, string> = {
+  done: "✔",
+  failed: "✘",
+  started: "▶",
+};

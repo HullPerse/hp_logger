@@ -8,6 +8,7 @@ export interface ResolvedRetry {
   jitter: number;
 }
 
+export const RETRY_ATTEMPTS = 5;
 export const RETRY_BASE_MS = 1000;
 export const RETRY_MAX_MS = 30_000;
 
@@ -16,7 +17,7 @@ export const resolveRetry = (settings?: RetrySettings | false): ResolvedRetry | 
   if (!settings) return null;
   const baseMs = Math.max(0, settings.baseMs ?? RETRY_BASE_MS);
   return {
-    attempts: Math.max(1, settings.attempts ?? Number.POSITIVE_INFINITY),
+    attempts: Math.max(1, settings.attempts ?? RETRY_ATTEMPTS),
     backoff: settings.backoff ?? "exponential",
     baseMs,
     jitter: Math.min(1, Math.max(0, settings.jitter ?? 0)),

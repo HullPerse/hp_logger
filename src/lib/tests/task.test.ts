@@ -116,6 +116,26 @@ describe("logger.task", () => {
     expect(on.entries[1]?.level).toBe("debug");
   });
 
+  test("progress entries carry an incrementing frame counter for spinner tokens", async () => {
+    const { entries, logger } = captureLogger({
+      level: "debug",
+      task: { progress: true },
+    });
+
+    await logger.task("spin", async (task) => {
+      task.update("one");
+      task.update("two");
+      task.update("three");
+    });
+
+    const frames = entries
+      .filter((item) => item.context.status === "progress")
+      .map((item) => item.context.frame);
+    expect(frames).toEqual([0, 1, 2]);
+    // Final done entry carries no frame.
+    expect(entries.at(-1)?.context.frame).toBeUndefined();
+  });
+
   test("tasks register spans so traceTree renders them", async () => {
     const { entries, logger } = captureLogger({ level: "debug" });
 

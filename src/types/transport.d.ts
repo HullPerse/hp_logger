@@ -10,7 +10,7 @@ export interface DatabaseAdapter {
 export interface RetrySettings {
   /**
    * Maximum write attempts per batch (the first try included) before the
-   * batch is dropped and counted in `stats().dropped`. Defaults to unlimited.
+   * batch is dropped and counted in `stats().dropped`. Defaults to 5.
    */
   attempts?: number;
   /** Delay growth between retries. Defaults to `exponential`. */

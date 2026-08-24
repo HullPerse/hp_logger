@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  RETRY_ATTEMPTS,
   RETRY_BASE_MS,
   RETRY_MAX_MS,
   applyJitter,
@@ -24,12 +25,13 @@ describe("resolveRetry", () => {
   test("applies documented defaults", () => {
     const retry = resolveRetry({});
     expect(retry).toEqual({
-      attempts: Number.POSITIVE_INFINITY,
+      attempts: RETRY_ATTEMPTS,
       backoff: "exponential",
       baseMs: RETRY_BASE_MS,
       jitter: 0,
       maxMs: RETRY_MAX_MS,
     });
+    expect(RETRY_ATTEMPTS).toBe(5);
   });
 
   test("clamps invalid values instead of throwing", () => {

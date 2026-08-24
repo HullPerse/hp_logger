@@ -30,7 +30,13 @@ export const buildTransports = (settings: ResolvedSettings): Transport => {
   }
 
   if (settings.database) {
-    transports.push(new DatabaseTransport(settings.database));
+    // Retry/drop notices flow to the console/file transports, never back into
+    // the database transport itself (which also filters its own author).
+    const tap: Transport =
+      transports.length === 1 && transports[0] !== undefined
+        ? transports[0]
+        : new MultiTransport(transports);
+    transports.push(new DatabaseTransport(settings.database, tap));
   }
 
   const [singleTransport] = transports;
