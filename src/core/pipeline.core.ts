@@ -1,8 +1,17 @@
-import type { LazyContext, LazyMessage, LogLevel, LoggerState } from "../types/logger";
+import type { LazyContext, LazyMessage, LogEntry, LogLevel, LoggerState } from "../types/logger";
 import type { Transport } from "../types/transport";
 import { buildEntry } from "./entry.core";
 
 const globalTransports: Transport[] = [];
+
+const dispatchSafely = async (transport: Transport, entry: LogEntry): Promise<void> => {
+  try {
+    await transport.write(entry);
+  } catch {
+    // Transport failures (sync throws and rejected promises alike) never
+    // crash the application that is logging.
+  }
+};
 
 export const addGlobalTransport = (transport: Transport): void => {
   globalTransports.push(transport);
@@ -25,11 +34,17 @@ export const writeEntry = (
   context: LazyContext | undefined,
 ): void => {
   if (!state.enabled) return;
-  const entry = buildEntry(state, level, message, context);
+  let entry: LogEntry | null = null;
+  try {
+    entry = buildEntry(state, level, message, context);
+  } catch {
+    // Hostile context (throwing getters, toJSON) never crashes the caller.
+    return;
+  }
   if (entry === null) return;
   state.blackbox?.push(entry);
-  state.transport.write(entry);
+  dispatchSafely(state.transport, entry);
   if (globalTransports.length > 0) {
-    for (const transport of globalTransports) transport.write(entry);
+    for (const transport of globalTransports) dispatchSafely(transport, entry);
   }
 };

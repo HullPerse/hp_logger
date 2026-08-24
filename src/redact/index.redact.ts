@@ -35,6 +35,13 @@ const matchesSecretKey = (key: string, secretKey: RegExp): boolean => {
  * everything under the prefix. `user.password` hits only that path;
  * `secrets.*` hits `secrets.token` and anything deeper.
  */
+const readChild = (source: Record<string, unknown>, key: string): unknown => {
+  try {
+    return source[key];
+  } catch {
+    return "[REDACTED]";
+  }
+};
 const pathMatches = (currentPath: string, paths: string[]): boolean => {
   for (const pattern of paths) {
     if (pattern.endsWith(".*")) {
@@ -122,7 +129,7 @@ const redactObject = (
   const keys = Object.keys(value);
   let needsCopy = false;
   for (const key of keys) {
-    const child = value[key];
+    const child = readChild(value, key);
     const childPath = currentPath === "" ? key : `${currentPath}.${key}`;
     if (needsRedactionScan(key, child, secretKey, childPath, paths)) {
       needsCopy = true;
@@ -133,7 +140,7 @@ const redactObject = (
 
   const result: Record<string, unknown> = {};
   for (const key of keys) {
-    const child = value[key];
+    const child = readChild(value, key);
     const childPath = currentPath === "" ? key : `${currentPath}.${key}`;
     result[key] = resolveRedactChild(
       key,

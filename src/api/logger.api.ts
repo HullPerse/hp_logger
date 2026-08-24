@@ -615,10 +615,15 @@ export class Logger implements LoggerState {
 
   /**
    * Deliver buffered entries (batching queues, file buffers, database queue)
-   * without closing. A flushed logger keeps logging.
+   * without closing. A flushed logger keeps logging; flush errors never
+   * propagate to the caller.
    */
   async flush(): Promise<void> {
-    await this.transport.flush?.();
+    try {
+      await this.transport.flush?.();
+    } catch {
+      // A failing transport must not crash the flushing caller.
+    }
   }
 
   /**

@@ -73,13 +73,19 @@ export const buildEntry = (
   if (lazyContext !== undefined) {
     resolvedContext = typeof lazyContext === "function" ? lazyContext() : lazyContext;
   }
-  const finalContext = mergeEntryContext(
-    context,
-    hasStaticContext,
-    resolvedContext,
-    getAsyncContext(),
-  );
-  const safeContext = sanitizeContext(finalContext, needsRedaction, redactValue);
+  let finalContext: LogContext;
+  try {
+    finalContext = mergeEntryContext(context, hasStaticContext, resolvedContext, getAsyncContext());
+  } catch {
+    // Hostile context (throwing getters) still logs, with a marker instead.
+    finalContext = { contextError: "unserializable context" };
+  }
+  let safeContext: LogContext;
+  try {
+    safeContext = sanitizeContext(finalContext, needsRedaction, redactValue);
+  } catch {
+    safeContext = { contextError: "unserializable context" };
+  }
   const entryContext = level === "fatal" ? attachFatalSnapshot(safeContext) : safeContext;
 
   const entry: LogEntry = {
