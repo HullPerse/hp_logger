@@ -41,7 +41,7 @@ Full guides, the complete settings reference and integration recipes live on the
 
 ## AI usage disclosure
 
-AI tools were used in building this project for general code structuring, JSDoc comments and security review passes. Architecture, API design and every product decision are made by a human. The documentation and agent-workflow system used throughout development is open source: [github.com/hullperse/hp_docs](https://github.com/hullperse/hp_docs).
+AI tools were used in building this project for general code structuring, JSDoc comments and security review passes. Architecture, API design and every product decision are made by a human. The documentation and agent-workflow system used throughout development is open source: [hp_docs](https://github.com/hullperse/hp_docs).
 
 ## License
 
