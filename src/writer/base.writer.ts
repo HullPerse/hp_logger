@@ -70,7 +70,15 @@ export abstract class BaseFileTransport implements Transport {
     if (!filepath) return;
     if (this.stream === null) {
       // Keep the file open between flushes instead of reopening per flush.
-      this.stream = createWriteStream(filepath, { flags: "a" });
+      const created = createWriteStream(filepath, { flags: "a" });
+      // Without a listener a stream error becomes an uncaughtException.
+      // Self-healing: destroy the dead stream so the next flush re-opens
+      // it fresh (deleted file, bad path, full disk).
+      created.on("error", () => {
+        created.destroy();
+        if (this.stream === created) this.stream = null;
+      });
+      this.stream = created;
     }
     const { stream } = this;
     const data = `${this.buffer.join("\n")}\n`;
@@ -80,10 +88,15 @@ export abstract class BaseFileTransport implements Transport {
         await once(stream, "drain");
       }
     });
-    // File write errors are non-fatal for logging; the buffer is already cleared.
+    // File write errors are non-fatal for logging; the buffer is already
+    // cleared. The stream is destroyed and re-created on the next flush:
+    // a broken stream (deleted file, full disk, revoked handle) stays
+    // broken forever otherwise.
     if (!outcome.ok) {
       this.transportErrors += 1;
       console.error(`hp_logger: file flush failed: ${outcome.error.message}`);
+      stream.destroy();
+      if (this.stream === stream) this.stream = null;
     }
   }
 

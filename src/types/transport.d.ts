@@ -23,9 +23,26 @@ export interface RetrySettings {
   jitter?: number;
 }
 
+/** Reconnect policy for a self-healing database transport (`database.reconnect`). */
+export interface ReconnectSettings {
+  /** Pause between adapter restarts in milliseconds. Defaults to 5000. */
+  cooldownMs?: number;
+  /**
+   * Adapter restart tries per outage before the buffered backlog is dropped
+   * and the transport gives up until the next failure. Defaults to 3.
+   */
+  maxAttempts?: number;
+}
+
 export interface DatabaseSettings {
   /** Adapter that persists entries (e.g. createSqliteAdapter). Required when enabled. */
   adapter?: DatabaseAdapter;
+  /**
+   * Factory for self-healing: after the retry cap is exhausted the transport
+   * closes the dead adapter, waits `reconnect.cooldownMs` and rebuilds one
+   * through this factory, draining the buffered backlog on success.
+   */
+  createAdapter?: () => DatabaseAdapter | Promise<DatabaseAdapter>;
   enabled: boolean;
   /** Flush interval in milliseconds. */
   flushInterval?: number;
@@ -39,6 +56,8 @@ export interface DatabaseSettings {
    * Ignored during close(), which never waits.
    */
   retry?: RetrySettings | false;
+  /** Adapter restart policy; requires `createAdapter` to have any effect. */
+  reconnect?: ReconnectSettings | false;
 }
 
 export interface FileSettings {
