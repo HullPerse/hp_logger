@@ -18,7 +18,7 @@ import { renderSpanTree } from "../format/span.format";
 import { renderTable } from "../format/table.format";
 import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
 import { attemptAsync } from "../lib/result.utils";
-import { mergeSettings, resolveEnvLevel, resolveSettings } from "../lib/settings.utils";
+import { mergeSettings, resolveEnvLevel, resolveEnvModules, resolveSettings } from "../lib/settings.utils";
 import { redact } from "../redact/index.redact";
 import { writeFile } from "node:fs/promises";
 import type {
@@ -79,6 +79,7 @@ export class Logger implements LoggerState {
   needsRedaction!: boolean;
   redactValue!: (value: unknown) => unknown;
   private currentSettings: ResolvedSettings;
+  private readonly envModuleLevels: Map<string, LogLevel> | undefined;
   private blackboxRing: RingBuffer<LogEntry> | null = null;
   private declarativeWatch: WatchHandle | null = null;
   private metricsRegistryInstance: Registry | null = null;
@@ -91,11 +92,13 @@ export class Logger implements LoggerState {
     context: LogContext = {},
     declarativeWatch?: WatchOptions | false,
     transport?: Transport,
+    envModuleLevels?: Map<string, LogLevel>,
   ) {
     this.author = author;
     this.context = context;
     this.hasStaticContext = Object.keys(context).length > 0;
     this.currentSettings = currentSettings;
+    this.envModuleLevels = envModuleLevels;
     this.applyHotSettings(currentSettings);
     this.transport = transport ?? buildTransports(currentSettings);
     if (declarativeWatch) this.rebindWatch(declarativeWatch);
@@ -216,18 +219,40 @@ export class Logger implements LoggerState {
 
   /** Create a named child module with optional settings override. */
   module(name: string, settingsOverride?: LoggerSettings): Logger {
+    // LOG_MODULES wins over inherited settings so an env var can turn one
+    // module's debug on in production without a deploy. `*` is the default
+    // for modules without their own pair.
+    const envLevel =
+      this.envModuleLevels?.get(name) ?? this.envModuleLevels?.get("*");
     const settings = settingsOverride
       ? mergeSettings(this.currentSettings, settingsOverride)
       : this.currentSettings;
-    return new Logger(name, settings, { ...this.context });
+    if (envLevel === undefined || envLevel === settings.level) {
+      return new Logger(name, settings, { ...this.context }, false, undefined, this.envModuleLevels);
+    }
+    return new Logger(
+      name,
+      mergeSettings(settings, { level: envLevel }),
+      { ...this.context },
+      false,
+      undefined,
+      this.envModuleLevels,
+    );
   }
 
   /** Create a child logger with extra persistent context. */
   child(context: LogContext): Logger {
-    return new Logger(this.author, this.currentSettings, {
-      ...this.context,
-      ...context,
-    });
+    return new Logger(
+      this.author,
+      this.currentSettings,
+      {
+        ...this.context,
+        ...context,
+      },
+      false,
+      undefined,
+      this.envModuleLevels,
+    );
   }
 
   addContext(context: LogContext): this {
@@ -668,7 +693,14 @@ export const createLogger = (options: CreateLoggerOptions = {}): Logger => {
     ...options.settings,
     level: options.settings?.level ?? resolveEnvLevel(),
   });
-  return new Logger(options.author ?? DEFAULT_AUTHOR, settings, {}, options.settings?.watch);
+  return new Logger(
+    options.author ?? DEFAULT_AUTHOR,
+    settings,
+    {},
+    options.settings?.watch,
+    undefined,
+    resolveEnvModules(),
+  );
 };
 
 let globalErrorHandlersInstalled = false;

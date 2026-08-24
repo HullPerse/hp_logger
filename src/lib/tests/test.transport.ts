@@ -1,7 +1,7 @@
 import { DEFAULT_AUTHOR } from "@/config/logger.config";
 import { Logger } from "@/index.logger";
 import { resolveSettings } from "@/lib/settings.utils";
-import type { LogEntry, LoggerSettings } from "@/types/logger";
+import type { LogEntry, LogLevel, LoggerSettings } from "@/types/logger";
 import type { Transport } from "@/types/transport";
 import { AsyncTransport } from "@/writer/buffer.writer";
 
@@ -19,6 +19,7 @@ export const createTestTransport = (): { entries: LogEntry[]; transport: Transpo
 
 export const captureLogger = (
   settings: LoggerSettings = {},
+  envModuleLevels?: Map<string, LogLevel>,
 ): { entries: LogEntry[]; logger: Logger; transport: Transport } => {
   const captured = createTestTransport();
   const transport = settings.batching
@@ -30,6 +31,7 @@ export const captureLogger = (
     {},
     settings.watch,
     transport,
+    envModuleLevels,
   );
   return { entries: captured.entries, logger, transport };
 };

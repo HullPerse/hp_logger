@@ -16,6 +16,28 @@ export const resolveEnvLevel = (
   return configured && configured in LOG_LEVELS ? (configured as LogLevel) : "info";
 };
 
+/**
+ * Per-module levels from `LOG_MODULES="auth:debug,http:warn"` (the
+ * debug/RUST_LOG pattern). Unknown levels in a pair are skipped; a bare
+ * `*` entry sets the default for modules without their own pair.
+ */
+export const resolveEnvModules = (
+  env: Record<string, string | undefined> = process.env,
+): Map<string, LogLevel> => {
+  const map = new Map<string, LogLevel>();
+  const raw = env.LOG_MODULES;
+  if (raw === undefined || raw === "") return map;
+  for (const pair of raw.split(",")) {
+    const sep = pair.indexOf(":");
+    if (sep === -1) continue;
+    const name = pair.slice(0, sep).trim();
+    const level = pair.slice(sep + 1).trim();
+    if (name === "" || !(level in LOG_LEVELS)) continue;
+    map.set(name, level as LogLevel);
+  }
+  return map;
+};
+
 type ResolvedTagSettings = Pick<
   ResolvedSettings,
   "colorizeContext" | "emoji" | "showAuthor" | "showDate" | "showElapsed" | "showLevel" | "showTime" | "showYear" | "stripControl" | "tagCase"
