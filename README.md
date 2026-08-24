@@ -10,6 +10,7 @@
 ![Performance](https://badgen.net/badge/performance/NYOOM/00c853)
 ![Console](https://badgen.net/badge/console.log/RETIRED/7c4dff)
 ![Powered](https://badgen.net/badge/powered%20by/rats/6b4f3a)
+[![Production](https://badgen.net/badge/production/rat%20approved/6b4f3a)](https://github.com/hullperse/hp_logger)
 
 Structured logger for Bun and Node.js. One dependency-free package for leveled logging, secret redaction, file and database output, flood control, tracing spans, Prometheus-style metrics and web framework integrations.
 
