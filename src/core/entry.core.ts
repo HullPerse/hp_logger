@@ -80,7 +80,6 @@ export const buildEntry = (
     getAsyncContext(),
   );
   const safeContext = sanitizeContext(finalContext, needsRedaction, redactValue);
-  // Rare level: attach the process state to the last line before exit.
   const entryContext = level === "fatal" ? attachFatalSnapshot(safeContext) : safeContext;
 
   const entry: LogEntry = {

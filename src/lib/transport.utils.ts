@@ -6,8 +6,7 @@ export const dispatchBatch = async (transport: Transport, entries: LogEntry[]): 
   if (transport.writeBatch) {
     await transport.writeBatch(entries);
   } else {
-    // Single await for the whole batch instead of one promise per entry.
-    const promises = entries.map((entry) => Promise.resolve(transport.write(entry)));
+      const promises = entries.map((entry) => Promise.resolve(transport.write(entry)));
     await Promise.all(promises);
   }
 };

@@ -63,14 +63,14 @@ export class AsyncTransport implements Transport {
 
   /** Deliver the pending queue without closing; the transport stays usable. */
   async flush(): Promise<void> {
-    for (;;) {
-      if (this.flushPromise === null && this.queue.length > 0) {
-        const batch = this.queue.splice(0, this.batchSize);
-        const entries = batch.map(({ entry }) => entry);
-        this.flushPromise = this.runFlush(batch, entries);
-      }
-      if (this.flushPromise === null) return;
+    if (this.flushPromise === null && this.queue.length > 0) {
+      const batch = this.queue.splice(0, this.batchSize);
+      const entries = batch.map(({ entry }) => entry);
+      this.flushPromise = this.runFlush(batch, entries);
+    }
+    if (this.flushPromise !== null) {
       await this.flushPromise;
+      return this.flush();
     }
   }
 

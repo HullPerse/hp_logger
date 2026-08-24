@@ -83,8 +83,6 @@ export class DatabaseTransport implements Transport {
     // Our own notices must never re-enter the write pipeline.
     if (entry.author === NOTICE_AUTHOR) return;
     if (this.closed || LOG_LEVELS[entry.level] < LOG_LEVELS[this.level]) return;
-    // While the adapter is being rebuilt the backlog is capped: the newest
-    // entries are dropped, keeping the oldest for the reconnect drain.
     if (this.recovering && this.buffer.length >= RECOVERY_BACKLOG_CAP) {
       this.dropped += 1;
       return;
@@ -179,8 +177,6 @@ export class DatabaseTransport implements Transport {
     this.retryAttempt += 1;
     const attemptLabel = `${this.retryAttempt}/${Number.isFinite(retry.attempts) ? retry.attempts : "inf"}`;
     if (this.retryAttempt >= retry.attempts) {
-      // Self-healing: hand the outage over to the reconnect loop instead of
-      // dropping when a factory is available.
       if (this.createAdapter !== undefined) {
         this.startRecovery(errorMessage);
         return;
@@ -274,8 +270,6 @@ export class DatabaseTransport implements Transport {
       this.adapter.close?.();
       return;
     }
-    // Probe: pump() drains the buffered backlog through the new adapter; a
-    // failing write re-enters recovery via writeNext.
     this.emitNotice(
       "debug",
       `adapter rebuilt (try ${this.reconnectAttempt}/${this.reconnectMaxAttempts}) - probing with ${this.buffer.length} buffered entries`,

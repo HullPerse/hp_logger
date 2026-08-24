@@ -73,8 +73,7 @@ export class ConsoleTransport implements Transport {
     } else if (typeof format === "function") {
       output = this.finalize(format(entry));
     } else {
-      // Templates color themselves per token, so no finalize-time pass is needed.
-      output = renderTemplateSettings(format, entry, {
+        output = renderTemplateSettings(format, entry, {
         authorName: (author) => this.authorName(author),
         colorize: true,
         contextFormat: this.settings.formatContext,
@@ -100,7 +99,6 @@ export class ConsoleTransport implements Transport {
     const tag = (value: string): string => applyColor(levelColor, `[${value}]`);
     let output = "";
 
-    // Tree logs: children of a group are indented under their parent.
     const { group } = entry.context;
     if (typeof group === "string" && group !== "") {
       output += "  ".repeat(Math.max(0, group.split(".").length - 1));

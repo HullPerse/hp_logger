@@ -17,7 +17,6 @@ export const formatEntry = (
     if (typeof formatter === "function") {
       return stripControl ? stripControlCharacters(formatter(entry)) : formatter(entry);
     }
-    // Templates render plain in files: file pretty output carries no colors.
     const line = renderTemplateSettings(formatter, entry, {
       authorName: (author) => caseTag(author, tagCase),
       colorize: false,

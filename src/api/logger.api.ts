@@ -124,7 +124,6 @@ export class Logger implements LoggerState {
         ? identity
         : (value) =>
             redact(value, redactKeys, settings.redactDepth, 0, settings.redactPaths);
-    // The ring survives toggles; its capacity is fixed at creation time.
     if (settings.blackbox) {
       this.blackboxRing ??= new RingBuffer(settings.blackbox.size);
     } else {
@@ -219,9 +218,6 @@ export class Logger implements LoggerState {
 
   /** Create a named child module with optional settings override. */
   module(name: string, settingsOverride?: LoggerSettings): Logger {
-    // LOG_MODULES wins over inherited settings so an env var can turn one
-    // module's debug on in production without a deploy. `*` is the default
-    // for modules without their own pair.
     const envLevel =
       this.envModuleLevels?.get(name) ?? this.envModuleLevels?.get("*");
     const settings = settingsOverride
@@ -275,9 +271,6 @@ export class Logger implements LoggerState {
   // returns before the write() call, the LOG_LEVELS lookup and any argument
   // work. `levelThreshold` is a number on the instance, updated by
   // settings(), so the comparison stays dynamic.
-  // Each level accepts (message, context) as before, (context, message) as
-  // the typed structured alternative, or a bare object that is printed as
-  // JSON.
 
   trace(message: LazyMessage, context?: LazyContext): void;
   trace(context: LogContext, message?: string): void;
@@ -349,7 +342,6 @@ export class Logger implements LoggerState {
     if (typeof second === "string") {
       return { context: first, message: second };
     }
-    // A bare object is printed as JSON instead of an empty-string message.
     return { context: second as LazyContext | undefined, message: () => JSON.stringify(first) };
   }
 
@@ -442,8 +434,6 @@ export class Logger implements LoggerState {
 
     if (callback === undefined) return handle;
 
-    // Callback form: run inside the span's async-local context so all
-    // entries (including child spans) inherit spanId/traceId/parentId.
     return runWithContext(spanContext, async () => {
       try {
         const result = (await callback(handle)) as T;
@@ -494,7 +484,7 @@ export class Logger implements LoggerState {
     const inherited = getAsyncContext();
     const prefix = typeof inherited?.group === "string" ? (inherited.group as string) : "";
     const ownGroup = `${prefix}${name}`;
-    // Trailing dot: child entries split one level deeper and indent under the task.
+    // Trailing dot is load-bearing: it makes child entries indent one level deeper.
     const childGroup = `${ownGroup}.`;
 
     const traceId = inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string);
@@ -573,8 +563,6 @@ export class Logger implements LoggerState {
 
     if (callback === undefined) return handle;
 
-    // Callback form: entries inside inherit the task group (pretty nesting)
-    // plus span/trace ids; an unhandled throw marks the task failed.
     return runWithContext({ ...spanContext, group: childGroup }, async () => {
       try {
         const result = (await callback(handle)) as T;

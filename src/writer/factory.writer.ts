@@ -37,7 +37,6 @@ export const buildTransports = (settings: ResolvedSettings): Transport => {
 
     let fileTransport: Transport;
     if (settings.file.splitByLevel) {
-      // One file transport per level, each gated to exactly its level.
       const perLevel: Transport[] = LEVEL_NAMES.map((level) => {
         const options: FileTransportOptions = { ...fileOptions, namePrefix: level };
         let inner: Transport;

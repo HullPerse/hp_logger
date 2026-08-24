@@ -39,9 +39,14 @@ export class LeveledTransport implements Transport {
       await batched;
       return;
     }
-    // The inner transport has no batch path: deliver sequentially, keeping
-    // order (the type-aware lint also rejects awaiting a mixed iterable).
-    for (const entry of filtered) await this.inner.write(entry);
+    await this.deliverSequentially(filtered);
+  }
+
+  private async deliverSequentially(entries: LogEntry[]): Promise<void> {
+    const [first, ...rest] = entries;
+    if (first === undefined) return;
+    await this.inner.write(first);
+    await this.deliverSequentially(rest);
   }
 
   flush(): void | Promise<void> {

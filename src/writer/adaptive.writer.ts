@@ -90,8 +90,7 @@ export class AdaptiveTransport implements Transport {
       if (ERROR_LEVELS.has(entry.level)) {
         this.groupError(entry);
       } else if (SAMPLE_LEVELS.has(entry.level) && Math.random() >= this.sample) {
-        // Sampled out: the storm already has an error summary on screen.
-        continue;
+            continue;
       } else {
         this.inner.write(entry);
       }

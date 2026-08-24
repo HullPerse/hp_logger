@@ -118,8 +118,6 @@ const redactObject = (
   currentPath: string,
   redactFn: RedactFn,
 ): unknown => {
-  // Fast path: no candidate keys, no redaction paths and no nested
-  // objects/Errors to serialize -> nothing to mask, return as-is.
   if (secretKey === null && paths.length === 0) return value;
   const keys = Object.keys(value);
   let needsCopy = false;

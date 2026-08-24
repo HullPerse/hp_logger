@@ -34,7 +34,6 @@ export class DateBasedFileTransport extends BaseFileTransport {
     }
 
     if (filepath !== this.currentFilepath) {
-      // Day changed or first write: close the old file and open the new one.
       await this.closeStream();
       this.currentFilepath = filepath;
     }

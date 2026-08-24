@@ -248,8 +248,7 @@ const resolveToken = (name: string, entry: LogEntry, env: TemplateEnv): string =
       if (name.startsWith("timestamp.")) {
         return resolveTimestampField(name.slice("timestamp.".length), entry.timestamp);
       }
-      // Any context key doubles as a token.
-      const value = entry.context[name];
+        const value = entry.context[name];
       if (value === undefined) return "";
       if (typeof value === "object") return JSON.stringify(value);
       return String(value);

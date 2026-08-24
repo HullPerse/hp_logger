@@ -62,7 +62,6 @@ export class SizeBasedFileTransport extends BaseFileTransport {
 
   private async rotate(): Promise<void> {
     await this.closeStream();
-    // The oldest segment falls off the cliff; its gzip ghost goes too.
     rmSync(`${this.segment(this.maxFiles)}.gz`, { force: true });
     for (let index = this.maxFiles - 1; index >= 1; index -= 1) {
       const from = this.segment(index);

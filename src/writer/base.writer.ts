@@ -63,8 +63,7 @@ export abstract class BaseFileTransport implements Transport {
     const filepath = await this.targetFilepath();
     if (!filepath) return;
     if (this.stream === null) {
-      // Keep the file open between flushes instead of reopening per flush.
-      const created = createWriteStream(filepath, { flags: "a" });
+        const created = createWriteStream(filepath, { flags: "a" });
       // Without a listener a stream error becomes an uncaughtException.
       // Self-healing: destroy the dead stream so the next flush re-opens
       // it fresh (deleted file, bad path, full disk).

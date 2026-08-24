@@ -60,13 +60,14 @@ describe("SizeBasedFileTransport", () => {
     });
 
     await withMutedConsole(async () => {
-      for (const wave of ["w1", "w2", "w3", "w4"]) {
+      const waves = ["w1", "w2", "w3", "w4"];
+      const flushWave = async (index: number): Promise<void> => {
+        const wave = waves[index] as string;
         for (let i = 0; i < 3; i += 1) transport.write(entry(`${wave}-${i}`));
-        // Sequential on purpose: each wave must land before the next
-        // rotation check, otherwise the waves interleave across segments.
-        // eslint-disable-next-line no-await-in-loop
         await transport.flush();
-      }
+        if (index + 1 < waves.length) return flushWave(index + 1);
+      };
+      await flushWave(0);
       await transport.close();
     });
 

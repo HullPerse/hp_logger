@@ -29,20 +29,6 @@ export default defineConfig({
         "promise/prefer-await-to-callbacks": "off",
       },
     },
-    {
-      files: ["src/index.logger.ts", "src/writer/index.writer.ts"],
-      rules: {
-        "oxc/no-barrel-file": "off",
-      },
-    },
-    {
-      files: ["src/writer/buffer.writer.ts", "src/writer/leveled.writer.ts"],
-      rules: {
-        // Batch delivery is strictly sequential: parallel awaits would let a
-        // later entry overtake an earlier one.
-        "no-await-in-loop": "off",
-      },
-    },
   ],
   options: {
     typeAware: true,
