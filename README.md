@@ -39,6 +39,13 @@ logger.info("server started", { port: 3000 });
 
 Full guides, the complete settings reference and integration recipes live on the documentation site linked in this repository's GitHub description.
 
+## Security
+
+- Zero runtime dependencies: `npm install hp_logger` installs exactly one package.
+- `devDependencies` (framework SDKs for integration tests, TypeScript, linters) and optional `peerDependencies` are never installed by consumers and never enter the published tarball.
+- The published tarball contains only `dist/`, `README.md` and `LICENSE` - verifiable with `npm pack --dry-run`.
+- Redaction runs before every transport; the full security contract lives in `.docs/SECURITY.md` in this repository.
+
 ## AI usage disclosure
 
 AI tools were used in building this project for general code structuring, JSDoc comments and security review passes. Architecture, API design and every product decision are made by a human. The documentation and agent-workflow system used throughout development is open source: [hp_docs](https://github.com/hullperse/hp_docs).
