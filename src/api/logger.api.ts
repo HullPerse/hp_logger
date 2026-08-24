@@ -43,6 +43,7 @@ import type { Transport } from "../types/transport";
 import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch";
 import { startWatcher } from "../watch/index.watch";
 import { buildTransports } from "../writer/factory.writer";
+import { LeveledTransport } from "../writer/leveled.writer";
 
 /** Numeric levels, inlined as constants in the hot path. */
 const LEVEL_TRACE = LOG_LEVELS.trace;
@@ -57,6 +58,7 @@ const identity = (value: unknown): unknown => value;
 
 const rateLimits = new Map<string, number>();
 const onceKeys = new Set<string>();
+const leveledWrappers = new Map<Transport, LeveledTransport>();
 
 export class Logger implements LoggerState {
   readonly author: string;
@@ -627,12 +629,26 @@ export class Logger implements LoggerState {
   }
 
   /** Register a transport for every logger in the process. */
-  static addTransport(transport: Transport): void {
+  static addTransport(transport: Transport, options?: { level?: LogLevel }): void {
+    // A leveled registration wraps the transport; removal unwraps it, so the
+    // caller always passes the original object to removeTransport.
+    if (options?.level !== undefined) {
+      const leveled = new LeveledTransport(transport, options.level);
+      leveledWrappers.set(transport, leveled);
+      addGlobalTransport(leveled);
+      return;
+    }
     addGlobalTransport(transport);
   }
 
   /** Remove a previously registered global transport. */
   static removeTransport(transport: Transport): void {
+    const leveled = leveledWrappers.get(transport);
+    if (leveled !== undefined) {
+      leveledWrappers.delete(transport);
+      removeGlobalTransport(leveled);
+      return;
+    }
     removeGlobalTransport(transport);
   }
 

@@ -30,16 +30,16 @@ export default defineConfig({
       },
     },
     {
-      files: ["src/index.logger.ts"],
+      files: ["src/index.logger.ts", "src/writer/index.writer.ts"],
       rules: {
         "oxc/no-barrel-file": "off",
       },
     },
     {
-      files: ["src/writer/buffer.writer.ts"],
+      files: ["src/writer/buffer.writer.ts", "src/writer/leveled.writer.ts"],
       rules: {
-        // Batches are delivered strictly in FIFO order: parallel awaits
-        // would let a later batch overtake an earlier one.
+        // Batch delivery is strictly sequential: parallel awaits would let a
+        // later entry overtake an earlier one.
         "no-await-in-loop": "off",
       },
     },

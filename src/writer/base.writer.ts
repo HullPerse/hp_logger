@@ -24,13 +24,7 @@ export abstract class BaseFileTransport implements Transport {
   private stream: WriteStream | null = null;
   private transportErrors = 0;
 
-  constructor(
-    options: Omit<FileTransportOptions, "path"> & {
-      format?: EntryFormatter | FormatSettings;
-      stripControl?: boolean;
-      tagCase?: TagCase;
-    },
-  ) {
+  constructor(options: Omit<FileTransportOptions, "path">) {
     this.contextFormat = options.contextFormat ?? "json";
     this.format = options.format;
     this.maxBufferSize = options.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE;

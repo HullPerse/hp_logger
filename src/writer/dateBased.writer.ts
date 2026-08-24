@@ -14,16 +14,18 @@ export class DateBasedFileTransport extends BaseFileTransport {
   private currentFilepath: string | null = null;
   private readonly baseDir: string;
   private readonly maxFilesPerDay: number;
+  private readonly namePrefix: string;
 
   constructor(baseDir: string, options: FileTransportOptions) {
     super(options);
     this.baseDir = baseDir;
     this.maxFilesPerDay = options.maxFilesPerDay ?? DEFAULT_MAX_FILES_PER_DAY;
+    this.namePrefix = options.namePrefix ?? "log";
   }
 
   protected async targetFilepath(): Promise<string> {
     const dateDir = this.getDateDir();
-    const key = `${this.baseDir}::${dateDir}`;
+    const key = `${this.baseDir}::${dateDir}::${this.namePrefix}`;
 
     let filepath = sharedFilepaths.get(key);
     if (!filepath) {
@@ -51,9 +53,10 @@ export class DateBasedFileTransport extends BaseFileTransport {
     await mkdir(dateDir, { recursive: true });
 
     const files = await readdir(dateDir);
+    const marker = `${this.namePrefix}_`;
     const indices = files
-      .filter((f) => f.startsWith("log_") && f.endsWith(".log"))
-      .map((f) => Math.trunc(Number(f.slice(4, -4))))
+      .filter((f) => f.startsWith(marker) && f.endsWith(".log"))
+      .map((f) => Math.trunc(Number(f.slice(marker.length, -4))))
       .filter((n) => !Number.isNaN(n));
 
     let nextIndex = indices.length > 0 ? Math.max(...indices) + 1 : 1;
@@ -62,6 +65,6 @@ export class DateBasedFileTransport extends BaseFileTransport {
       nextIndex = 1;
     }
 
-    return path.join(dateDir, `log_${String(nextIndex).padStart(3, "0")}.log`);
+    return path.join(dateDir, `${marker}${String(nextIndex).padStart(3, "0")}.log`);
   }
 }

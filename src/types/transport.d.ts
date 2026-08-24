@@ -1,4 +1,4 @@
-import type { ContextFormat, LogEntry, LogLevel } from "./logger";
+import type { ContextFormat, EntryFormatter, FormatSettings, LogEntry, LogLevel, TagCase } from "./logger";
 
 export interface DatabaseAdapter {
   close?: () => void | Promise<void>;
@@ -72,6 +72,12 @@ export interface FileSettings {
   flushInterval?: number;
   maxBufferSize?: number;
   maxFilesPerDay?: number;
+  /**
+   * Write each level to its own file: `app.log` becomes `app.error.log`,
+   * `app.warn.log` and so on. Daily rotation names them `{level}_NNN.log`.
+   * Default false - all levels share one file.
+   */
+  splitByLevel?: boolean;
   /** Size rotation: rotate when the active file reaches this many bytes. Defaults to 10485760. */
   maxBytes?: number;
   /** Size rotation: number of rotated segments to keep. Defaults to 5. */
@@ -83,6 +89,14 @@ export interface FileSettings {
 /** Options shared by FileTransport and DateBasedFileTransport. */
 export type FileTransportOptions = Omit<FileSettings, "enabled"> & {
   contextFormat?: ContextFormat;
+  /** Daily-rotation file name prefix: `{prefix}_NNN.log`. Defaults to "log". */
+  namePrefix?: string;
+  /** Custom pretty renderer for file output. */
+  format?: EntryFormatter | FormatSettings;
+  /** Strip control characters from message and context. */
+  stripControl?: boolean;
+  /** Case transform for author and level tags in pretty file output. */
+  tagCase?: TagCase;
 };
 
 export interface Transport {

@@ -1,32 +1,59 @@
 import { DEFAULT_LOG_DIR } from "../config/writer.config";
+import { LEVEL_NAMES } from "../config/levels.config";
 import type { ResolvedSettings } from "../types/logger";
-import type { Transport } from "../types/transport";
+import type { FileTransportOptions, Transport } from "../types/transport";
 import { AdaptiveTransport } from "./adaptive.writer";
 import { AsyncTransport } from "./buffer.writer";
 import { ConsoleTransport } from "./console.writer";
 import { DatabaseTransport } from "./database.writer";
 import { DateBasedFileTransport } from "./dateBased.writer";
 import { FileTransport } from "./file.writer";
+import { LeveledTransport } from "./leveled.writer";
 import { MultiTransport } from "./group.writer";
 import { RepeatTransport } from "./repeat.writer";
 import { SizeBasedFileTransport } from "./sizeBased.writer";
+
+/** `logs/app.log` + "error" -> `logs/app.error.log` (extension-aware). */
+const withLevelSuffix = (filepath: string, level: string): string => {
+  const dot = filepath.lastIndexOf(".");
+  const base = dot === -1 ? filepath : filepath.slice(0, dot);
+  const ext = dot === -1 ? "" : filepath.slice(dot);
+  return `${base}.${level}${ext}`;
+};
 
 export const buildTransports = (settings: ResolvedSettings): Transport => {
   const transports: Transport[] = [new ConsoleTransport(settings)];
 
   if (settings.file) {
-    const fileSettings = settings.file;
-    const fileOptions = {
-      ...fileSettings,
+    const { rotation } = settings.file;
+    const logDir = settings.file.path ?? DEFAULT_LOG_DIR;
+    const fileOptions: FileTransportOptions = {
+      ...settings.file,
       contextFormat: settings.formatContext,
       format: settings.format,
       stripControl: settings.stripControl,
       tagCase: settings.tagCase,
     };
-    const { rotation } = fileSettings;
-    const logDir = fileSettings.path ?? DEFAULT_LOG_DIR;
+
     let fileTransport: Transport;
-    if (rotation === "daily") {
+    if (settings.file.splitByLevel) {
+      // One file transport per level, each gated to exactly its level.
+      const perLevel: Transport[] = LEVEL_NAMES.map((level) => {
+        const options: FileTransportOptions = { ...fileOptions, namePrefix: level };
+        let inner: Transport;
+        if (rotation === "daily") {
+          inner = new DateBasedFileTransport(logDir, options);
+        } else if (rotation === "size") {
+          inner = new SizeBasedFileTransport(withLevelSuffix(logDir, level), options);
+        } else {
+          inner = new FileTransport(withLevelSuffix(logDir, level), options);
+        }
+        return new LeveledTransport(inner, level, true);
+      });
+      const [first] = perLevel;
+      fileTransport =
+        perLevel.length === 1 && first !== undefined ? first : new MultiTransport(perLevel);
+    } else if (rotation === "daily") {
       fileTransport = new DateBasedFileTransport(logDir, fileOptions);
     } else if (rotation === "size") {
       fileTransport = new SizeBasedFileTransport(logDir, fileOptions);
