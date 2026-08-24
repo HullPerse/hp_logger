@@ -35,7 +35,7 @@ Global settings are passed to `createLogger`; module settings via `.module(name,
 | Setting | Description | Default |
 | --- | --- | --- |
 | `level` | Minimum level: trace, debug, info, success, warn, error, fatal | `info` (or `LOG_LEVEL` env var) |
-| `mode` | `pretty` tagged output or `json` structured | `pretty` |
+| `mode` | `pretty` tagged output or `json` structured | TTY: `pretty`, pipe: `json` |
 | `colors` | Per-level colors or `false` to disable all | standard |
 | `enabled` | Master switch: `false` skips all entries | `true` |
 | `redactKeys` | Regex of keys to redact, or `null` to disable redaction entirely | standard (password, token, etc.) |
@@ -46,13 +46,12 @@ Global settings are passed to `createLogger`; module settings via `.module(name,
 | `showYear` | Show the `[YYYY]` year tag in pretty output | `false` |
 | `showAuthor` | Show module name in pretty output | `true` |
 | `showLevel` | Show the colored level tag `[INFO]`/`[ERROR]` in pretty output | `false` |
-| `showTimestamp` | Deprecated alias for `showTime` | — |
 | `formatContext` | Context rendering in pretty output: `json` object or `kv` pairs `key="value"` | `json` |
 | `formatTimestamp` | `iso` or `local` time format | `iso` |
 | `prettyWrap` | Wrap pretty lines to this many terminal columns (Bun 1.4+, ANSI-safe). `false` disables. | `false` |
 | `prettyTruncate` | Truncate pretty lines to this many visible columns with `…` (Bun 1.4+, ANSI-safe). `false` disables. | `false` |
 | `file` | File output: `{ enabled, path, mode, rotation, ... }` or `false` | `false` |
-| `async` | Async batched writes or `false` | `false` |
+| `batching` | Async batched writes: `{ batchSize?, maxQueueSize?, flushInterval? }` or `false` | `false` |
 | `filters` | Entry filter functions | `[]` |
 
 ### Colors
@@ -98,7 +97,7 @@ const logger = createLogger({
       mode: "json",              // "json" by default or "pretty" (readable text without colors)
       rotation: "daily",         // files by day: logs/{yyyy-mm-dd}/log_NNN.log
       // one file per day shared by all loggers with the same path (process-wide)
-      flushIntervalMs: 1000,
+      flushInterval: 1000, // milliseconds
       maxBufferSize: 100,
     },
   },
@@ -129,7 +128,7 @@ const logger = createLogger({
 
 - `createSqliteAdapter(db, { table? })` - adapter for `bun:sqlite` with batched inserts inside a transaction. The caller owns the `Database` instance.
 - Any other database works through a `DatabaseAdapter`: `{ write(entries), close?() }`.
-- `level` filters what gets persisted; entries are buffered and flushed on `maxBufferSize` or `flushIntervalMs`.
+- `level` filters what gets persisted; entries are buffered and flushed on `maxBufferSize` or `flushInterval` (milliseconds).
 - Writes run through a sequential pipeline: one batch in flight at a time, strict FIFO order, batches capped at `maxBufferSize`. A failed write puts its batch back at the head and is retried on the next trigger; `close()` drains everything but gives up instead of hanging if the adapter keeps failing.
 - Disable with `database: false`.
 
@@ -164,7 +163,7 @@ Author and level tags are uppercased in pretty output by default. Change it with
 ```ts
 const logger = createLogger({
   settings: {
-    tagCase: "as-is", // "upper" (default) | "lower" | "as-is"
+    tagCase: "none", // "upper" (default) | "lower" | "none"
   },
 });
 ```
@@ -179,8 +178,8 @@ Poll an endpoint or a custom probe and log availability edges. Transitions are l
 const stop = logger.watch(
   {
     url: "https://api.example.com/health",
-    intervalMs: 15_000,
-    timeoutMs: 3_000,
+    interval: 15_000, // milliseconds
+    timeout: 3_000,   // milliseconds
     method: "HEAD",
     logProbes: false,
   },
@@ -212,6 +211,28 @@ logger.settings({ watch: false }); // stop it
 
 Message and context can be functions: they are only evaluated when the entry passes the level check, so disabled levels cost almost nothing (no `JSON.stringify`, no template literals, no side effects).
 
+### Async batching and queue limits
+
+When batching is enabled, entries are flushed by `batchSize` or `flushInterval`. The pending queue is bounded by `maxQueueSize`, which defaults to `10_000`. When full, the newest entry is dropped and its write completion resolves normally. Read delivery counters with `logger.stats()`:
+
+```ts
+const logger = createLogger({
+  settings: {
+    batching: {
+      batchSize: 100,
+      flushInterval: 1000,
+      maxQueueSize: 10_000,
+    },
+  },
+});
+
+logger.info("request");
+console.log(logger.stats());
+// { queued: 0, dropped: 0, transportErrors: 0 }
+```
+
+`queued` includes entries waiting for or currently being delivered by the logger. `dropped` counts queue overflow and writes attempted after close. `transportErrors` counts failed delivery attempts; batching continues with later entries.
+
 ```ts
 logger.debug(() => `Processed ${expensiveCalculation()}`);
 logger.debug(() => ({ snapshot: buildExpensiveSnapshot() }));
@@ -222,7 +243,7 @@ logger.debug(() => ({ snapshot: buildExpensiveSnapshot() }));
 Time a function and log its duration. Returns the function result.
 
 ```ts
-const rows = await logger.measure("db.query", () => db.query(...));
+const rows = await logger.time("db.query", () => db.query(...));
 // success: db.query completed in 42ms { durationMs: 42, operation: "db.query" }
 ```
 
@@ -237,10 +258,10 @@ logger.throttle("connection-error", 1000, "connection failed", {}, "error");
 
 ### AsyncLocalStorage context
 
-`logger.run(context, fn)` runs a function with an async-local context merged into every entry inside it, including async continuations. Useful for request-scoped fields like `requestId` or `userId`.
+`logger.withContext(context, fn)` runs a function with an async-local context merged into every entry inside it, including async continuations. Useful for request-scoped fields like `requestId` or `userId`.
 
 ```ts
-await logger.run({ requestId: "abc" }, async () => {
+await logger.withContext({ requestId: "abc" }, async () => {
   logger.info("request started"); // includes requestId
   await somethingAsync();
   logger.info("request finished"); // still includes requestId
@@ -288,7 +309,7 @@ const logger = createLogger({
 
 ### Global error handlers
 
-`installGlobalErrorHandlers` also logs Bun's `memoryPressure` event (warning/critical) on Bun 1.4+, so low-memory situations are visible in the logs before the process is killed.
+`installErrorHandlers` also logs Bun's `memoryPressure` event (warning/critical) on Bun 1.4+, so low-memory situations are visible in the logs before the process is killed.
 
 ### Adaptive output
 
@@ -430,10 +451,10 @@ const text = registry.metrics();
 ## Global error handlers
 
 ```ts
-import { createLogger, installGlobalErrorHandlers } from "hp_logger";
+import { createLogger, installErrorHandlers } from "hp_logger";
 
 const logger = createLogger();
-installGlobalErrorHandlers(logger);
+installErrorHandlers(logger);
 ```
 
 `unhandledRejection` and `uncaughtException` are logged through the logger.
@@ -444,11 +465,6 @@ installGlobalErrorHandlers(logger);
 bun test            # tests
 bun run typecheck   # type checking
 bun run lint        # linting
-bun run bench       # repeatable benchmark matrix (median ops/s)
-# optional: BENCH_RUNS=9 BENCH_ITERATIONS=200000 bun run bench
-# machine-readable: BENCH_JSON=1 bun run bench
-# enforce disabled/json floors: BENCH_GATE=1 bun run bench
-# keep console output in the benchmark stream: BENCH_SILENT=0 bun run bench
 bun run build       # build dist for publishing
 ```
 

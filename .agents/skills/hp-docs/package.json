@@ -1,0 +1,23 @@
+{
+  "name": "hp-docs",
+  "version": "1.4.2",
+  "description": "Universal .docs template system for AI agents - first-run analysis, deep project review, and new project initialization",
+  "keywords": [
+    "ai",
+    "agent",
+    "docs",
+    "template",
+    "project-analysis",
+    "code-review",
+    "architecture"
+  ],
+  "author": "HullPerse",
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HullPerse/hp_docs.git"
+  },
+  "files": [
+    "SKILL.md"
+  ]
+}

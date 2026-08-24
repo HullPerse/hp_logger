@@ -141,3 +141,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+.docs/
+AGENTS.md
+skills-lock.json
+knip.json
+AGENTS.md
+.agents/
+.docs/

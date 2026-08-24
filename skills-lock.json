@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "deslop": {
+      "source": "HullPerse/hp_docs",
+      "sourceType": "github",
+      "skillPath": "skills/deslop/SKILL.md",
+      "computedHash": "c676c659232b01f41fb6d71fb1a3c1c6b647ecca62ea45a33f36ede82b4b52fb"
+    },
+    "docs-init": {
+      "source": "HullPerse/hp_docs",
+      "sourceType": "github",
+      "skillPath": "skills/docs-init/SKILL.md",
+      "computedHash": "15feb6034640ca0cba85736613b5b529b1d3cd5bf0bfea19ec3d349e8f516db8"
+    },
+    "docs-onboard": {
+      "source": "HullPerse/hp_docs",
+      "sourceType": "github",
+      "skillPath": "skills/docs-onboard/SKILL.md",
+      "computedHash": "c7e4d6189fa780232de5904db1b013eacbb2712a26a61814e20341254ec7f215"
+    },
+    "docs-refactor": {
+      "source": "HullPerse/hp_docs",
+      "sourceType": "github",
+      "skillPath": "skills/docs-refactor/SKILL.md",
+      "computedHash": "27a1fe01d59609dff45813ed80618647a85b57acd9b95877a2b7d01624a6c870"
+    },
+    "hp-docs": {
+      "source": "HullPerse/hp_docs",
+      "sourceType": "github",
+      "skillPath": "skills/hp-docs/SKILL.md",
+      "computedHash": "2af7aec21366f77eb0d0f19c892b1d75c507cffb7dd04cbab6d4675f68d7d6d2"
+    },
+    "scandinavian-design": {
+      "source": "HullPerse/hp_docs",
+      "sourceType": "github",
+      "skillPath": "skills/scandinavian-design/SKILL.md",
+      "computedHash": "af4c7c060707217e05d1b0f2ff63d2911d808a55595210cc09cdd8d35954d3e5"
+    }
+  }
+}

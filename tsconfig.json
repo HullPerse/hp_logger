@@ -9,7 +9,10 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["bun-types"],
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"],
+    },
   },
-  "include": ["src"]
+  "include": ["src"],
 }
