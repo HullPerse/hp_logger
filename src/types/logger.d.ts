@@ -97,6 +97,36 @@ export interface SpanRecord {
   timestamp: string;
 }
 
+/** Settings for `logger.task()`. */
+export interface TaskSettings {
+  /** Level of the started and progress entries. Defaults to "debug". */
+  level?: LogLevel;
+  /** Log a debug entry on every `update()` call. Defaults to false. */
+  progress?: boolean;
+}
+
+/** Options for a single `logger.task()` call. */
+export interface TaskOptions {
+  /** Overrides settings.task.level for every entry of this task. */
+  level?: LogLevel;
+}
+
+/** Handle returned by logger.task(). */
+export interface TaskHandle {
+  /** Whether done() or fail() already ran. Prevents double-logging. */
+  ended: boolean;
+  /** Mark the task done: logs a success entry with the duration. */
+  done: (detail?: string) => void;
+  /**
+   * Mark the task failed: logs an error entry with the duration and,
+   * when an Error is passed, its serialized cause chain.
+   */
+  fail: (detail?: string | Error) => void;
+  /** Log a progress entry. No-op unless settings.task.progress is enabled. */
+  update: (text: string, context?: LogContext) => void;
+}
+
+
 /** A node in the rendered span tree. */
 export interface SpanNode {
   record: SpanRecord;
@@ -170,6 +200,8 @@ export interface LoggerSettings {
   showDate?: boolean;
   /** Show the year tag `[YYYY]` in pretty output. Defaults to false. */
   showYear?: boolean;
+  /** Pending-task entries via `logger.task()`. */
+  task?: TaskSettings;
 }
 
 /**
@@ -216,6 +248,7 @@ export interface ResolvedSettings {
   showDate: boolean;
   showYear: boolean;
   tagCase: TagCase;
+  task: { level: LogLevel; progress: boolean };
 }
 
 export interface LogEntry {

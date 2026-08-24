@@ -34,6 +34,21 @@ const resolveTagSettings = (settings: LoggerSettings): ResolvedTagSettings => ({
   tagCase: settings.tagCase ?? "upper",
 });
 
+const DEFAULT_TASK_SETTINGS = { level: "debug" as LogLevel, progress: false };
+
+const resolveTaskSettings = (settings: LoggerSettings): ResolvedSettings["task"] => ({
+  level: settings.task?.level ?? DEFAULT_TASK_SETTINGS.level,
+  progress: settings.task?.progress ?? DEFAULT_TASK_SETTINGS.progress,
+});
+
+const mergeTaskSettings = (
+  base: ResolvedSettings["task"],
+  patch: LoggerSettings,
+): ResolvedSettings["task"] => ({
+  level: patch.task?.level ?? base.level,
+  progress: patch.task?.progress ?? base.progress,
+});
+
 const mergeTagSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedTagSettings => ({
   colorizeContext: patch.colorizeContext ?? base.colorizeContext,
   emoji: patch.emoji ?? base.emoji,
@@ -67,6 +82,7 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
   redactDepth: settings.redactDepth ?? 2,
   redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
   repeat: settings.repeat ?? false,
+  task: resolveTaskSettings(settings),
   ...resolveTagSettings(settings),
 });
 
@@ -90,5 +106,6 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
   redactDepth: patch.redactDepth ?? base.redactDepth,
   redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
   repeat: patch.repeat ?? base.repeat,
+  task: mergeTaskSettings(base.task, patch),
   ...mergeTagSettings(base, patch),
 });

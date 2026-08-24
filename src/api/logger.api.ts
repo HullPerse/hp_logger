@@ -29,11 +29,13 @@ import type {
   LogLevel,
   LoggerSettings,
   LoggerState,
-  ResolvedSettings,
-  SpanHandle,
-  TimeOptions,
-  TimestampFormat,
-} from "../types/logger";
+   ResolvedSettings,
+   SpanHandle,
+   TaskHandle,
+   TaskOptions,
+   TimeOptions,
+   TimestampFormat,
+ } from "../types/logger";
 import type { MetricOptions } from "../types/metrics";
 import type { Transport } from "../types/transport";
 import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch";
@@ -426,6 +428,117 @@ export class Logger implements LoggerState {
       return;
     }
     this.write("info", renderSpanTree(roots));
+  }
+
+  /**
+   * Track a pending task: a started entry, then a done/failed entry with the
+   * duration. In the callback form, entries logged inside run under the
+   * task's group (pretty output nests them) and carry the span and trace ids;
+   * leaving the callback without done()/fail() finalizes the task, an error
+   * marks it failed.
+   */
+  task<T>(name: string, callback: (task: TaskHandle) => T | Promise<T>): Promise<T>;
+  task(name: string, options?: TaskOptions): TaskHandle;
+  task<T>(
+    name: string,
+    optionsOrCallback?: TaskOptions | ((task: TaskHandle) => T | Promise<T>),
+  ): TaskHandle | Promise<T> {
+    const isCallback = typeof optionsOrCallback === "function";
+    const options: TaskOptions = isCallback ? {} : (optionsOrCallback ?? {});
+    const callback = isCallback ? (optionsOrCallback as (task: TaskHandle) => T | Promise<T>) : undefined;
+
+    const inherited = getAsyncContext();
+    const prefix = typeof inherited?.group === "string" ? (inherited.group as string) : "";
+    const ownGroup = `${prefix}${name}`;
+    // Trailing dot: child entries split one level deeper and indent under the task.
+    const childGroup = `${ownGroup}.`;
+
+    const traceId = inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string);
+    const parentId = inherited?.spanId === undefined ? undefined : (inherited.spanId as string);
+    const spanId = nextSpanId();
+    const spanContext = { parentId, spanId, traceId };
+
+    const taskLevel: LogLevel = options.level ?? this.currentSettings.task.level;
+    const progressEnabled = this.currentSettings.task.progress;
+    const startedAt = performance.now();
+    const state = { open: true };
+
+    const finish = (ok: boolean, detail?: string | Error): void => {
+      if (state.open) {
+        state.open = false;
+        const durationMs = Math.round(performance.now() - startedAt);
+        const error = detail instanceof Error ? detail : undefined;
+        const suffix =
+          detail === undefined ? "" : ` - ${error === undefined ? detail : error.message}`;
+        const message = ok
+          ? `${name} done in ${formatDuration(durationMs)}${suffix}`
+          : `${name} failed in ${formatDuration(durationMs)}${suffix}`;
+        const level: LogLevel = ok ? "success" : "error";
+        this.write(level, message, {
+          durationMs,
+          ...(error === undefined ? {} : { error }),
+          group: ownGroup,
+          operation: name,
+          ...spanContext,
+          status: ok ? "done" : "failed",
+          task: name,
+        });
+        getSpanRegistry().add({
+          durationMs,
+          level,
+          message,
+          name,
+          parentId: spanContext.parentId,
+          spanId,
+          timestamp: this.timestamp(),
+          traceId,
+        });
+      }
+    };
+
+    const handle: TaskHandle = {
+      done: (detail?: string): void => {
+        finish(true, detail);
+      },
+      get ended() {
+        return state.open === false;
+      },
+      fail: (detail?: string | Error): void => {
+        finish(false, detail);
+      },
+      update: (text: string, context?: LogContext): void => {
+        if (progressEnabled && state.open) {
+          this.write(taskLevel, text, {
+            group: childGroup,
+            status: "progress",
+            task: name,
+            ...context,
+          });
+        }
+      },
+    };
+
+    this.write(taskLevel, `${name} started`, {
+      group: ownGroup,
+      ...spanContext,
+      status: "started",
+      task: name,
+    });
+
+    if (callback === undefined) return handle;
+
+    // Callback form: entries inside inherit the task group (pretty nesting)
+    // plus span/trace ids; an unhandled throw marks the task failed.
+    return runWithContext({ ...spanContext, group: childGroup }, async () => {
+      try {
+        const result = (await callback(handle)) as T;
+        finish(true);
+        return result;
+      } catch (error: unknown) {
+        finish(false, error instanceof Error ? error : String(error));
+        throw error;
+      }
+    });
   }
 
   /** Render rows as a plain-text table and log it at the given level. */
