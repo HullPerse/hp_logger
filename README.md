@@ -1,4 +1,15 @@
-# hp_logger [![Socket Badge](https://badge.socket.dev/npm/package/hp_logger/0.5.0)](https://badge.socket.dev/npm/package/hp_logger/0.5.0)
+# hp_logger
+
+
+
+[![npm](https://badgen.net/npm/v/hp_logger?icon=npm)](https://www.npmjs.com/package/hp_logger)
+[![downloads](https://badgen.net/npm/dm/hp_logger?icon=npm)](https://www.npmjs.com/package/hp_logger)
+[![GitHub](https://badgen.net/github/stars/hullperse/hp_logger?icon=github)](https://github.com/hullperse/hp_logger)
+
+![Dependencies](https://badgen.net/badge/dependencies/0/00c853)
+![Performance](https://badgen.net/badge/performance/NYOOM/00c853)
+![Console](https://badgen.net/badge/console.log/RETIRED/7c4dff)
+![Powered](https://badgen.net/badge/powered%20by/rats/6b4f3a)
 
 Structured logger for Bun and Node.js. One dependency-free package for leveled logging, secret redaction, file and database output, flood control, tracing spans, Prometheus-style metrics and web framework integrations.
 
