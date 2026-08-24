@@ -2,6 +2,43 @@ import { describe, expect, test } from "bun:test";
 
 import { redact } from "@/redact/index.redact";
 
+describe("redactPaths", () => {
+  test("redacts an exact dot path without touching same-named keys elsewhere", () => {
+    const value = { config: { password: "keep-me" }, user: { password: "hunter2" } };
+    expect(redact(value, null, 4, 0, ["user.password"])).toEqual({
+      config: { password: "keep-me" },
+      user: { password: "[REDACTED]" },
+    });
+  });
+
+  test("a trailing .* masks everything under the prefix", () => {
+    const value = { open: "keep", secrets: { nested: { deep: "b" }, token: "a" } };
+    expect(redact(value, null, 6, 0, ["secrets.*"])).toEqual({
+      open: "keep",
+      secrets: "[REDACTED]",
+    });
+  });
+
+  test("works with redactKeys disabled", () => {
+    const value = { req: { headers: { authorization: "Bearer xyz" } } };
+    expect(redact(value, null, 6, 0, ["req.headers.authorization"])).toEqual({
+      req: { headers: { authorization: "[REDACTED]" } },
+    });
+  });
+
+  test("composes with key-based redaction", () => {
+    const value = { user: { password: "a", token: "b" } };
+    expect(redact(value, /token/iu, 4, 0, ["user.password"])).toEqual({
+      user: { password: "[REDACTED]", token: "[REDACTED]" },
+    });
+  });
+
+  test("unmatched paths leave values untouched", () => {
+    const value = { user: { password: "visible" } };
+    expect(redact(value, null, 4, 0, ["other.path"])).toEqual(value);
+  });
+});
+
 describe("redact", () => {
   test("returns primitive values unchanged when no secret expression is configured", () => {
     expect(redact("plain", null)).toBe("plain");

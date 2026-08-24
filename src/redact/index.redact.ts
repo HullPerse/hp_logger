@@ -30,10 +30,34 @@ const matchesSecretKey = (key: string, secretKey: RegExp): boolean => {
   return secretKeyMemo.call(key, () => SENSITIVE_KEY_FRAGMENTS.test(key));
 };
 
-const needsRedactionScan = (key: string, value: unknown, secretKey: RegExp): boolean => {
-  if (matchesSecretKey(key, secretKey)) return true;
+/**
+ * Path redaction: exact dot paths plus a trailing `.*` wildcard that masks
+ * everything under the prefix. `user.password` hits only that path;
+ * `secrets.*` hits `secrets.token` and anything deeper.
+ */
+const pathMatches = (currentPath: string, paths: string[]): boolean => {
+  for (const pattern of paths) {
+    if (pattern.endsWith(".*")) {
+      const prefix = pattern.slice(0, -2);
+      if (currentPath === prefix || currentPath.startsWith(`${prefix}.`)) return true;
+    } else if (pattern === currentPath) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const needsRedactionScan = (
+  key: string,
+  value: unknown,
+  secretKey: RegExp | null,
+  childPath: string,
+  paths: string[],
+): boolean => {
+  if (paths.length > 0 && pathMatches(childPath, paths)) return true;
+  if (secretKey !== null && matchesSecretKey(key, secretKey)) return true;
   if (typeof value === "string") {
-    return matchesPattern(MESSAGE_REDACTION_PATTERN, value);
+    return secretKey !== null && matchesPattern(MESSAGE_REDACTION_PATTERN, value);
   }
   return typeof value === "object" && value !== null;
 };
@@ -60,11 +84,81 @@ const serializeError = (error: Error, seen = new WeakSet<Error>(), depth = 0): S
   return result;
 };
 
+type RedactFn = (
+  value: unknown,
+  secretKey: RegExp | null,
+  maxDepth: number,
+  depth: number,
+  paths: string[],
+  currentPath: string,
+) => unknown;
+
+const resolveRedactChild = (
+  key: string,
+  child: unknown,
+  childPath: string,
+  secretKey: RegExp | null,
+  maxDepth: number,
+  depth: number,
+  paths: string[],
+  currentPath: string,
+  redactFn: RedactFn,
+): unknown => {
+  if (paths.length > 0 && pathMatches(childPath, paths)) return "[REDACTED]";
+  if (secretKey !== null && matchesSecretKey(key, secretKey)) return "[REDACTED]";
+  return redactFn(child, secretKey, maxDepth, depth + 1, paths, childPath);
+};
+
+const redactObject = (
+  value: Record<string, unknown>,
+  secretKey: RegExp | null,
+  maxDepth: number,
+  depth: number,
+  paths: string[],
+  currentPath: string,
+  redactFn: RedactFn,
+): unknown => {
+  // Fast path: no candidate keys, no redaction paths and no nested
+  // objects/Errors to serialize -> nothing to mask, return as-is.
+  if (secretKey === null && paths.length === 0) return value;
+  const keys = Object.keys(value);
+  let needsCopy = false;
+  for (const key of keys) {
+    const child = value[key];
+    const childPath = currentPath === "" ? key : `${currentPath}.${key}`;
+    if (needsRedactionScan(key, child, secretKey, childPath, paths)) {
+      needsCopy = true;
+      break;
+    }
+  }
+  if (!needsCopy) return value;
+
+  const result: Record<string, unknown> = {};
+  for (const key of keys) {
+    const child = value[key];
+    const childPath = currentPath === "" ? key : `${currentPath}.${key}`;
+    result[key] = resolveRedactChild(
+      key,
+      child,
+      childPath,
+      secretKey,
+      maxDepth,
+      depth,
+      paths,
+      currentPath,
+      redactFn,
+    );
+  }
+  return result;
+};
+
 export const redact = (
   value: unknown,
   secretKey: RegExp | null,
   maxDepth = 2,
   depth = 0,
+  paths: string[] = [],
+  currentPath = "",
 ): unknown => {
   if (depth > maxDepth) return "[REDACTED]";
 
@@ -80,28 +174,15 @@ export const redact = (
   if (Array.isArray(value)) return `[${value.length} items]`;
 
   if (typeof value === "object" && value !== null) {
-    // Fast path: no candidate keys and no nested objects/Errors to
-    // serialize -> nothing to mask, return as-is without copying.
-    if (secretKey === null) return value;
-    const keys = Object.keys(value);
-    let needsCopy = false;
-    for (const key of keys) {
-      const child = (value as Record<string, unknown>)[key];
-      if (needsRedactionScan(key, child, secretKey)) {
-        needsCopy = true;
-        break;
-      }
-    }
-    if (!needsCopy) return value;
-
-    const result: Record<string, unknown> = {};
-    for (const key of keys) {
-      const child = (value as Record<string, unknown>)[key];
-      result[key] = matchesSecretKey(key, secretKey)
-        ? "[REDACTED]"
-        : redact(child, secretKey, maxDepth, depth + 1);
-    }
-    return result;
+    return redactObject(
+      value as Record<string, unknown>,
+      secretKey,
+      maxDepth,
+      depth,
+      paths,
+      currentPath,
+      redact,
+    );
   }
 
   return value;

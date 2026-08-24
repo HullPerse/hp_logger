@@ -112,10 +112,13 @@ export class Logger implements LoggerState {
       settings.formatTimestamp === "iso" ? cachedTimestamp : () => formatTimestamp("local");
     this.filters = settings.filters;
     this.hasFilters = settings.filters.length > 0;
-    this.needsRedaction = settings.redactKeys !== null;
+    this.needsRedaction = settings.redactKeys !== null || settings.redactPaths.length > 0;
     const { redactKeys } = settings;
     this.redactValue =
-      redactKeys === null ? identity : (value) => redact(value, redactKeys, settings.redactDepth);
+      redactKeys === null && settings.redactPaths.length === 0
+        ? identity
+        : (value) =>
+            redact(value, redactKeys, settings.redactDepth, 0, settings.redactPaths);
     // The ring survives toggles; its capacity is fixed at creation time.
     if (settings.blackbox) {
       this.blackboxRing ??= new RingBuffer(settings.blackbox.size);

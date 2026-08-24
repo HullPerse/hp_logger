@@ -66,6 +66,12 @@ const mergeBlackbox = (
   return { path: box.path, size: Math.max(1, box.size ?? DEFAULT_BLACKBOX_SIZE) };
 };
 
+const resolveRedactionSettings = (settings: LoggerSettings) => ({
+  redactDepth: settings.redactDepth ?? 2,
+  redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
+  redactPaths: settings.redactPaths ?? [],
+});
+
 const mergeTagSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedTagSettings => ({
   colorizeContext: patch.colorizeContext ?? base.colorizeContext,
   emoji: patch.emoji ?? base.emoji,
@@ -97,11 +103,27 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
   mode: settings.mode ?? defaultMode(),
   prettyTruncate: settings.prettyTruncate ?? false,
   prettyWrap: settings.prettyWrap ?? false,
-  redactDepth: settings.redactDepth ?? 2,
-  redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
+  ...resolveRedactionSettings(settings),
   repeat: settings.repeat ?? false,
   task: resolveTaskSettings(settings),
   ...resolveTagSettings(settings),
+});
+
+const mergeFormatSettings = (base: ResolvedSettings, patch: LoggerSettings) => ({
+  format: patch.format ?? base.format,
+  formatContext: patch.formatContext ?? base.formatContext,
+  formatTimestamp: patch.formatTimestamp ?? base.formatTimestamp,
+  level: patch.level ?? base.level,
+  maxMessageLength: patch.maxMessageLength ?? base.maxMessageLength,
+  mode: patch.mode ?? base.mode,
+  prettyTruncate: patch.prettyTruncate ?? base.prettyTruncate,
+  prettyWrap: patch.prettyWrap ?? base.prettyWrap,
+});
+
+const mergeRedactionSettings = (base: ResolvedSettings, patch: LoggerSettings) => ({
+  redactDepth: patch.redactDepth ?? base.redactDepth,
+  redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
+  redactPaths: patch.redactPaths ?? base.redactPaths,
 });
 
 export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedSettings => ({
@@ -114,16 +136,8 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
   enabled: patch.enabled ?? base.enabled,
   file: patch.file ?? base.file,
   filters: patch.filters ?? base.filters,
-  format: patch.format ?? base.format,
-  formatContext: patch.formatContext ?? base.formatContext,
-  formatTimestamp: patch.formatTimestamp ?? base.formatTimestamp,
-  level: patch.level ?? base.level,
-  maxMessageLength: patch.maxMessageLength ?? base.maxMessageLength,
-  mode: patch.mode ?? base.mode,
-  prettyTruncate: patch.prettyTruncate ?? base.prettyTruncate,
-  prettyWrap: patch.prettyWrap ?? base.prettyWrap,
-  redactDepth: patch.redactDepth ?? base.redactDepth,
-  redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
+  ...mergeFormatSettings(base, patch),
+  ...mergeRedactionSettings(base, patch),
   repeat: patch.repeat ?? base.repeat,
   task: mergeTaskSettings(base.task, patch),
   ...mergeTagSettings(base, patch),

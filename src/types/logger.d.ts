@@ -187,6 +187,12 @@ export interface LoggerSettings {
   redactDepth?: number;
   /** Keys that get redacted in messages and context. `null` disables redaction. */
   redactKeys?: RegExp | null;
+  /**
+   * Dot paths that get redacted in context, e.g. `user.password` or
+   * `secrets.*` (everything under the prefix). Works even when
+   * `redactKeys` is null. Arrays are summarized and not path-addressable.
+   */
+  redactPaths?: string[];
   /** Show the author/module tag in pretty output. */
   showAuthor?: boolean;
   /** Case transform for author and level tags in pretty output. Defaults to 'upper'. */
@@ -265,6 +271,7 @@ export interface ResolvedSettings {
   prettyWrap: number | false;
   redactDepth: number;
   redactKeys: RegExp | null;
+  redactPaths: string[];
   repeat: RepeatSettings | false;
   autoCounters: boolean;
   showAuthor: boolean;
