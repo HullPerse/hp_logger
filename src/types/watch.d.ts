@@ -19,6 +19,10 @@ export interface WatchHooks {
   onConnect?: (info: { latencyMs: number; status: number }) => void;
   /** Edge up -> down. Not fired when the very first probe fails. */
   onDisconnect?: (info: { reason: WatchReason; error?: Error }) => void;
+  /** Any probe that ends with HTTP 403, before the isUp decision. */
+  onForbidden?: (info: { latencyMs: number; status: number }) => void;
+  /** Called when a probe finishes with a status present in this map. */
+  onStatus?: Record<number, (info: { latencyMs: number; status: number }) => void>;
   /** Every successful probe. */
   onSuccess?: (info: { latencyMs: number; status: number }) => void;
   /** Every failed probe with a classified reason. */

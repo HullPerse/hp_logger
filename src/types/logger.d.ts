@@ -32,6 +32,18 @@ export interface BatchingSettings {
   flushInterval?: number;
 }
 
+/** Options for adaptive throttling during error storms (`logger.adaptive`). */
+export interface AdaptiveSettings {
+  /** Sliding window in milliseconds for counting errors. Defaults to 10000. */
+  windowMs?: number;
+  /** Errors (error+fatal) per window that trigger throttling. Defaults to 20. */
+  errorRate?: number;
+  /** Fraction of debug/info/trace entries kept while throttled. Defaults to 0.1. */
+  sample?: number;
+  /** Quiet period after the rate drops before logging resumes fully. Defaults to 30000. */
+  cooldownMs?: number;
+}
+
 export interface LoggerStats {
   /** Entries waiting for or currently being delivered by this logger. */
   queued: number;
@@ -41,7 +53,60 @@ export interface LoggerStats {
   transportErrors: number;
 }
 
+/** Options for collapsing repeated identical entries (`logger.repeat`). */
+export interface RepeatSettings {
+  /** Group window in milliseconds. Defaults to 1000. */
+  windowMs?: number;
+  /** Maximum tracked groups; the oldest is flushed when exceeded. Defaults to 1000. */
+  maxKeys?: number;
+}
+
+/** Options for logger.time() and logger.span(). */
+export interface TimeOptions {
+  /** Entry level for the finished measurement. Defaults to `success`. */
+  level?: LogLevel;
+  /** When the measurement exceeds this many ms, the entry is logged as warn with slow: true. */
+  maxMs?: number;
+}
+
+/** Handle returned by logger.span(). */
+export interface SpanHandle {
+  /** Unique id of this span within its trace. */
+  spanId: string;
+  /** Trace id shared by the root span and all its descendants. */
+  traceId: string;
+  /** Span id of the enclosing span, or undefined for a root span. */
+  parentId: string | undefined;
+  /** Whether `end()` was already called. Prevents double-logging in callback form. */
+  ended: boolean;
+  /** Write the finished measurement. Optional level overrides the span options. */
+  end: (level?: LogLevel) => void;
+}
+
+/** A completed span recorded for tree rendering. */
+export interface SpanRecord {
+  spanId: string;
+  traceId: string;
+  parentId: string | undefined;
+  name: string;
+  level: LogLevel;
+  message: string;
+  durationMs: number;
+  timestamp: string;
+}
+
+/** A node in the rendered span tree. */
+export interface SpanNode {
+  record: SpanRecord;
+  children: SpanNode[];
+}
+
 export interface LoggerSettings {
+  /**
+   * During error storms, throttle verbose levels (sample debug/info/trace)
+   * and group repeated errors into one summary per cycle. `false` disables.
+   */
+  adaptive?: AdaptiveSettings | false;
   /** Async batching for the console/file transports. `false` disables. */
   batching?: BatchingSettings | false;
   /** Per-level colors in pretty mode. `false` disables all colors. */
@@ -58,6 +123,10 @@ export interface LoggerSettings {
   format?: EntryFormatter;
   /** How context renders in pretty mode: `json` object or `kv` key="value" pairs. */
   formatContext?: ContextFormat;
+  /** Collapse repeated identical entries into `message ×N` summaries. `false` disables. */
+  repeat?: RepeatSettings | false;
+  /** Count every entry in a `hp_logger_entries_total` counter with level and author labels. Defaults to false. */
+  autoCounters?: boolean;
   /** Timestamp format in pretty mode. */
   formatTimestamp?: TimestampFormat;
   /** Minimum level that gets logged. */
@@ -78,6 +147,14 @@ export interface LoggerSettings {
   showAuthor?: boolean;
   /** Case transform for author and level tags in pretty output. Defaults to 'upper'. */
   tagCase?: TagCase;
+  /** Colorize JSON context in pretty console output. Defaults to false. */
+  colorizeContext?: boolean;
+  /** Strip control and terminal escape characters from message/context in pretty output. Defaults to false. */
+  stripControl?: boolean;
+  /** Show a level emoji tag like [⚠️] in pretty console output. Defaults to false. */
+  emoji?: boolean;
+  /** Show the elapsed-since-logger-start tag like [+1.2s] in pretty console output. Defaults to false. */
+  showElapsed?: boolean;
   /**
    * Endpoint or custom probe to poll for availability. Attached only to the
    * logger it is declared on: module() and child() do not inherit it.
@@ -108,9 +185,13 @@ export type LazyContext = LogContext | (() => LogContext);
 export type EntryFormatter = (entry: LogEntry) => string;
 
 export interface ResolvedSettings {
+  adaptive: AdaptiveSettings | false;
   batching: BatchingSettings | false;
+  colorizeContext: boolean;
   colors: false | LevelColors;
+  stripControl: boolean;
   database: DatabaseSettings | false;
+  emoji: boolean;
   enabled: boolean;
   file: FileSettings | false;
   filters: ((entry: LogEntry) => boolean)[];
@@ -124,7 +205,10 @@ export interface ResolvedSettings {
   prettyWrap: number | false;
   redactDepth: number;
   redactKeys: RegExp | null;
+  repeat: RepeatSettings | false;
+  autoCounters: boolean;
   showAuthor: boolean;
+  showElapsed: boolean;
   showLevel: boolean;
   showTime: boolean;
   showDate: boolean;

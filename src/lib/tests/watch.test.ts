@@ -254,6 +254,50 @@ describe("watcher", () => {
     captured.restore();
   });
 
+  test("forbidden and status hooks fire on HTTP 403", async () => {
+    const forbidden = Promise.withResolvers<{ latencyMs: number; status: number }>();
+    const statusHit = Promise.withResolvers<{ latencyMs: number; status: number }>();
+    const original = globalThis.fetch;
+    globalThis.fetch = fakeFetch(new Response(null, { status: 403 }));
+    const logger = makeLogger();
+    try {
+      logger.watch(
+        { interval: 60_000, timeout: 3000, url: "http://example.test/health" },
+        {
+          onForbidden: (info) => forbidden.resolve(info),
+          onStatus: { 403: (info) => statusHit.resolve(info) },
+        },
+      );
+      await Promise.all([forbidden.promise, statusHit.promise]);
+    } finally {
+      globalThis.fetch = original;
+    }
+    const forbiddenInfo = await forbidden.promise;
+    const statusInfo = await statusHit.promise;
+    expect(forbiddenInfo.status).toBe(403);
+    expect(statusInfo.status).toBe(403);
+    await logger.close();
+  });
+
+  test("onStatus fires for successful statuses", async () => {
+    const hit = Promise.withResolvers<{ latencyMs: number; status: number }>();
+    const original = globalThis.fetch;
+    globalThis.fetch = fakeFetch(new Response(null, { status: 202 }));
+    const logger = makeLogger();
+    try {
+      logger.watch(
+        { interval: 60_000, url: "http://example.test/health" },
+        { onStatus: { 202: (info) => hit.resolve(info) } },
+      );
+      await hit.promise;
+    } finally {
+      globalThis.fetch = original;
+    }
+    const statusInfo = await hit.promise;
+    expect(statusInfo.status).toBe(202);
+    await logger.close();
+  });
+
   test("custom isUp controls HTTP availability", async () => {
     const originalFetch = globalThis.fetch;
     const statuses: number[] = [];

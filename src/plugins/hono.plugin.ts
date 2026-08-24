@@ -18,7 +18,7 @@ export const honoMiddleware = (
     );
     const startedAt = performance.now();
 
-    await forward();
+    await logger.withContext({ correlationId }, () => forward());
 
     const path = pathFromUrl(request.url);
     const durationMs = Math.max(0, performance.now() - startedAt);

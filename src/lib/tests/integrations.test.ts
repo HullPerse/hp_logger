@@ -63,6 +63,21 @@ describe("bunServe", () => {
       message: "request",
     });
   });
+
+  test("user logs inside the handler inherit the correlation id", async () => {
+    const { entries, logger } = captureLogger();
+    const handler = bunServe(() => {
+      logger.info("inside");
+      return new Response("ok");
+    }, logger);
+
+    await handler(new Request("http://localhost/items", {
+      headers: { "x-correlation-id": "req-ctx" },
+    }));
+
+    const inside = entries.find((entry) => entry.message === "inside");
+    expect(inside?.context.correlationId).toBe("req-ctx");
+  });
 });
 
 describe("honoMiddleware", () => {
@@ -113,6 +128,35 @@ describe("fastifyPlugin", () => {
       level: "info",
       message: "request",
     });
+  });
+
+  test("onRoute wraps handlers with the correlation context", () => {
+    const { entries, logger } = captureLogger();
+    const hooks = new Map<string, (request: never, reply: never, done: () => void) => void>();
+    const fastify = {
+      addHook(name: string, hook: (request: never, reply: never, done: () => void) => void) {
+        hooks.set(name, hook);
+      },
+    } as never;
+    fastifyPlugin(fastify, logger);
+
+    const routeOptions: { handler: (request: never, reply: never) => void } = {
+      handler: () => {
+        logger.info("inside route");
+      },
+    };
+    const onRoute = hooks.get("onRoute") as unknown as (
+      options: { handler: (request: never, reply: never) => void },
+    ) => void;
+    onRoute(routeOptions);
+
+    routeOptions.handler(
+      { headers: { "x-correlation-id": "req-5" }, method: "GET", url: "/x" } as never,
+      {} as never,
+    );
+
+    const inside = entries.find((entry) => entry.message === "inside route");
+    expect(inside?.context.correlationId).toBe("req-5");
   });
 });
 

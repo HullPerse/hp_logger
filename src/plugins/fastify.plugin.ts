@@ -21,6 +21,18 @@ export const fastifyPlugin = (
     done();
   });
 
+  // Wrap every registered route handler so user logs inside it carry the
+  // correlation id through the async-local context.
+  fastify.addHook("onRoute", (routeOptions) => {
+    const { handler: originalHandler } = routeOptions;
+    routeOptions.handler = function handler(request, reply) {
+      const correlationId = resolveCorrelationId(request.headers["x-correlation-id"]);
+      return logger.withContext({ correlationId }, () =>
+        originalHandler.call(this, request, reply),
+      );
+    };
+  });
+
   fastify.addHook("onResponse", (request, reply, done) => {
     const meta = requests.get(request);
     if (meta) {

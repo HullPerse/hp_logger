@@ -34,6 +34,8 @@ export const nodeServer = (
       }
     });
 
-    handler(request, response);
+    logger.withContext({ correlationId }, () => {
+      handler(request, response);
+    });
   };
 };

@@ -15,6 +15,50 @@ const entry = (message: string): LogEntry => ({
   timestamp: message,
 });
 
+describe("sqlite adapter schema", () => {
+  test("rejects an existing table with a different schema", () => {
+    const db = new Database(":memory:");
+    db.run("CREATE TABLE logs (id INTEGER PRIMARY KEY, note TEXT NOT NULL)");
+    expect(() => createSqliteAdapter(db)).toThrow(/unexpected schema/u);
+  });
+
+  test("appends to an existing table that already matches the logger schema", async () => {
+    const db = new Database(":memory:");
+    db.run(`
+      CREATE TABLE logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        level TEXT NOT NULL,
+        author TEXT NOT NULL,
+        message TEXT NOT NULL,
+        context TEXT NOT NULL DEFAULT '{}'
+      )
+    `);
+    const logger = createLogger({
+      settings: {
+        database: { adapter: createSqliteAdapter(db), enabled: true },
+        file: false,
+        mode: "json",
+      },
+    });
+
+    await withMutedConsole(async () => {
+      logger.info("append me");
+      await logger.close();
+    });
+
+    const rows = db.query("SELECT message FROM logs").all() as { message: string }[];
+    expect(rows.map((row) => row.message)).toEqual(["append me"]);
+  });
+
+  test("rejects an unsafe table name", () => {
+    const db = new Database(":memory:");
+    expect(() => createSqliteAdapter(db, { table: "logs; DROP TABLE users" })).toThrow(
+      /Invalid sqlite table name/u,
+    );
+  });
+});
+
 describe("DatabaseTransport", () => {
   test("persists entries through the sqlite adapter", async () => {
     const db = new Database(":memory:");
@@ -44,13 +88,17 @@ describe("DatabaseTransport", () => {
       message: string;
     }[];
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({
+    const [firstRow, secondRow] = rows;
+    if (firstRow === undefined || secondRow === undefined) {
+      throw new Error("expected two log rows");
+    }
+    expect(firstRow).toMatchObject({
       author: "ROOT",
       level: "info",
       message: "hello db",
     });
-    expect(JSON.parse(rows[0].context)).toEqual({ userId: 42 });
-    expect(rows[1].level).toBe("warn");
+    expect(JSON.parse(firstRow.context)).toEqual({ userId: 42 });
+    expect(secondRow.level).toBe("warn");
   });
 
   test("level filter drops entries below the configured level", async () => {

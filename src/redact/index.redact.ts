@@ -1,3 +1,4 @@
+import { Memoize } from "../brain/memo.utils";
 import {
   BEARER_PATTERN,
   KEY_VALUE_PATTERN,
@@ -18,10 +19,16 @@ const matchesPattern = (pattern: RegExp, value: string): boolean => {
   return matched;
 };
 
-const matchesSecretKey = (key: string, secretKey: RegExp): boolean =>
-  secretKey === DEFAULT_REDACT_KEYS
-    ? SENSITIVE_KEY_FRAGMENTS.test(key)
-    : matchesPattern(secretKey, key);
+// Key matches repeat across entries (authorization, token, password in
+// every request); cache the per-key verdict. Bounded, so the cache cannot
+// grow without limit when keys vary. Values are not cached: strings carry
+// the bulk of redaction cost and their space is unbounded.
+const secretKeyMemo = new Memoize<string, boolean>(2048);
+
+const matchesSecretKey = (key: string, secretKey: RegExp): boolean => {
+  if (secretKey !== DEFAULT_REDACT_KEYS) return matchesPattern(secretKey, key);
+  return secretKeyMemo.call(key, () => SENSITIVE_KEY_FRAGMENTS.test(key));
+};
 
 const needsRedactionScan = (key: string, value: unknown, secretKey: RegExp): boolean => {
   if (matchesSecretKey(key, secretKey)) return true;
@@ -31,12 +38,25 @@ const needsRedactionScan = (key: string, value: unknown, secretKey: RegExp): boo
   return typeof value === "object" && value !== null;
 };
 
-const serializeError = (error: Error): SerializedError => {
+const MAX_ERROR_DEPTH = 8;
+
+// Cycles and shared references are guarded per branch: `seen` is released
+// after each recursion, so a DAG renders fully and only true cycles stop.
+const serializeError = (error: Error, seen = new WeakSet<Error>(), depth = 0): SerializedError => {
+  if (depth > MAX_ERROR_DEPTH) {
+    return { message: "[Nested]", name: error.name };
+  }
+  if (seen.has(error)) {
+    return { message: "[Circular]", name: error.name };
+  }
+  seen.add(error);
   const result: SerializedError = { message: error.message, name: error.name };
   if (error.stack) result.stack = error.stack;
   if (error.cause !== undefined) {
-    result.cause = error.cause instanceof Error ? serializeError(error.cause) : error.cause;
+    result.cause =
+      error.cause instanceof Error ? serializeError(error.cause, seen, depth + 1) : error.cause;
   }
+  seen.delete(error);
   return result;
 };
 

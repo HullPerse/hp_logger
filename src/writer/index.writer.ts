@@ -4,6 +4,7 @@ export * from "./file.writer";
 export * from "./dateBased.writer";
 export * from "./buffer.writer";
 export * from "./group.writer";
+export * from "./repeat.writer";
 export * from "./database.writer";
 export * from "./sqlite.writer";
 export * from "./factory.writer";

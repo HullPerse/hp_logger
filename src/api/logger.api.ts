@@ -1,6 +1,11 @@
 import { LOG_LEVELS } from "../config/levels.config";
 import { DEFAULT_AUTHOR } from "../config/logger.config";
-import { runWithContext } from "../core/context.core";
+import { getAsyncContext, runWithContext } from "../core/context.core";
+import { getSpanRegistry, nextSpanId, nextTraceId } from "../core/span.core";
+import { Counter } from "../metrics/counter.metric";
+import { Gauge } from "../metrics/gauge.metric";
+import { Histogram } from "../metrics/histogram.metric";
+import { Registry } from "../metrics/registry.metric";
 import {
   addGlobalTransport,
   clearGlobalTransports,
@@ -8,10 +13,12 @@ import {
   writeEntry,
 } from "../core/pipeline.core";
 import { formatDuration } from "../format/duration.format";
+import { renderSpanTree } from "../format/span.format";
+import { renderTable } from "../format/table.format";
 import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
-import { redact } from "../redact/index.redact";
 import { attemptAsync } from "../lib/result.utils";
 import { mergeSettings, resolveEnvLevel, resolveSettings } from "../lib/settings.utils";
+import { redact } from "../redact/index.redact";
 import type {
   CreateLoggerOptions,
   LazyContext,
@@ -23,8 +30,11 @@ import type {
   LoggerSettings,
   LoggerState,
   ResolvedSettings,
+  SpanHandle,
+  TimeOptions,
   TimestampFormat,
 } from "../types/logger";
+import type { MetricOptions } from "../types/metrics";
 import type { Transport } from "../types/transport";
 import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch";
 import { startWatcher } from "../watch/index.watch";
@@ -64,6 +74,8 @@ export class Logger implements LoggerState {
   redactValue!: (value: unknown) => unknown;
   private currentSettings: ResolvedSettings;
   private declarativeWatch: WatchHandle | null = null;
+  private metricsRegistryInstance: Registry | null = null;
+  private autoCounter: Counter | null = null;
   private watchHandles: WatchHandle[] = [];
 
   constructor(
@@ -80,6 +92,7 @@ export class Logger implements LoggerState {
     this.applyHotSettings(currentSettings);
     this.transport = transport ?? buildTransports(currentSettings);
     if (declarativeWatch) this.rebindWatch(declarativeWatch);
+    if (currentSettings.autoCounters) this.ensureAutoCounter();
   }
 
   /** Copy per-entry settings into direct fields so the write path reads primitives. */
@@ -97,9 +110,7 @@ export class Logger implements LoggerState {
     this.needsRedaction = settings.redactKeys !== null;
     const { redactKeys } = settings;
     this.redactValue =
-      redactKeys === null
-        ? identity
-        : (value) => redact(value, redactKeys, settings.redactDepth);
+      redactKeys === null ? identity : (value) => redact(value, redactKeys, settings.redactDepth);
   }
 
   /** Override settings for this logger and all its descendants. */
@@ -107,8 +118,47 @@ export class Logger implements LoggerState {
     this.currentSettings = mergeSettings(this.currentSettings, changes);
     this.applyHotSettings(this.currentSettings);
     this.transport = buildTransports(this.currentSettings);
+    if (changes.autoCounters) this.ensureAutoCounter();
     if (changes.watch !== undefined) this.rebindWatch(changes.watch);
     return this;
+  }
+
+  /** Lazy registry for logger metrics; created on first metric usage. */
+  private metricsRegistry(): Registry {
+    if (this.metricsRegistryInstance === null) {
+      this.metricsRegistryInstance = new Registry();
+    }
+    return this.metricsRegistryInstance;
+  }
+
+  private ensureAutoCounter(): void {
+    if (this.autoCounter !== null) return;
+    this.autoCounter = new Counter({
+      help: "Log entries written by this logger",
+      labelNames: ["author", "level"],
+      name: "hp_logger_entries_total",
+      registers: [this.metricsRegistry()],
+    });
+  }
+
+  /** Create a counter bound to this logger's registry. */
+  counter(options: Omit<MetricOptions, "registers">): Counter {
+    return new Counter({ ...options, registers: [this.metricsRegistry()] });
+  }
+
+  /** Create a gauge bound to this logger's registry. */
+  gauge(options: Omit<MetricOptions, "registers">): Gauge {
+    return new Gauge({ ...options, registers: [this.metricsRegistry()] });
+  }
+
+  /** Create a histogram bound to this logger's registry. */
+  histogram(options: Omit<MetricOptions, "registers"> & { buckets?: readonly number[] }): Histogram {
+    return new Histogram({ ...options, registers: [this.metricsRegistry()] });
+  }
+
+  /** All logger metrics in Prometheus text format, ready for a /metrics endpoint. */
+  metricsText(): string {
+    return this.metricsRegistryInstance?.metrics() ?? "";
   }
 
   /**
@@ -179,53 +229,208 @@ export class Logger implements LoggerState {
   // returns before the write() call, the LOG_LEVELS lookup and any argument
   // work. `levelThreshold` is a number on the instance, updated by
   // settings(), so the comparison stays dynamic.
+  // Each level accepts (message, context) as before, (context, message) as
+  // the typed structured alternative, or a bare object that is printed as
+  // JSON.
 
-  trace(message: LazyMessage, context?: LazyContext): void {
+  trace(message: LazyMessage, context?: LazyContext): void;
+  trace(context: LogContext, message?: string): void;
+  trace(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_TRACE < this.levelThreshold) return;
-    this.write("trace", message, context);
+    const args = Logger.normalizeArgs(first, second);
+    this.write("trace", args.message, args.context);
   }
 
-  debug(message: LazyMessage, context?: LazyContext): void {
+  debug(message: LazyMessage, context?: LazyContext): void;
+  debug(context: LogContext, message?: string): void;
+  debug(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_DEBUG < this.levelThreshold) return;
-    this.write("debug", message, context);
+    const args = Logger.normalizeArgs(first, second);
+    this.write("debug", args.message, args.context);
   }
 
-  info(message: LazyMessage, context?: LazyContext): void {
+  info(message: LazyMessage, context?: LazyContext): void;
+  info(context: LogContext, message?: string): void;
+  info(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_INFO < this.levelThreshold) return;
-    this.write("info", message, context);
+    const args = Logger.normalizeArgs(first, second);
+    this.write("info", args.message, args.context);
   }
 
-  success(message: LazyMessage, context?: LazyContext): void {
+  success(message: LazyMessage, context?: LazyContext): void;
+  success(context: LogContext, message?: string): void;
+  success(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_SUCCESS < this.levelThreshold) return;
-    this.write("success", message, context);
+    const args = Logger.normalizeArgs(first, second);
+    this.write("success", args.message, args.context);
   }
 
-  warn(message: LazyMessage, context?: LazyContext): void {
+  warn(message: LazyMessage, context?: LazyContext): void;
+  warn(context: LogContext, message?: string): void;
+  warn(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_WARN < this.levelThreshold) return;
-    this.write("warn", message, context);
+    const args = Logger.normalizeArgs(first, second);
+    this.write("warn", args.message, args.context);
   }
 
-  error(message: LazyMessage, context?: LazyContext): void {
+  error(message: LazyMessage, context?: LazyContext): void;
+  error(context: LogContext, message?: string): void;
+  error(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_ERROR < this.levelThreshold) return;
-    this.write("error", message, context);
+    const args = Logger.normalizeArgs(first, second);
+    this.write("error", args.message, args.context);
   }
 
-  fatal(message: LazyMessage, context?: LazyContext): void {
+  fatal(message: LazyMessage, context?: LazyContext): void;
+  fatal(context: LogContext, message?: string): void;
+  fatal(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_FATAL < this.levelThreshold) return;
-    this.write("fatal", message, context);
+    const args = Logger.normalizeArgs(first, second);
+    this.write("fatal", args.message, args.context);
   }
 
-  /** Measure a function and log its duration. Returns the function result. */
-  async time<T>(name: string, fn: () => Promise<T> | T, level: LogLevel = "success"): Promise<T> {
-    const startedAt = performance.now();
-    const outcome = await attemptAsync(() => fn());
-    const durationMs = Math.round(performance.now() - startedAt);
+  /**
+   * Normalize the two accepted argument orders plus the bare-object form:
+   * `(message, context)`, `(context, message)`, `(message)` and `(object)`.
+   */
+  private static normalizeArgs(
+    first: LazyMessage | LogContext,
+    second?: LazyContext | string,
+  ): { context: LazyContext | undefined; message: LazyMessage } {
+    if (typeof first === "string" || typeof first === "function") {
+      return { context: second as LazyContext | undefined, message: first };
+    }
+    if (typeof second === "string") {
+      return { context: first, message: second };
+    }
+    // A bare object is printed as JSON instead of an empty-string message.
+    return { context: second as LazyContext | undefined, message: () => JSON.stringify(first) };
+  }
+
+  private writeMeasured(
+    name: string,
+    durationMs: number,
+    options: TimeOptions = {},
+    spanContext?: { spanId: string; traceId: string; parentId?: string },
+  ): void {
+    const slow = options.maxMs !== undefined && durationMs > options.maxMs;
+    const level = slow ? "warn" : (options.level ?? "success");
     this.write(level, `${name} completed in ${formatDuration(durationMs)}`, {
       durationMs,
       operation: name,
+      ...(slow ? { maxMs: options.maxMs, slow: true } : {}),
+      ...spanContext,
     });
+    if (spanContext !== undefined) {
+      getSpanRegistry().add({
+        durationMs,
+        level,
+        message: `${name} completed in ${formatDuration(durationMs)}`,
+        name,
+        parentId: spanContext.parentId,
+        spanId: spanContext.spanId,
+        timestamp: this.timestamp(),
+        traceId: spanContext.traceId,
+      });
+    }
+  }
+
+  /**
+   * Measure a function and log its duration. Returns the function result.
+   * Pass `maxMs` to warn when the measurement exceeds the threshold.
+   */
+  async time<T>(name: string, fn: () => Promise<T> | T, options: TimeOptions = {}): Promise<T> {
+    const startedAt = performance.now();
+    const outcome = await attemptAsync(() => fn());
+    const durationMs = Math.round(performance.now() - startedAt);
+    this.writeMeasured(name, durationMs, options);
     if (!outcome.ok) throw outcome.error;
     return outcome.value;
+  }
+
+  /**
+   * Start a manual span. Call `end()` to log the measured duration, or pass a
+   * callback to run inside the span's async-local context: all entries
+   * inside the callback (including child spans) carry the span and trace ids.
+   */
+  span<T>(name: string, callback: (span: SpanHandle) => T | Promise<T>): Promise<T>;
+  span(name: string, options?: TimeOptions): SpanHandle;
+  span<T>(
+    name: string,
+    optionsOrCallback?: TimeOptions | ((span: SpanHandle) => T | Promise<T>),
+  ): SpanHandle | Promise<T> {
+    const isCallback = typeof optionsOrCallback === "function";
+    const options: TimeOptions = isCallback ? {} : (optionsOrCallback ?? {});
+    const callback = isCallback
+      ? (optionsOrCallback as (span: SpanHandle) => T | Promise<T>)
+      : undefined;
+    const inherited = getAsyncContext();
+    const traceId =
+      inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string);
+    const parentId = inherited?.spanId === undefined ? undefined : (inherited.spanId as string);
+    const spanId = nextSpanId();
+    const spanContext = { parentId, spanId, traceId };
+    const startedAt = performance.now();
+    const stub: SpanHandle = {
+      end: () => {
+        throw new Error("span.end called before initialization");
+      },
+      ended: false,
+      parentId,
+      spanId,
+      traceId,
+    };
+    const handle: SpanHandle = stub;
+
+    handle.end = (level?: LogLevel): void => {
+      if (handle.ended) return;
+      handle.ended = true;
+      const durationMs = Math.round(performance.now() - startedAt);
+      this.writeMeasured(
+        name,
+        durationMs,
+        { ...options, level: level ?? options.level },
+        spanContext,
+      );
+    };
+
+    if (callback === undefined) return handle;
+
+    // Callback form: run inside the span's async-local context so all
+    // entries (including child spans) inherit spanId/traceId/parentId.
+    return runWithContext(spanContext, async () => {
+      try {
+        const result = (await callback(handle)) as T;
+        if (handle.ended) return result;
+        handle.end();
+        return result;
+      } catch (error: unknown) {
+        if (handle.ended) throw error;
+        handle.end("error");
+        throw error;
+      }
+    });
+  }
+
+  /** Render the span tree for a trace (default: most recent) as an ASCII tree. */
+  traceTree(traceId?: string): void {
+    const registry = getSpanRegistry();
+    const id = traceId ?? registry.latestTraceId();
+    if (id === undefined) {
+      this.write("info", "no spans recorded");
+      return;
+    }
+    const roots = registry.treeForTrace(id);
+    if (roots.length === 0) {
+      this.write("info", `no spans for trace ${id}`);
+      return;
+    }
+    this.write("info", renderSpanTree(roots));
+  }
+
+  /** Render rows as a plain-text table and log it at the given level. */
+  table(rows: readonly Record<string, unknown>[], level: LogLevel = "info"): void {
+    this.write(level, renderTable(rows));
   }
 
   /** Log once per key: subsequent calls with the same key are dropped. */
@@ -251,6 +456,9 @@ export class Logger implements LoggerState {
   }
 
   private write(level: LogLevel, message: LazyMessage, context?: LazyContext): void {
+    if (this.autoCounter !== null) {
+      this.autoCounter.inc({ author: this.author, level });
+    }
     writeEntry(this, level, message, context);
   }
 

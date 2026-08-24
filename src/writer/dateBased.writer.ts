@@ -41,7 +41,9 @@ export class DateBasedFileTransport extends BaseFileTransport {
   }
 
   private getDateDir(): string {
-    const [dateStr] = new Date().toISOString().split("T");
+    // ISO timestamps are always "YYYY-MM-DDTHH:mm:ss.sssZ", so the first ten
+    // characters are the calendar date without a split allocation.
+    const dateStr = new Date().toISOString().slice(0, 10);
     return path.join(this.baseDir, dateStr);
   }
 

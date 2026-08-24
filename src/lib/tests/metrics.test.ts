@@ -130,6 +130,35 @@ describe("Histogram", () => {
     histogram.observe({}, 0.5);
     expect(registry.metrics()).toContain('default_histogram_bucket{le="0.5"} 1');
   });
+
+  test("quantile estimates the rank inside the crossing bucket", () => {
+    const histogram = new Histogram({
+      buckets: [5, 10, 25],
+      help: "Duration",
+      name: "quantile_histogram",
+      registers: [],
+    });
+    for (let i = 0; i < 100; i += 1) histogram.observe({}, i % 25);
+
+    const p50 = histogram.quantile(0.5);
+    expect(p50).toBeGreaterThan(10);
+    expect(p50).toBeLessThan(25);
+    const p99 = histogram.quantile(0.99);
+    expect(p99).toBeLessThanOrEqual(25);
+    expect(histogram.quantile(0)).toBe(0);
+    expect(histogram.quantile(1)).toBeLessThanOrEqual(25);
+  });
+
+  test("quantile is NaN without observations and rejects bad ranks", () => {
+    const histogram = new Histogram({
+      help: "Duration",
+      name: "empty_histogram",
+      registers: [],
+    });
+    expect(histogram.quantile(0.5)).toBeNaN();
+    expect(() => histogram.quantile(1.5)).toThrow("between 0 and 1");
+    expect(() => histogram.quantile(Number.NaN)).toThrow("between 0 and 1");
+  });
 });
 
 describe("BaseMetric registration", () => {

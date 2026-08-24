@@ -82,32 +82,37 @@ export const startWatcher = (
     return classifyError(outcome.error).reason;
   };
 
-  const runProbe = async (): Promise<void> => {
-    if (stopped) return;
-    const outcome = await probeOnce(rawOptions, timeout);
+  const fireStatusHooks = (info: { latencyMs: number; status: number }): void => {
+    hooks.onStatus?.[info.status]?.(info);
+    if (info.status === 403) hooks.onForbidden?.(info);
+  };
 
-    if (outcome.ok) {
-      const info = {
-        latencyMs: outcome.latencyMs,
-        status: outcome.status,
-      };
-      if (up !== true) {
-        up = true;
-        hooks.onConnect?.(info);
-        log("success", "watch connected", { ...info });
-      }
-      hooks.onSuccess?.(info);
-      if (rawOptions.logProbes) {
-        log("debug", "watch probe ok", { ...info });
-      }
-      return;
+  const handleSuccess = (outcome: ProbeOutcome): void => {
+    const info = {
+      latencyMs: outcome.latencyMs,
+      status: outcome.status,
+    };
+    if (up !== true) {
+      up = true;
+      hooks.onConnect?.(info);
+      log("success", "watch connected", { ...info });
     }
+    hooks.onSuccess?.(info);
+    fireStatusHooks(info);
+    if (rawOptions.logProbes) {
+      log("debug", "watch probe ok", { ...info });
+    }
+  };
 
+  const handleFailure = (outcome: ProbeOutcome): void => {
     const info = {
       error: outcome.error,
       latencyMs: outcome.latencyMs,
       reason: failReasonOf(outcome),
     };
+    if (outcome.status !== 0) {
+      fireStatusHooks({ latencyMs: outcome.latencyMs, status: outcome.status });
+    }
     hooks.onError?.({ error: info.error, reason: info.reason });
     if (rawOptions.logProbes) {
       log("debug", "watch probe failed", {
@@ -130,6 +135,13 @@ export const startWatcher = (
         reason: info.reason,
       });
     }
+  };
+
+  const runProbe = async (): Promise<void> => {
+    if (stopped) return;
+    const outcome = await probeOnce(rawOptions, timeout);
+    if (outcome.ok) handleSuccess(outcome);
+    else handleFailure(outcome);
   };
 
   const stop = (): void => {

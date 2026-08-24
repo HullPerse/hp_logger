@@ -46,6 +46,13 @@ Global settings are passed to `createLogger`; module settings via `.module(name,
 | `showYear` | Show the `[YYYY]` year tag in pretty output | `false` |
 | `showAuthor` | Show module name in pretty output | `true` |
 | `showLevel` | Show the colored level tag `[INFO]`/`[ERROR]` in pretty output | `false` |
+| `showElapsed` | Show a `[+12.3s]` tag with time since the logger was created | `false` |
+| `emoji` | Show a level emoji tag like `[✅]` in pretty console output | `false` |
+| `colorizeContext` | Colorize context (keys cyan, strings green, numbers yellow) | `false` |
+| `stripControl` | Strip ESC/C0 control chars and DEL from message, context and error blocks in pretty console output (defends against terminal/log injection from hostile logged data) | `false` |
+| `repeat` | Collapse repeated identical entries into `message ×N` summaries: `{ windowMs, maxKeys }` or `false` | `false` |
+| `adaptive` | During error storms, sample verbose levels and group repeated errors: `{ windowMs?, errorRate?, sample?, cooldownMs? }` or `false` | `false` |
+| `autoCounters` | Count every entry in `hp_logger_entries_total{author,level}` | `false` |
 | `formatContext` | Context rendering in pretty output: `json` object or `kv` pairs `key="value"` | `json` |
 | `formatTimestamp` | `iso` or `local` time format | `iso` |
 | `prettyWrap` | Wrap pretty lines to this many terminal columns (Bun 1.4+, ANSI-safe). `false` disables. | `false` |
@@ -127,7 +134,7 @@ const logger = createLogger({
 ```
 
 - `createSqliteAdapter(db, { table? })` - adapter for `bun:sqlite` with batched inserts inside a transaction. The caller owns the `Database` instance.
-- Any other database works through a `DatabaseAdapter`: `{ write(entries), close?() }`.
+- Any other database works through a `DatabaseAdapter`: `{ write(entries), close?() }`. When the table already exists, its schema is checked against the logger columns (`id`, `timestamp`, `level`, `author`, `message`, `context`); a matching table is appended to (restart-safe), a different schema raises an error instead of writing garbage. The table name must be a plain SQL identifier.
 - `level` filters what gets persisted; entries are buffered and flushed on `maxBufferSize` or `flushInterval` (milliseconds).
 - Writes run through a sequential pipeline: one batch in flight at a time, strict FIFO order, batches capped at `maxBufferSize`. A failed write puts its batch back at the head and is retried on the next trigger; `close()` drains everything but gives up instead of hanging if the adapter keeps failing.
 - Disable with `database: false`.
@@ -172,7 +179,7 @@ JSON output and custom formatters always keep the raw author string.
 
 ### Watch
 
-Poll an endpoint or a custom probe and log availability edges. Transitions are logged automatically - `success` on connect, `warn` on disconnect; single probes stay silent unless `logProbes` is set.
+Poll an endpoint or a custom probe and log availability edges. Transitions are logged automatically - `success` on connect, `warn` on disconnect; single probes stay silent unless `logProbes` is set. Hooks can react to specific statuses: `onForbidden` fires on HTTP 403 and `onStatus` maps a status code to a callback.
 
 ```ts
 const stop = logger.watch(
@@ -245,7 +252,67 @@ Time a function and log its duration. Returns the function result.
 ```ts
 const rows = await logger.time("db.query", () => db.query(...));
 // success: db.query completed in 42ms { durationMs: 42, operation: "db.query" }
+
+const slow = await logger.time("report", generate, { maxMs: 100 });
+// warn: report completed in 1842ms { durationMs: 1842, maxMs: 100, slow: true }
+
+const span = logger.span("render");
+// ...
+span.end();
 ```
+
+### Spans and trace tree
+
+`logger.span(name)` times a block and logs the duration. Pass a callback to run inside the span's async-local context: all entries inside the span (including child spans) carry `spanId`, `traceId`, and `parentId`, so a request tree is traceable end to end.
+
+```ts
+// Manual span
+const span = logger.span("query");
+// ... do work ...
+span.end(); // logs: query completed in 18ms { spanId: "s0001", traceId: "t0001" }
+
+// Callback span with automatic context propagation
+await logger.span("request", async () => {
+  logger.info("started"); // carries spanId + traceId
+
+  await logger.span("database", async () => {
+    logger.info("querying"); // carries nested spanId, same traceId, parentId set
+  });
+
+  // child span auto-ends here
+});
+```
+
+`logger.traceTree()` renders the completed span tree for the most recent trace as an ASCII tree:
+
+```text
+request                     24ms  span=s0001
+`-- database               18ms  span=s0002 parent=s0001
+   `-- query               14ms  span=s0003 parent=s0002
+```
+
+In JSON mode, `spanId`, `traceId`, and `parentId` land in every entry's context fields. Root spans create a new traceId; child spans inherit it. The `ended` flag prevents double-logging when a callback span errors.
+
+### Repeated messages (repeat)
+
+With `repeat` enabled, identical entries inside one window are collapsed: the first line is written immediately, duplicates are counted, and at the end of the window one summary line is written with the total. `windowMs` defaults to 1000, `maxKeys` to 1000 (the oldest group is flushed when exceeded). Errors are grouped by name, message and first stack frame, so the same error from the same call site collapses too.
+
+```ts
+const logger = createLogger({
+  settings: {
+    repeat: { windowMs: 2000 },
+  },
+});
+
+for (let i = 0; i < 200; i += 1) {
+  logger.error("connection failed");
+}
+// [12:00:01] [ERROR] connection failed
+// ...window passes...
+// [12:00:03] [ERROR] connection failed ×200
+```
+
+`.once()` and `.throttle()` still exist for manual per-key suppression.
 
 ### once / throttle
 
@@ -293,6 +360,29 @@ const logger = createLogger({
 
 The default console pretty format is `[time] [author] message context`; time is `[HH:mm:ss]` by default. Enable `showDate` for `[MM-DD]`, `showYear` for `[YYYY]`, or `showLevel` for `[LEVEL]`. Only tags before the message are colored; the message and context stay plain. File pretty output keeps its complete timestamp and stable layout by default; use `format` to change the file layout.
 
+### Structured arguments
+
+Level methods accept three forms: `(message, context)`, `(context, message)` and a bare object that is printed as JSON. A `context.group` string indents pretty lines under a tree (`"request.db"` indents one level). Errors in `error`/`reason` context render as a block with their cause chain in pretty console output.
+
+```ts
+logger.info("user saved", { userId: 42 });
+logger.info({ userId: 42 }, "user saved"); // same entry
+logger.info({ user: { id: 42 } }); // prints the object as JSON
+logger.info("query done", { group: "request.db" }); // indented pretty line
+logger.error("boom", { error: new Error("db down") }); // cause chain block
+```
+
+### Table
+
+Render arrays of objects as an aligned plain-text table:
+
+```ts
+logger.table([
+  { id: 1, name: "aa" },
+  { id: 22, name: "b" },
+]);
+```
+
 ### Bun 1.4 pretty output
 
 On Bun 1.4+, `prettyWrap` and `prettyTruncate` use Bun's ANSI-aware `wrapAnsi`/`sliceAnsi`: long lines wrap to the configured terminal columns and overlong lines are cut with `…`, preserving tag colors, emoji and CJK width. On Node the same settings fall back to plain text truncation.
@@ -306,6 +396,36 @@ const logger = createLogger({
   },
 });
 ```
+
+### Error-storm throttling (adaptive)
+
+When the error rate (error + fatal) over a sliding window exceeds `errorRate`, verbose levels (debug/info/trace) are sampled at `sample` and repeated errors are collapsed into one summary per group, so a storm becomes `message ×N` instead of a flood. When the rate stays below the threshold for `cooldownMs`, full logging resumes.
+
+```ts
+createLogger({
+  settings: {
+    adaptive: { windowMs: 10_000, errorRate: 20, sample: 0.1, cooldownMs: 30_000 },
+  },
+});
+```
+
+Transitions emit `adaptive`-author notices ("storm: N errors in ... - sampling verbose levels" and "storm over - full logging resumed"). Combine with `repeat` for long-term grouping; adaptive sits outside repeat, so the storm floods the repeat groups at full rate while verbose levels are sampled.
+
+### Web log viewer (`hp_logger/http`)
+
+Poll recent logs from any page or script. `LogBuffer` keeps a ring of the last N entries (default 500) and exposes them as a `Transport`; mount `Logger.addTransport(buffer.transport)` so every entry lands in the buffer (the raw stream, before adaptive/repeat filtering). Then serve the buffer over HTTP and poll it with a cursor:
+
+```ts
+import { createLogServer, LogBuffer } from "hp_logger/http";
+
+const buffer = new LogBuffer(1000);
+Logger.addTransport(buffer.transport);
+const server = createLogServer(buffer, { port: 8787, token: "my-secret" });
+```
+
+- `GET /hp_logger/logs` - the whole ring as `{ entries, next }`.
+- `GET /hp_logger/logs?after={cursor}` - only entries newer than the cursor (poll with `next` as the cursor and an interval).
+- When `token` is set, requests must send `Authorization: Bearer <token>`; without a token, the endpoint is open, so keep the default `hostname: "127.0.0.1"` and choose a token when binding to a non-local host.
 
 ### Global error handlers
 
@@ -329,7 +449,7 @@ logger.settings({ level: "warn" });                       // change at runtime
 
 ## Integrations
 
-All integrations log requests: method, path, status, duration, correlation id. The level depends on the status: 2xx/3xx info, 4xx warn, 5xx error. `/health` and `/metrics` can be excluded via `skipPaths`.
+All integrations log requests: method, path, status, duration, correlation id. The level depends on the status: 2xx/3xx info, 4xx warn, 5xx error. `/health` and `/metrics` can be excluded via `skipPaths`. User logs written inside a handled request inherit the correlation id from the async context (all integrations except elysia, whose plugin API has no handler wrapping point - wrap the handler with `logger.withContext({ correlationId }, ...)` there).
 
 ### Elysia
 
@@ -445,8 +565,28 @@ const text = registry.metrics();
 
 - `Counter` - monotonically increasing counter, `inc(labels?, value = 1)`.
 - `Gauge` - value that can go up and down, `set`/`inc`/`dec`.
-- `Histogram` - distribution of observations into buckets, `observe(labels, value)`.
+- `Histogram` - distribution of observations into buckets, `observe(labels, value)`, `quantile(q, labels?)` estimates p50/p95/p99 from the buckets (NaN when empty).
 - `Registry` - collects metrics and produces text; metric names must be unique and match `[a-zA-Z_:][a-zA-Z0-9_:]*`.
+
+### Logger-bound metrics
+
+Metrics can live on a logger: `counter()`, `gauge()`, `histogram()` bind to its own registry and `metricsText()` renders everything (including the optional auto counters) for a `/metrics` endpoint.
+
+```ts
+const requests = logger.counter({ help: "Requests", name: "http_requests_total" });
+const slow = logger.histogram({ buckets: [100, 500], help: "Slow ops", name: "slow_ops_ms" });
+
+requests.inc();
+slow.observe({}, 250);
+
+console.log(logger.metricsText()); // Prometheus text format
+```
+
+With `autoCounters: true` every entry also increments `hp_logger_entries_total{author,level}`.
+
+### Process metrics
+
+`createProcessMetrics(registry, intervalMs?)` exposes gauges for memory (rss, heap), uptime and event loop lag, updated on an unref timer; call `stop()` to release it.
 
 ## Global error handlers
 

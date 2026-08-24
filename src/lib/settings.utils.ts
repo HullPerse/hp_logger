@@ -18,28 +18,38 @@ export const resolveEnvLevel = (
 
 type ResolvedTagSettings = Pick<
   ResolvedSettings,
-  "showAuthor" | "showDate" | "showLevel" | "showTime" | "showYear" | "tagCase"
+  "colorizeContext" | "emoji" | "showAuthor" | "showDate" | "showElapsed" | "showLevel" | "showTime" | "showYear" | "stripControl" | "tagCase"
 >;
 
 const resolveTagSettings = (settings: LoggerSettings): ResolvedTagSettings => ({
+  colorizeContext: settings.colorizeContext ?? false,
+  emoji: settings.emoji ?? false,
   showAuthor: settings.showAuthor ?? true,
   showDate: settings.showDate ?? false,
+  showElapsed: settings.showElapsed ?? false,
   showLevel: settings.showLevel ?? false,
   showTime: settings.showTime ?? true,
   showYear: settings.showYear ?? false,
+  stripControl: settings.stripControl ?? false,
   tagCase: settings.tagCase ?? "upper",
 });
 
 const mergeTagSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedTagSettings => ({
+  colorizeContext: patch.colorizeContext ?? base.colorizeContext,
+  emoji: patch.emoji ?? base.emoji,
   showAuthor: patch.showAuthor ?? base.showAuthor,
   showDate: patch.showDate ?? base.showDate,
+  showElapsed: patch.showElapsed ?? base.showElapsed,
   showLevel: patch.showLevel ?? base.showLevel,
   showTime: patch.showTime ?? base.showTime,
   showYear: patch.showYear ?? base.showYear,
+  stripControl: patch.stripControl ?? base.stripControl,
   tagCase: patch.tagCase ?? base.tagCase,
 });
 
 export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings => ({
+  adaptive: settings.adaptive ?? false,
+  autoCounters: settings.autoCounters ?? false,
   batching: settings.batching ?? false,
   colors: settings.colors ?? {},
   database: settings.database ?? false,
@@ -56,10 +66,13 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
   prettyWrap: settings.prettyWrap ?? false,
   redactDepth: settings.redactDepth ?? 2,
   redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
+  repeat: settings.repeat ?? false,
   ...resolveTagSettings(settings),
 });
 
 export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedSettings => ({
+  adaptive: patch.adaptive ?? base.adaptive,
+  autoCounters: patch.autoCounters ?? base.autoCounters,
   batching: patch.batching ?? base.batching,
   colors: patch.colors ?? base.colors,
   database: patch.database ?? base.database,
@@ -76,5 +89,6 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
   prettyWrap: patch.prettyWrap ?? base.prettyWrap,
   redactDepth: patch.redactDepth ?? base.redactDepth,
   redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
+  repeat: patch.repeat ?? base.repeat,
   ...mergeTagSettings(base, patch),
 });

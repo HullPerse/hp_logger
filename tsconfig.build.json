@@ -1,6 +1,8 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    // allowImportingTsExtensions is only legal with noEmit or emitDeclarationOnly.
+    "allowImportingTsExtensions": false,
     "declaration": true,
     "declarationMap": true,
     "emitDeclarationOnly": false,
@@ -10,4 +12,4 @@
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/__test__/**"]
-}
+}

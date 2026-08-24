@@ -564,6 +564,124 @@ describe("Logger", () => {
     });
   });
 
+  test("time warns and flags the entry when maxMs is exceeded", async () => {
+    const { entries, logger } = captureEntries({ level: "debug" });
+    const result = await logger.time("slow.query", () => 1, { maxMs: -1 });
+
+    expect(result).toBe(1);
+    expect(entries[0]).toMatchObject({
+      context: { maxMs: -1, operation: "slow.query", slow: true },
+      level: "warn",
+    });
+  });
+
+  test("span logs the duration on end", () => {
+    const { entries, logger } = captureEntries({ level: "debug" });
+    const span = logger.span("render", { maxMs: 10_000 });
+    span.end();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      context: { operation: "render" },
+      level: "success",
+      message: expect.stringContaining("render completed in"),
+    });
+    expect(entries[0]?.context.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test("span end accepts a level override", () => {
+    const { entries, logger } = captureEntries({ level: "debug" });
+    logger.span("job").end("info");
+    expect(entries[0]).toMatchObject({ context: { operation: "job" }, level: "info" });
+  });
+
+  test("context-first overload logs the context before the message", () => {
+    const { entries, logger } = captureEntries({ level: "debug" });
+    logger.info({ userId: 42 }, "user saved");
+    expect(entries[0]).toMatchObject({
+      context: { userId: 42 },
+      level: "info",
+      message: "user saved",
+    });
+  });
+
+  test("a bare object is printed as JSON", () => {
+    const { entries, logger } = captureEntries({ level: "debug" });
+    logger.warn({ a: 1 });
+    expect(entries[0]?.message).toBe(JSON.stringify({ a: 1 }));
+    expect(entries[0]?.context).toEqual({});
+    expect(entries[0]?.level).toBe("warn");
+  });
+
+  test("table logs aligned rows", () => {
+    const { entries, logger } = captureEntries({ level: "debug" });
+    logger.table([
+      { id: 1, name: "aa" },
+      { id: 22, name: "b" },
+    ]);
+    const message = entries[0]?.message ?? "";
+    expect(message).toContain("id");
+    expect(message).toContain("1");
+    expect(message).toContain("22");
+  });
+
+  test("pretty output supports emoji, elapsed tags and group indent", () => {
+    const captured = captureConsole();
+    try {
+      const logger = createLogger({
+        settings: {
+          colors: false,
+          emoji: true,
+          level: "debug",
+          mode: "pretty",
+          showAuthor: false,
+          showElapsed: true,
+          showTime: false,
+        },
+      });
+      logger.info("hello", { group: "request.db" });
+      expect(captured.outputs[0]).toMatch(/^ {2}\[\+/u);
+      expect(captured.outputs[0]).toContain("[ℹ️]");
+      expect(captured.outputs[0]).toContain("hello");
+    } finally {
+      captured.restore();
+    }
+  });
+
+  test("pretty renderer turns error context into a cause block", () => {
+    const captured = captureConsole();
+    try {
+      const logger = createLogger({
+        settings: { colors: false, level: "debug", mode: "pretty", showTime: false },
+      });
+      logger.error("boom", { error: new Error("db down") });
+      expect(captured.outputs[0]).toContain("boom");
+      expect(captured.outputs[0]).toContain("✗ Error: db down");
+    } finally {
+      captured.restore();
+    }
+  });
+
+  test("fatal entries carry a memory and uptime snapshot", () => {
+    const { entries, logger } = captureEntries({ level: "trace" });
+    logger.fatal("boom");
+
+    const context = entries[0]?.context as {
+      memory?: { heapTotal?: unknown; heapUsed?: unknown; rss?: unknown };
+      uptimeMs?: unknown;
+    };
+    expect(typeof context.memory?.rss).toBe("number");
+    expect(typeof context.memory?.heapTotal).toBe("number");
+    expect(typeof context.memory?.heapUsed).toBe("number");
+    expect(typeof context.uptimeMs).toBe("number");
+  });
+
+  test("non-fatal entries do not get the memory snapshot", () => {
+    const { entries, logger } = captureEntries({ level: "trace" });
+    logger.error("exploded");
+    expect(entries[0]?.context.memory).toBeUndefined();
+  });
+
   test("once logs a key only once", () => {
     const outputs: string[] = [];
     const original = console.warn;
@@ -864,5 +982,96 @@ describe("tagCase", () => {
     expect(formatEntry(entry, "pretty", "json", undefined, "none")).toBe(
       "[2026-08-21 10:00:00] [db] [warn] stored",
     );
+  });
+
+  test("stripControl removes terminal escapes from console output", () => {
+    const { outputs, restore } = captureConsole();
+    try {
+      const logger = createLogger({
+        settings: { colors: false, level: "debug", mode: "pretty", stripControl: true },
+      });
+      logger.info("clean\u001Bmessage");
+    } finally {
+      restore();
+    }
+    const line = outputs.at(-1) ?? "";
+    expect(line).toContain("cleanmessage");
+    expect(line).not.toContain("\u001B");
+  });
+
+  test("stripControl leaves escapes untouched when disabled", () => {
+    const { outputs, restore } = captureConsole();
+    try {
+      const logger = createLogger({
+        settings: { colors: false, level: "debug", mode: "pretty", stripControl: false },
+      });
+      logger.info("raw\u001B[2J");
+    } finally {
+      restore();
+    }
+    expect(outputs.at(-1) ?? "").toContain("\u001B[2J");
+  });
+
+  test("stripControl strips escapes from context in kv console output", () => {
+    const { outputs, restore } = captureConsole();
+    try {
+      const logger = createLogger({
+        settings: {
+          colors: false,
+          formatContext: "kv",
+          level: "debug",
+          mode: "pretty",
+          stripControl: true,
+        },
+      });
+      logger.info("context", { user: "alice\u001B[31m" });
+    } finally {
+      restore();
+    }
+    const line = outputs.at(-1) ?? "";
+    expect(line).toContain("user=\"alice[31m\"");
+    expect(line).not.toContain("\u001B");
+  });
+
+  test("stripControl sanitizes the pretty error block", () => {
+    const { outputs, restore } = captureConsole();
+    try {
+      const logger = createLogger({
+        settings: { colors: false, level: "debug", mode: "pretty", stripControl: true },
+      });
+      logger.error("db down", { error: new Error("boom\u001B[2J") });
+    } finally {
+      restore();
+    }
+    const line = outputs.at(-1) ?? "";
+    expect(line).toContain("boom[2J");
+    expect(line).not.toContain("\u001B");
+  });
+
+  test("a circular error cause serializes instead of recursing forever", () => {
+    const { entries, logger } = captureEntries({ level: "debug" });
+    const error = new Error("boom");
+    (error as unknown as Record<string, unknown>).cause = error;
+    logger.error("failed", { error });
+
+    const [entry] = entries;
+    const serialized = entry?.context.error as {
+      cause?: { message?: string };
+      message?: string;
+    };
+    expect(serialized.message).toBe("boom");
+    expect(serialized.cause?.message).toBe("[Circular]");
+  });
+
+  test("a circular context object reaches the transport without throwing", () => {
+    const { entries, logger } = captureEntries({ level: "debug" });
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    logger.info("payload", { circular });
+
+    const [entry] = entries;
+    expect(entry?.message).toBe("payload");
+    // The depth-limited redaction turns the deep cycle into a placeholder.
+    expect(JSON.stringify(entry)).toContain("payload");
   });
 });

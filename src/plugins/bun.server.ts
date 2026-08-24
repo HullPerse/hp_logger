@@ -18,7 +18,8 @@ export const bunServe = (
     );
     const startedAt = performance.now();
 
-    const response = await handler(request);
+    // User logs inside the handler carry the request id via async context.
+    const response = await logger.withContext({ correlationId }, () => handler(request));
     const path = pathFromUrl(request.url);
     const durationMs = Math.max(0, performance.now() - startedAt);
     const info: RequestInfo = {

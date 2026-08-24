@@ -8,6 +8,9 @@ export default defineConfig({
     {
       files: ["src/**/__test__/**", "src/**/*.test.ts"],
       rules: {
+        "require-await": "off",
+        "prefer-destructuring": "off",
+        "typescript/await-thenable": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-member-access": "off",
         "typescript/no-unsafe-return": "off",
@@ -17,6 +20,13 @@ export default defineConfig({
       files: ["src/integrations/**"],
       rules: {
         "node/callback-return": "off",
+      },
+    },
+    {
+      files: ["src/api/logger.api.ts"],
+      rules: {
+        "node/callback-return": "off",
+        "promise/prefer-await-to-callbacks": "off",
       },
     },
   ],

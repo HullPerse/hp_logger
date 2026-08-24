@@ -35,6 +35,20 @@ const sanitizeContext = (
   return redactValue(context) as LogContext;
 };
 
+/** Memory and uptime snapshot appended to every fatal entry. */
+const attachFatalSnapshot = (context: LogContext): LogContext => {
+  const usage = process.memoryUsage();
+  return {
+    ...context,
+    memory: {
+      heapTotal: usage.heapTotal,
+      heapUsed: usage.heapUsed,
+      rss: usage.rss,
+    },
+    uptimeMs: Math.round(process.uptime() * 1000),
+  };
+};
+
 /** Build one entry from a message and context, or null when a filter drops it. */
 export const buildEntry = (
   state: LoggerState,
@@ -66,10 +80,12 @@ export const buildEntry = (
     getAsyncContext(),
   );
   const safeContext = sanitizeContext(finalContext, needsRedaction, redactValue);
+  // Rare level: attach the process state to the last line before exit.
+  const entryContext = level === "fatal" ? attachFatalSnapshot(safeContext) : safeContext;
 
   const entry: LogEntry = {
     author,
-    context: safeContext,
+    context: entryContext,
     level,
     message: safeMessage,
     timestamp: state.timestamp(),

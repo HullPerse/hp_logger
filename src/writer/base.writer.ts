@@ -18,6 +18,7 @@ export abstract class BaseFileTransport implements Transport {
   protected readonly format: EntryFormatter | undefined;
   protected readonly maxBufferSize: number;
   protected readonly mode: "json" | "pretty";
+  protected readonly stripControl: boolean;
   protected readonly tagCase: TagCase;
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private stream: WriteStream | null = null;
@@ -26,6 +27,7 @@ export abstract class BaseFileTransport implements Transport {
   constructor(
     options: Omit<FileTransportOptions, "path"> & {
       format?: EntryFormatter;
+      stripControl?: boolean;
       tagCase?: TagCase;
     },
   ) {
@@ -34,6 +36,7 @@ export abstract class BaseFileTransport implements Transport {
     this.maxBufferSize = options.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE;
     this.flushInterval = options.flushInterval ?? DEFAULT_FLUSH_INTERVAL;
     this.mode = options.mode ?? "json";
+    this.stripControl = options.stripControl ?? false;
     this.tagCase = options.tagCase ?? "upper";
     this.startFlushInterval();
   }
@@ -52,7 +55,7 @@ export abstract class BaseFileTransport implements Transport {
   private pushEntries(entries: LogEntry[]): void {
     for (const entry of entries) {
       this.buffer.push(
-        formatEntry(entry, this.mode, this.contextFormat, this.format, this.tagCase),
+        formatEntry(entry, this.mode, this.contextFormat, this.format, this.tagCase, this.stripControl),
       );
     }
     if (this.buffer.length >= this.maxBufferSize) {
