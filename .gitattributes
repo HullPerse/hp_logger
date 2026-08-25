@@ -1,0 +1,3 @@
+# Normalize line endings: the formatter and checks assume LF everywhere,
+# including on Windows checkouts (CI runs the same gates on all three OSes).
+* text=auto eol=lf
