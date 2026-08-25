@@ -3,6 +3,15 @@
 Notable changes to hp_logger. Versions follow semver; the package is 0.x, so
 minor bumps may contain breaking renames.
 
+## 0.8.3 - 2026-08-25
+
+### Changed
+
+- Republish under a new version: identical source to 0.8.2, built from a
+  wiped `dist/` so no stale artifacts ship. No code changes; the release
+  refreshes registry and CDN cache entries after the bundle-analysis
+  investigation.
+
 ## 0.8.2 - 2026-08-25
 
 ### Changed
