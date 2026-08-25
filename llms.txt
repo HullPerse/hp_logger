@@ -1,0 +1,149 @@
+# hp_logger
+
+> Zero-dependency structured logger for Bun and Node.js: leveled logging, secret
+> redaction, file/database output, flood control, spans and traces, Prometheus-style
+> metrics, worker-thread transports and web framework integrations.
+
+Version: 0.8.2. License: MIT. Author: HullPerse.
+Repo: https://github.com/HullPerse/hp_logger
+Issues: https://github.com/HullPerse/hp_logger/issues
+npm: https://www.npmjs.com/package/hp_logger
+
+## Install
+
+```bash
+bun add hp_logger
+# or
+npm install hp_logger
+```
+
+Subpath exports: `hp_logger` (root), `hp_logger/elysia`, `hp_logger/bun`,
+`hp_logger/node`, `hp_logger/hono`, `hp_logger/fastify`, `hp_logger/http`
+(web log viewer), `hp_logger/worker` (worker-thread transport), `hp_logger/test`
+(test helpers).
+
+## Quick start
+
+```ts
+import { createLogger } from "hp_logger";
+
+const logger = createLogger({ settings: { level: "info", mode: "pretty" } });
+logger.info("server started", { port: 3000 });
+
+const auth = logger.module("auth", { level: "debug" }); // per-module logger
+auth.info("user registered", { userId: 42 });
+```
+
+## Core API
+
+- `createLogger({ settings?, author? })` - root logger.
+- `logger.module(name, settings?)` - child logger; `LOG_MODULES=auth:debug,http:warn`
+  env var overrides module levels with prefix wildcards (`web*:debug`), `*` sets a default.
+- `logger.child(context)` - child with persistent context.
+- `logger.settings(patch)` - change settings at runtime (also on modules).
+- Level methods: `logger.trace/debug/info/success/warn/error/fatal(message, context?)`
+  (also `(context, message)` and bare-object forms). Lazy forms:
+  `logger.debug(() => expensive())`.
+- `logger.withContext(ctx, fn)` - AsyncLocalStorage request scope.
+- `logger.time(name, fn, { maxMs? })` - log duration of async work.
+- `logger.span(name)` / `logger.span(name, cb)` / `logger.span(name, { traceId, parentSpanId }, cb)`
+  - spans with trace tree; `logger.traceTree(traceId?)` renders it. Entries
+  written inside a callback span or task carry `spanPath` (root-to-leaf names).
+  W3C trace context: `parseTraceparent(header)` / `buildTraceparent({ traceId, spanId })`.
+- `logger.task(name)` / `logger.task(name, cb)` - pending-task entries with
+  duration; `handle.update(text)` progress (needs `task.progress`), `handle.done()`,
+  `handle.fail(err?)`.
+- `logger.assert(condition, message?)`, `logger.group(name)`, `logger.groupEnd()`.
+- `logger.once(key, msg)`, `logger.throttle(key, ms, msg)`, `logger.table(rows)`.
+- `logger.watch(options, hooks?)` - endpoint/availability probes; optional
+  exponential `backoff` with jitter after failures, reset on success.
+- `logger.stats()`, `logger.flush()`, `logger.close()`, `logger.dump(path?)`.
+- `logger.counter/gauge/histogram(...)`, `logger.metricsText()` - Prometheus format.- `Logger.addTransport(t, { level? })`, `Logger.removeTransport(t)`, `Logger.clearTransports()`.
+- `installErrorHandlers(logger)` - logs uncaughtException/unhandledRejection,
+  dumps the black box and flushes transports.
+- `captureConsole(logger)` - route console.* into the logger.
+- `fromEnv()` - env-driven factory: LOG_LEVEL, LOG_MODULES, LOG_MODE, LOG_FILE,
+  LOG_COLOR, LOG_AUTHOR.
+
+## Settings
+
+- `level` (default info, or LOG_LEVEL), `mode` ("pretty" | "json", adaptive default).
+- `colors` per level or false; `tagCase`; `emoji`; `showTime/showDate/showYear/showLevel/showAuthor/showElapsed`.
+- `format.template` - custom lines: `"[{timestamp.time}] [{level.tag}] {message}"`.
+  Tokens: message, author, level, level.tag, context, context.kv, elapsed,
+  group.indent, timestamp.year/.month/.day/.hour/.minute/.second/.ms/.time/.date/.weekday,
+  task.frame, task.glyph, retry.attempt, any context key. Colors: `{token:red}`,
+  `{:green}span{:/}`. Unknown dotted tokens render literally (warn once).
+- `format` - full custom renderer function (console + file).
+- `redactKeys` (RegExp, default standard secret keys), `redactPaths`
+  (e.g. ["user.password", "secrets.*"]), `redactDepth` (default 2).
+- `serializers` - per-key transformers applied before redaction.
+- `mixin(context, level)` - enrichment hook merged under every entry context
+  before serializers and redaction; explicit data wins, output is redacted.
+- `file.fsync` - fsync the descriptor on close for strict durability.
+- `schemaVersion` - stamp `v: 1` on every entry; sqlite adapter option adds a
+  `version` column (old tables fail validation with an ALTER TABLE hint).
+- `file`: `{ enabled, path, mode, rotation: "daily" | "size" | "none", splitByLevel?,
+  maxBytes?, maxFiles?, gzip?, flushInterval?, maxBufferSize?, maxFilesPerDay? }`.
+  splitByLevel writes `app.error.log` per level; size rotation keeps `app.N.log`
+  segments with retention and optional gzip.
+- `database`: `{ enabled, adapter | createAdapter, level?, maxBufferSize?,
+  flushInterval?, retry?: { attempts=5, backoff="exponential"|"linear"|"fixed",
+  baseMs=1000, maxMs=30000, jitter=0 }, reconnect?: { cooldownMs=5000, maxAttempts=3 } }`.
+  Self-healing: after the retry cap the adapter is rebuilt via the factory and
+  the buffered backlog drains.
+- `batching`: `{ batchSize, maxQueueSize=10000, flushInterval, flushOn?: LogLevel[] }`
+  - bounded queue, drop-newest, `logger.stats()`.
+- `repeat`: `{ windowMs, maxKeys }` - collapse duplicates into `message xN`.
+- `adaptive`: `{ windowMs, errorRate, sample, cooldownMs }` - error-storm sampling.
+- `sampling`: `{ rate, perTrace? }` - trace-coherent sampling (error/fatal pass).
+- `blackbox`: `{ size=1000, path? }` - flight recorder; dumped on crash or `logger.dump()`.
+- `task`: `{ level="debug", progress=false }`.
+- `stripControl` - strip terminal escapes from logged data (log-injection defense).
+- `box`: `{ error?, fatal?, storm? }` - ASCII frames around error chains, fatal
+  bodies and adaptive storm notices in pretty output. Off by default.
+- `profile: true | { maxOperations }` - operation timers feed
+  `logger.metricsBox()` / `metricsText()` snapshots (p50/p95/count/sum per name).
+
+## Integrations
+
+- Elysia: `elysiaPlugin(logger, { skipPaths? })`
+- Bun.serve: `bunServe(handler, logger)`
+- Node http: `nodeServer(handler, logger)`
+- Hono: `honoMiddleware(logger)`
+- Fastify: `fastifyPlugin(instance, logger)`
+All log method/path/status/duration with correlation ids; 2xx info, 4xx warn, 5xx error.
+
+## Worker transport
+
+```ts
+import { createThreadTransport } from "hp_logger/worker";
+const t = createThreadTransport({ file: { enabled: true, path: "logs/app.log" } });
+Logger.addTransport(t);
+```
+JSON-safe settings only (no RegExp/functions across the thread boundary).
+Crashed workers restart automatically with exponential backoff (1s base, 30s cap).
+
+## Test helpers
+
+```ts
+import { captureLogger } from "hp_logger/test";
+const { entries, logger } = captureLogger({ level: "debug" });
+logger.info("captured");
+```
+
+## Web viewer
+
+```ts
+import { createLogServer, LogBuffer } from "hp_logger/http";
+const buffer = new LogBuffer(1000);
+Logger.addTransport(buffer.transport);
+createLogServer(buffer, { port: 8787, token: "secret" });
+// GET /hp_logger/logs?after=<cursor>
+```
+
+## Guarantees
+
+- Zero runtime dependencies; the published tarball contains only dist + README + LICENSE.
+- Redaction runs before every transport; error/fatal bypass sampling.
+- No outbound network by default: watch probes and the http viewer are opt-in.
