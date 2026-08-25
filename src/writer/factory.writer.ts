@@ -5,10 +5,10 @@ import type { FileTransportOptions, Transport } from "../types/transport";
 import { AdaptiveTransport } from "./adaptive.writer";
 import { AsyncTransport } from "./buffer.writer";
 import { ConsoleTransport } from "./console.writer";
-import { DatabaseTransport } from "./database.writer";
 import { DateBasedFileTransport } from "./dateBased.writer";
 import { FileTransport } from "./file.writer";
 import { MultiTransport } from "./group.writer";
+import { LazyDatabaseTransport } from "./lazyDatabase.writer";
 import { LeveledTransport } from "./leveled.writer";
 import { RepeatTransport } from "./repeat.writer";
 import { SizeBasedFileTransport } from "./sizeBased.writer";
@@ -69,7 +69,7 @@ export const buildTransports = (settings: ResolvedSettings): Transport => {
       transports.length === 1 && transports[0] !== undefined
         ? transports[0]
         : new MultiTransport(transports);
-    transports.push(new DatabaseTransport(settings.database, tap));
+    transports.push(new LazyDatabaseTransport(settings.database, tap));
   }
 
   const [singleTransport] = transports;

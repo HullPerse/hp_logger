@@ -12,7 +12,7 @@
 ![Powered](https://badgen.net/badge/powered%20by/rats/6b4f3a)
 [![Production](https://badgen.net/badge/production/rat%20approved/6b4f3a)](https://github.com/hullperse/hp_logger)
 
-Structured logger for Bun and Node.js. One dependency-free package for leveled logging, secret redaction, file and database output, flood control, tracing spans, Prometheus-style metrics and web framework integrations.
+Structured logger for Bun and Node.js. One dependency-free package for leveled logging, secret redaction, file output, flood control, tracing spans, Prometheus-style metrics and web framework integrations. The database transport and sqlite adapter live in the optional `hp_logger/database` subpath so the main import stays small.
 
 Built for servers that need readable console output in development, strict JSON lines in production, and a guarantee that logged secrets never reach disk.
 
@@ -38,6 +38,22 @@ logger.info("server started", { port: 3000 });
 
 - **Levels** - trace to fatal, per-module loggers, runtime setting patches.
 - **Mixin hook** - merge request ids or tenant ids under every entry; explicit data wins, output still passes redaction.
+- **Resolver enrichment** - look up values such as `userId` in a database or service and add fields such as `username` with a deadline, TTL cache and in-flight deduplication.
+
+```ts
+const logger = createLogger({
+  settings: {
+    resolvers: {
+      userId: {
+        as: "username",
+        resolve: async (id) => (await users.findByPk(id))?.username,
+      },
+    },
+  },
+});
+logger.info("user logged in", { userId: 42 });
+// context: { userId: 42, username: "alice" }
+```
 - **Redaction** - passwords, tokens and bearer strings are masked before any transport sees them; `redactPaths` targets exact dot paths like `user.password`.
 - **Output modes** - tagged pretty output on TTY, JSON lines in pipes and files, template-based custom lines, custom formatters, registered custom tokens (`registerToken`).
 - **File output** - single file, daily rotation, or size-based rotation with retention and optional gzip; optional per-level files (`app.error.log`); optional fsync on close.

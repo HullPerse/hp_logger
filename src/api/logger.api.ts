@@ -38,6 +38,7 @@ import { Gauge } from "../metrics/gauge.metric";
 import { Histogram } from "../metrics/histogram.metric";
 import { Registry } from "../metrics/registry.metric";
 import { redact } from "../redact/index.redact";
+import { buildResolverSet } from "../resolvers/index.resolver";
 import type {
   CreateLoggerOptions,
   LazyContext,
@@ -49,6 +50,7 @@ import type {
   LoggerSettings,
   LoggerState,
   ResolvedSettings,
+  ResolverSet,
   SpanHandle,
   TaskHandle,
   TaskOptions,
@@ -97,6 +99,7 @@ export class Logger implements LoggerState {
   redactValue!: (value: unknown) => unknown;
   sampler!: ((entry: LogEntry) => boolean) | undefined;
   serializers!: Record<string, (value: unknown) => unknown> | undefined;
+  resolvers!: ResolverSet | undefined;
   mixin!: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
   schemaVersion!: boolean | undefined;
   callSite!: boolean | undefined;
@@ -152,6 +155,7 @@ export class Logger implements LoggerState {
     this.hasFilters = settings.filters.length > 0;
     this.needsRedaction = settings.redactKeys !== null || settings.redactPaths.length > 0;
     this.serializers = settings.serializers;
+    this.resolvers = settings.resolvers ? buildResolverSet(settings.resolvers) || undefined : undefined;
     this.mixin = settings.mixin;
     this.schemaVersion = settings.schemaVersion ? true : undefined;
     this.callSite = settings.callSite ? true : undefined;
@@ -772,6 +776,7 @@ export class Logger implements LoggerState {
    */
   async flush(): Promise<void> {
     try {
+      await this.resolvers?.waitForIdle();
       await this.transport.flush?.();
     } catch {
       // A failing transport must not crash the flushing caller.
@@ -829,6 +834,7 @@ export class Logger implements LoggerState {
   async close(): Promise<void> {
     for (const handle of this.watchHandles.splice(0)) handle.stop();
     this.declarativeWatch = null;
+    await this.resolvers?.waitForIdle();
     await this.transport.close?.();
   }
 }

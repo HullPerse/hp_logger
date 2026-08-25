@@ -142,6 +142,31 @@ export interface ProfileSettings {
   maxOperations?: number;
 }
 
+/** One configured resolver: translate a context value into extra fields. */
+export interface ResolverEntry {
+  /** Target field for scalar results; object results merge their own keys. */
+  as?: string;
+  /** Cache lifetime for one value lookup, ms. Defaults to 60000. */
+  ttlMs?: number;
+  /** Max time one lookup may take before the entry logs without it, ms. Defaults to 50. */
+  timeoutMs?: number;
+  /** On lookup failure: "skip" keeps the raw value, "mark" records [RESOLVER ERROR]. Defaults to "skip". */
+  onError?: "skip" | "mark";
+  /** Lookup: the context key's value in, enriched fields (or replacement) out. */
+  resolve: (value: unknown) => unknown | Promise<unknown>;
+}
+
+/** Per-key enrichment lookups: `resolvers: { userId: { resolve: ... } }`. */
+export type ResolverSettings = Record<string, ResolverEntry>;
+
+/** Minimal shape of the runtime resolver set read by the entry pipeline. */
+export interface ResolverSet {
+  size: number;
+  hasAny: (context: LogContext) => boolean;
+  resolveAll: (context: LogContext) => Promise<Record<string, unknown>>;
+  waitForIdle: () => Promise<void>;
+}
+
 /** Options for a single `logger.task()` call. */
 export interface TaskOptions {
   /** Overrides settings.task.level for every entry of this task. */
@@ -239,6 +264,17 @@ export interface LoggerSettings {
    * serializer masks the key with `[SERIALIZER ERROR]`.
    */
   serializers?: Record<string, (value: unknown) => unknown>;
+  /**
+   * Per-key enrichment lookups with a bounded cache:
+   * `resolvers: { userId: { resolve: async (id) => (await users.find(id))?.username } }`.
+   * When a context key has a resolver, the entry waits up to the lookup's
+   * timeoutMs for a cache miss (then falls back to the raw value), and the
+   * resolved fields are merged next to the key. Results are cached per value
+   * for ttlMs, so hot values cost nothing after the first lookup. Applies to
+   * static, async and call-site context. Only loggers with resolvers take
+   * the async path; the synchronous fast path stays untouched.
+   */
+  resolvers?: ResolverSettings;
   /**
    * Stamp every entry with `v: 1` (the current log schema version) so JSONL
    * lines, black box dumps and database rows survive future format changes.
@@ -351,6 +387,7 @@ export interface ResolvedSettings {
   sampling: { perTrace: boolean; rate: number } | false;
   repeat: RepeatSettings | false;
   autoCounters: boolean;
+  resolvers: ResolverSettings | false;
   showAuthor: boolean;
   showElapsed: boolean;
   showLevel: boolean;
@@ -430,6 +467,8 @@ export interface LoggerState {
   readonly mixin?: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
   /** Stamp entries with the schema version field; undefined or false disables. */
   readonly schemaVersion?: boolean | undefined;
+  /** Per-key enrichment lookups; undefined disables them. */
+  readonly resolvers?: ResolverSet | undefined;
   /** Attach caller location to error/fatal entries; undefined or false disables. */
   readonly callSite?: boolean | undefined;
   /** Sampling decision for a built entry; undefined disables sampling. */

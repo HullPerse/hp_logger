@@ -19,7 +19,8 @@ npm install hp_logger
 
 Subpath exports: `hp_logger` (root), `hp_logger/elysia`, `hp_logger/bun`,
 `hp_logger/node`, `hp_logger/hono`, `hp_logger/fastify`, `hp_logger/http`
-(web log viewer), `hp_logger/worker` (worker-thread transport), `hp_logger/test`
+(web log viewer), `hp_logger/worker` (worker-thread transport),
+`hp_logger/database` (DatabaseTransport + createSqliteAdapter), `hp_logger/test`
 (test helpers).
 
 ## Quick start
@@ -80,6 +81,13 @@ auth.info("user registered", { userId: 42 });
 - `serializers` - per-key transformers applied before redaction.
 - `mixin(context, level)` - enrichment hook merged under every entry context
   before serializers and redaction; explicit data wins, output is redacted.
+- `resolvers` - per-key async enrichment lookups with a bounded cache:
+  `resolvers: { userId: { as: "username", resolve: async (id) => (await users.find(id))?.username } }`.
+  Object results merge their own keys; scalars land under `as`. Per-value
+  cache with `ttlMs` (default 60s) and per-lookup `timeoutMs` (default 50ms,
+  falls back to the raw value); `onError: "mark"` records a
+  `[RESOLVER ERROR]` marker instead of skipping. Only applies to loggers
+  that configure resolvers; the sync fast path is untouched.
 - `file.fsync` - fsync the descriptor on close for strict durability.
 - `schemaVersion` - stamp `v: 1` on every entry; sqlite adapter option adds a
   `version` column (old tables fail validation with an ALTER TABLE hint).

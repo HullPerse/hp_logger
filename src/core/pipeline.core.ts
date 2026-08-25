@@ -1,6 +1,14 @@
 import { captureCaller } from "../lib/callsite.utils";
-import type { LazyContext, LazyMessage, LogEntry, LogLevel, LoggerState } from "../types/logger";
+import type {
+  LazyContext,
+  LazyMessage,
+  LogContext,
+  LogEntry,
+  LogLevel,
+  LoggerState,
+} from "../types/logger";
 import type { Transport } from "../types/transport";
+import { getAsyncContext, mergeEntryContext } from "./context.core";
 
 const globalTransports: Transport[] = [];
 
@@ -26,25 +34,11 @@ export const clearGlobalTransports = (): void => {
   globalTransports.length = 0;
 };
 
-/** Route one entry through the pipeline: build, filter, black box, dispatch. */
-export const writeEntry = (
-  state: LoggerState,
-  level: LogLevel,
-  message: LazyMessage,
-  context: LazyContext | undefined,
-): void => {
-  if (!state.enabled) return;
-  let entry: LogEntry | null = null;
-  try {
-    entry = state.entryPlan(state, level, message, context);
-  } catch {
-    // Hostile context (throwing getters, toJSON) never crashes the caller.
-    return;
-  }
-  if (entry === null) return;
+/** Post-build stages shared by both entry paths: black box, sampling, dispatch. */
+const deliver = (state: LoggerState, entry: LogEntry): void => {
   // Call-site capture sits after the builders so the compiled fast path
   // stays untouched; only error/fatal entries pay for the stack walk.
-  if (state.callSite && (level === "error" || level === "fatal")) {
+  if (state.callSite && (entry.level === "error" || entry.level === "fatal")) {
     entry.callSite = captureCaller();
   }
   state.blackbox?.push(entry);
@@ -59,4 +53,92 @@ export const writeEntry = (
   if (globalTransports.length > 0) {
     for (const transport of globalTransports) dispatchSafely(transport, entry);
   }
+};
+
+/** Synchronous entry path: build, filter, black box, dispatch. */
+const dispatchNormal = (
+  state: LoggerState,
+  level: LogLevel,
+  message: LazyMessage,
+  context: LazyContext | undefined,
+): void => {
+  let entry: LogEntry | null = null;
+  try {
+    entry = state.entryPlan(state, level, message, context);
+  } catch {
+    // Hostile context (throwing getters, toJSON) never crashes the caller.
+    return;
+  }
+  if (entry === null) return;
+  deliver(state, entry);
+};
+
+/**
+ * Async resolver path: assemble the full context (static + async + call
+ * site), resolve every configured key through the bounded cache, then feed
+ * the additions back through the normal builder so they pass serializers,
+ * redaction and filters. Entries without resolvable keys never take the async
+ * hop; a timeout or error falls back to the raw value.
+ */
+const writeResolvedEntry = async (
+  state: LoggerState,
+  level: LogLevel,
+  message: LazyMessage,
+  context: LazyContext | undefined,
+): Promise<void> => {
+  let resolvedContext: LogContext | undefined;
+  if (context !== undefined) {
+    try {
+      resolvedContext = typeof context === "function" ? context() : context;
+    } catch {
+      // Hostile context: leave undefined and let entryPlan do its own fallback.
+    }
+  }
+  const resolverSet = state.resolvers;
+  let full: LogContext;
+  try {
+    full = mergeEntryContext(
+      state.context,
+      state.hasStaticContext,
+      resolvedContext,
+      getAsyncContext(),
+    );
+  } catch {
+    dispatchNormal(state, level, message, resolvedContext);
+    return;
+  }
+  if (resolverSet === undefined || !resolverSet.hasAny(full)) {
+    dispatchNormal(state, level, message, resolvedContext);
+    return;
+  }
+  let additions: Record<string, unknown>;
+  try {
+    additions = await resolverSet.resolveAll(full);
+  } catch {
+    additions = {};
+  }
+  // Additions sit under the explicit call-site data: they win over static
+  // and async context, matching how resolvers augment a key it found.
+  let enriched: LazyContext | undefined;
+  if (resolvedContext === undefined) {
+    enriched = Object.keys(additions).length > 0 ? additions : undefined;
+  } else {
+    enriched = { ...resolvedContext, ...additions };
+  }
+  dispatchNormal(state, level, message, enriched);
+};
+
+/** Route one entry through the pipeline: resolvers first when configured. */
+export const writeEntry = (
+  state: LoggerState,
+  level: LogLevel,
+  message: LazyMessage,
+  context: LazyContext | undefined,
+): void => {
+  if (!state.enabled) return;
+  if (state.resolvers !== undefined && state.resolvers.size > 0) {
+    void writeResolvedEntry(state, level, message, context);
+    return;
+  }
+  dispatchNormal(state, level, message, context);
 };

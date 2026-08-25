@@ -50,17 +50,17 @@ export { AdaptiveTransport } from "./writer/adaptive.writer";
 export { AsyncTransport } from "./writer/buffer.writer";
 export { ConsoleTransport } from "./writer/console.writer";
 export { DateBasedFileTransport } from "./writer/dateBased.writer";
-export { DatabaseTransport } from "./writer/database.writer";
 export { FileTransport } from "./writer/file.writer";
 export { MultiTransport } from "./writer/group.writer";
 export { LeveledTransport } from "./writer/leveled.writer";
 export { RepeatTransport } from "./writer/repeat.writer";
-export { createSqliteAdapter } from "./writer/sqlite.writer";
 export { SizeBasedFileTransport } from "./writer/sizeBased.writer";
 export { BaseFileTransport } from "./writer/base.writer";
 export { buildTransports } from "./writer/factory.writer";
 
 export { registerToken } from "./format/template.format";
+
+export { ResolverSet, buildResolverSet } from "./resolvers/index.resolver";
 
 export {
   BaseMetric,
