@@ -23,6 +23,34 @@ export const nextTraceId = (): string => {
 };
 
 /**
+ * Build a forest of span trees from records. Roots are spans without a
+ * parent (or whose parent is not present). Shared by traceTree rendering
+ * and the http /spans route.
+ */
+export const buildSpanTree = (records: SpanRecord[]): SpanNode[] => {
+  const nodes = new Map<string, SpanNode>();
+  const roots: SpanNode[] = [];
+  for (const record of records) {
+    nodes.set(record.spanId, { children: [], record });
+  }
+  for (const record of records) {
+    const node = nodes.get(record.spanId);
+    if (node === undefined) continue;
+    if (record.parentId === undefined) {
+      roots.push(node);
+      continue;
+    }
+    const parent = nodes.get(record.parentId);
+    if (parent === undefined) {
+      roots.push(node);
+    } else {
+      parent.children.push(node);
+    }
+  }
+  return roots;
+};
+
+/**
  * Bounded ring of completed spans, grouped by trace. Keeps the last
  * `capacity` spans per process so `logger.trace()` can render a recent tree
  * without unbounded memory.
@@ -44,29 +72,15 @@ export class SpanRegistry {
     return this.buffer.toArray().filter((record) => record.traceId === traceId);
   }
 
+  /** The most recent completed spans, oldest first, up to limit (default 100). */
+  recent(limit = 100): SpanRecord[] {
+    const all = this.buffer.toArray();
+    return all.slice(Math.max(0, all.length - limit));
+  }
+
   /** Build a forest of span trees for a trace. Roots are spans without a parent. */
   treeForTrace(traceId: string): SpanNode[] {
-    const records = this.forTrace(traceId);
-    const nodes = new Map<string, SpanNode>();
-    const roots: SpanNode[] = [];
-    for (const record of records) {
-      nodes.set(record.spanId, { children: [], record });
-    }
-    for (const record of records) {
-      const node = nodes.get(record.spanId);
-      if (node === undefined) continue;
-      if (record.parentId === undefined) {
-        roots.push(node);
-        continue;
-      }
-      const parent = nodes.get(record.parentId);
-      if (parent === undefined) {
-        roots.push(node);
-      } else {
-        parent.children.push(node);
-      }
-    }
-    return roots;
+    return buildSpanTree(this.forTrace(traceId));
   }
 
   /** The most recent trace id seen, or undefined when no spans exist. */

@@ -52,7 +52,7 @@ logger.info("server started", { port: 3000 });
 - **Worker offload** - `hp_logger/worker` moves serialization and IO to a background thread that restarts itself after a crash.
 - **Metrics** - zero-dependency Counter, Gauge, Histogram and Registry in Prometheus text format, with snapshot helpers.
 - **Box drawing** - optional ASCII frames around error chains, fatal bodies and storm notices in pretty output.
-- **Web viewer** - optional HTTP endpoint serving the last N entries from memory.
+- **Log server** - `hp_logger/http` serves recent entries over cursor polling and a live WebSocket stream (resume by sequence id, capability handshake), plus `/stats` and `/spans` routes and optional token-gated remote level control.
 - **Integrations** - Elysia, Bun.serve, Node http, Hono and Fastify middlewares with correlation ids.
 - **Env-driven tuning** - `LOG_LEVEL` for the root level, `LOG_MODULES="auth:debug,http:warn"` per module.
 - **Schema versioning** - opt-in `v` field on every entry plus a versioned sqlite column, so stored logs survive format changes.
