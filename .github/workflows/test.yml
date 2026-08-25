@@ -1,0 +1,64 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: bun ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Format check
+        run: bun run format:check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        run: bun run build
+
+      # Coverage reporters must be passed as repeated flags; a comma list is rejected.
+      - name: Test with coverage and junit report
+        run: >
+          bun test --coverage
+          --coverage-reporter=text --coverage-reporter=lcov
+          --coverage-dir coverage
+          --reporter=junit --reporter-outfile coverage/junit.xml
+
+      - name: Upload junit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.os }}
+          path: coverage/junit.xml
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload lcov
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov-${{ matrix.os }}
+          path: coverage/lcov.info
+          retention-days: 14
+          if-no-files-found: ignore

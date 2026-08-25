@@ -51,6 +51,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "bun test",
+    "test:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir coverage",
+    "test:randomized": "bun test --randomize",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --type-aware --deny-warnings src/",
     "format": "oxfmt --write src/",
