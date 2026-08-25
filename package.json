@@ -1,8 +1,9 @@
 {
   "name": "hp_logger",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Structured logger for Bun/Node with levels, redaction, colors, file output and server framework integrations",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.logger.js",
   "types": "./dist/index.logger.d.ts",
   "exports": {

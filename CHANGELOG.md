@@ -3,6 +3,14 @@
 Notable changes to hp_logger. Versions follow semver; the package is 0.x, so
 minor bumps may contain breaking renames.
 
+## 0.8.2 - 2026-08-25
+
+### Changed
+
+- Declared `sideEffects: false` in package metadata so bundlers can
+  tree-shake unused exports with confidence (no import-time side effects
+  exist; verified with an esbuild A/B bundle).
+
 ## 0.8.1 - 2026-08-25
 
 ### Added
