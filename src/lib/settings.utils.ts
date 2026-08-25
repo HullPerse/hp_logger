@@ -166,6 +166,36 @@ const blackboxBlock: SettingsBlock<"blackbox"> = {
   },
 };
 
+const ATTENTION_DEFAULTS: NonNullable<ResolvedSettings["attention"]> = {
+  bell: false,
+  progress: false,
+  title: false,
+};
+
+/** Terminal attention effects (title, bell, taskbar progress). */
+const attentionBlock: SettingsBlock<"attention"> = {
+  merge(base, patch) {
+    const { attention } = patch;
+    if (attention === false) return false;
+    if (attention === undefined) return base;
+    const source = base === false ? ATTENTION_DEFAULTS : base;
+    return {
+      bell: attention.bell ?? source.bell,
+      progress: attention.progress ?? source.progress,
+      title: attention.title ?? source.title,
+    };
+  },
+  resolve(settings) {
+    const { attention } = settings;
+    if (!attention) return false;
+    return {
+      bell: attention.bell ?? ATTENTION_DEFAULTS.bell,
+      progress: attention.progress ?? ATTENTION_DEFAULTS.progress,
+      title: attention.title ?? ATTENTION_DEFAULTS.title,
+    };
+  },
+};
+
 const BOX_DEFAULTS: NonNullable<ResolvedSettings["box"]> = {
   error: false,
   fatal: false,
@@ -285,6 +315,7 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
   const tags = tagBlock.resolve(settings);
   return {
     adaptive: settings.adaptive ?? false,
+    attention: attentionBlock.resolve(settings),
     autoCounters: settings.autoCounters ?? false,
     batching: settings.batching ?? false,
     blackbox: blackboxBlock.resolve(settings),
@@ -332,6 +363,7 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
   const tags = tagBlock.merge(base, patch);
   return {
     adaptive: patch.adaptive ?? base.adaptive,
+    attention: attentionBlock.merge(base.attention, patch),
     autoCounters: patch.autoCounters ?? base.autoCounters,
     batching: patch.batching ?? base.batching,
     blackbox: blackboxBlock.merge(base.blackbox, patch),

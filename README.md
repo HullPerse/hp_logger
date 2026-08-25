@@ -46,6 +46,7 @@ logger.info("server started", { port: 3000 });
 - **Flood control** - collapse repeats, once/throttle keys, adaptive sampling during error storms.
 - **Spans and traces** - manual and callback spans with AsyncLocalStorage propagation, a trace tree renderer, and `spanPath` on entries written inside a scope.
 - **Call-site links** - opt-in `callSite` attaches a clickable `path:line:col` to error and fatal entries.
+- **Terminal attention** - opt-in `attention` rings the bell on the first fatal or storm start, shows the storm in the terminal title, and mirrors open tasks as taskbar progress (OSC 9;4). TTY-only, off by default.
 - **Black box** - a ring of recent entries dumped to a JSONL file and flushed on crash, so buffered logs survive process death.
 - **Watch** - poll endpoints or custom probes and log availability edges, with optional exponential backoff and jitter on failures.
 - **Worker offload** - `hp_logger/worker` moves serialization and IO to a background thread that restarts itself after a crash.

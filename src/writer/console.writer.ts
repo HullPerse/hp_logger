@@ -1,5 +1,16 @@
 import type { sliceAnsi, wrapAnsi } from "bun";
 
+import {
+  BELL_SEQUENCE,
+  PROGRESS_ERROR,
+  PROGRESS_INDETERMINATE,
+  PROGRESS_PREFIX,
+  PROGRESS_REMOVE,
+  PROGRESS_SUFFIX,
+  STORM_TITLE,
+  TITLE_PREFIX,
+  TITLE_SUFFIX,
+} from "../config/attention.config";
 import { DEFAULT_LEVEL_COLORS, LEVEL_EMOJIS } from "../config/colors.config";
 import { LEVEL_NAMES } from "../config/levels.config";
 import { drawBox } from "../format/box.format";
@@ -47,6 +58,20 @@ const writeTracked = (level: LogLevel, output: string, debugTraceToConsoleDebug 
   consoleWrite(level, output, debugTraceToConsoleDebug);
 };
 
+/** Minimal stdout shape for attention sequences; test fakes fit too. */
+interface AttentionStream {
+  readonly isTTY?: boolean;
+  write: (chunk: string) => unknown;
+}
+
+/** OSC 9;4 taskbar progress subcommand frame. */
+const progressSequence = (state: string): string => `${PROGRESS_PREFIX}${state}${PROGRESS_SUFFIX}`;
+
+const defaultStream = (): AttentionStream | null => {
+  if (typeof process === "undefined") return null;
+  return process.stdout;
+};
+
 export class ConsoleTransport implements Transport {
   private readonly levelColors: LevelColorMap;
   private readonly levelTags: LevelTagMap;
@@ -55,11 +80,18 @@ export class ConsoleTransport implements Transport {
   private readonly startedAt: number;
   private readonly writeCompiled: (entry: LogEntry) => void;
   private authorTagCache: { raw: string; tag: string } | null = null;
+  private readonly attention: ResolvedSettings["attention"];
+  private readonly out: AttentionStream | null;
+  private fatalSeen = false;
+  private stormActive = false;
+  private tasksOpen = 0;
 
-  constructor(settings: ResolvedSettings) {
+  constructor(settings: ResolvedSettings, out?: AttentionStream | null) {
     this.startedAt = performance.now();
     this.settings = settings;
     this.tagCase = settings.tagCase;
+    this.attention = settings.attention;
+    this.out = out === undefined ? defaultStream() : out;
     this.levelColors = Object.fromEntries(
       LEVEL_NAMES.map((level) => [level, this.colorFor(level)]),
     ) as LevelColorMap;
@@ -74,11 +106,70 @@ export class ConsoleTransport implements Transport {
   }
 
   write(entry: LogEntry): void {
+    this.observe(entry);
     this.writeCompiled(entry);
   }
 
   writeBatch(entries: LogEntry[]): void {
-    for (const entry of entries) this.writeCompiled(entry);
+    for (const entry of entries) {
+      this.observe(entry);
+      this.writeCompiled(entry);
+    }
+  }
+
+  /**
+   * Terminal attention reactions, observed before rendering: bell on the
+   * first fatal or a storm start, storm title, taskbar progress for open
+   * tasks. Storm detection reads the status key that AdaptiveTransport puts
+   * on its notices; task lifecycle reads the status/task keys written by
+   * logger.task(). One falsy check is the whole cost when attention is off.
+   */
+  private observe(entry: LogEntry): void {
+    const { attention } = this;
+    if (attention === false) return;
+
+    if (attention.bell && entry.level === "fatal" && !this.fatalSeen) {
+      this.fatalSeen = true;
+      this.emit(BELL_SEQUENCE);
+    }
+    if (attention.progress) this.observeTask(entry);
+
+    if (!attention.title && !attention.bell) return;
+    const { status } = entry.context;
+    if (entry.author !== "adaptive") return;
+    if (status === "storm-started") {
+      this.stormActive = true;
+      if (attention.bell) this.emit(BELL_SEQUENCE);
+      if (attention.title) this.emit(`${TITLE_PREFIX}${STORM_TITLE}${TITLE_SUFFIX}`);
+    } else if (status === "storm-ended" && this.stormActive) {
+      this.stormActive = false;
+      // The original title cannot be read back synchronously, so storm end
+      // clears it and terminals fall back to their default label.
+      if (attention.title) this.emit(`${TITLE_PREFIX}${TITLE_SUFFIX}`);
+    }
+  }
+
+  /** Taskbar progress bookkeeping over the task lifecycle entries. */
+  private observeTask(entry: LogEntry): void {
+    if (typeof entry.context.task !== "string") return;
+    const { status } = entry.context;
+    if (status === "started") {
+      this.tasksOpen += 1;
+      if (this.tasksOpen === 1) this.emit(progressSequence(PROGRESS_INDETERMINATE));
+      return;
+    }
+    if (status !== "done" && status !== "failed") return;
+    if (this.tasksOpen === 0) return;
+    this.tasksOpen -= 1;
+    if (this.tasksOpen === 0) {
+      this.emit(progressSequence(status === "failed" ? PROGRESS_ERROR : PROGRESS_REMOVE));
+    }
+  }
+
+  /** Write one attention sequence straight to the terminal stream, TTY-gated. */
+  private emit(sequence: string): void {
+    if (this.out?.isTTY !== true) return;
+    this.out.write(sequence);
   }
 
   private writePretty(entry: LogEntry): void {

@@ -133,6 +133,31 @@ export interface BoxSettings {
   storm?: boolean;
 }
 
+/**
+ * Terminal attention effects for interactive consoles (`settings.attention`).
+ * Sequences go to stdout only when it is a TTY; every element defaults to off.
+ */
+export interface AttentionSettings {
+  /**
+   * Set the terminal title to "hp_logger: storm" while an adaptive storm is
+   * active and clear it when the storm ends. Needs settings.adaptive: storms
+   * are detected there.
+   */
+  title?: boolean;
+  /**
+   * Ring the terminal bell (BEL) on the first fatal entry and on every storm
+   * start. The first-fatal bell rings once per console transport.
+   */
+  bell?: boolean;
+  /**
+   * Mirror open tasks as taskbar progress via OSC 9;4 (Windows Terminal,
+   * ConEmu): indeterminate while any task runs, error state when the last
+   * one fails, removed when none remain. Task entries must pass the level
+   * filter, so set settings.task.level or the logger level accordingly.
+   */
+  progress?: boolean;
+}
+
 /** Profiler aggregation options for measured durations. */
 export interface ProfileSettings {
   /**
@@ -288,6 +313,13 @@ export interface LoggerSettings {
    */
   box?: BoxSettings | false;
   /**
+   * Terminal attention effects: bell on first fatal or storm start, terminal
+   * title during a storm, taskbar progress for open tasks. Sequences are
+   * logger-generated constants written only to a TTY stdout; `false` or
+   * omitted disables everything.
+   */
+  attention?: AttentionSettings | false;
+  /**
    * Aggregate every measured duration (`time()`, `span()`, `task()`) into a
    * per-operation histogram `hp_logger_operation_ms{operation}` shown by
    * `logger.metricsBox()` and `metricsText()`. Distinct operation names are
@@ -361,6 +393,7 @@ export interface ResolvedSettings {
   task: { level: LogLevel; progress: boolean };
   blackbox: { path: string | undefined; size: number } | false;
   box: { error: boolean; fatal: boolean; storm: boolean } | false;
+  attention: { title: boolean; bell: boolean; progress: boolean } | false;
   profile: { maxOperations: number } | false;
 }
 

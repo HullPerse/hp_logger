@@ -1,5 +1,6 @@
 export * from "./levels.config";
 export * from "./colors.config";
+export * from "./attention.config";
 export * from "./redaction.config";
 export * from "./watch.config";
 export * from "./metrics.config";

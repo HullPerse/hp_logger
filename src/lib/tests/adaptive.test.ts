@@ -49,6 +49,8 @@ describe("AdaptiveTransport", () => {
       "storm: 2 errors in 60000ms - sampling verbose levels",
       "error two",
     ]);
+    const notice = received.find((item) => item.author === "adaptive");
+    expect(notice?.context).toEqual({ errors: 2, status: "storm-started" });
   });
 
   test("groups repeated errors into one summary until recovery", async () => {
