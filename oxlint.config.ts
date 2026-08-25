@@ -8,7 +8,6 @@ export default defineConfig({
     {
       files: ["src/**/__test__/**", "src/**/*.test.ts"],
       rules: {
-        "no-await-in-loop": "off",
         "require-await": "off",
         "prefer-destructuring": "off",
         "typescript/await-thenable": "off",
