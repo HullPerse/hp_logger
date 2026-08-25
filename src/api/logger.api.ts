@@ -10,6 +10,7 @@ import {
   PROFILE_OVERFLOW_LABEL,
 } from "../config/metrics.config";
 import { getAsyncContext, runWithContext, runWithSpanPath } from "../core/context.core";
+import { buildEntry, buildEntryFast } from "../core/entry.core";
 import {
   addGlobalTransport,
   clearGlobalTransports,
@@ -98,6 +99,12 @@ export class Logger implements LoggerState {
   serializers!: Record<string, (value: unknown) => unknown> | undefined;
   mixin!: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
   schemaVersion!: boolean | undefined;
+  entryPlan!: (
+    state: LoggerState,
+    level: LogLevel,
+    message: LazyMessage,
+    context: LazyContext | undefined,
+  ) => LogEntry | null;
   private currentSettings: ResolvedSettings;
   private readonly envModuleLevels: Map<string, LogLevel> | undefined;
   private blackboxRing: RingBuffer<LogEntry> | null = null;
@@ -154,6 +161,16 @@ export class Logger implements LoggerState {
       redactKeys === null && settings.redactPaths.length === 0
         ? identity
         : (value) => redact(value, redactKeys, settings.redactDepth, 0, settings.redactPaths);
+    // Compiled entry plan: the specialized builder only when every optional
+    // per-entry feature is off. Recomputed here, so settings() recompiles.
+    this.entryPlan =
+      this.needsRedaction ||
+      this.serializers !== undefined ||
+      this.mixin !== undefined ||
+      this.hasFilters ||
+      this.schemaVersion === true
+        ? buildEntry
+        : buildEntryFast;
     if (settings.blackbox) {
       this.blackboxRing ??= new RingBuffer(settings.blackbox.size);
     } else {

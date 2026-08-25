@@ -119,6 +119,32 @@ describe("renderTemplate tokens", () => {
     expect(renderTemplate(parts, entry, env())).toBe("x {nope.missing} y");
   });
 
+  test("warns once per unknown token and keeps module state bounded", () => {
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (message: unknown): void => {
+      warnings.push(String(message));
+    };
+    // Unique per run: the warned-token cache is shared module state.
+    // Dotted names are the only ones that can be unknown.
+    const run = `t${Math.random().toString(36).slice(2)}`;
+    const tokenA = `${run}.a`;
+    try {
+      parseTemplate(`{${tokenA}}`);
+      parseTemplate(`{${tokenA}}`);
+      const firstWarnings = warnings.filter((w) => w.includes(tokenA));
+      expect(firstWarnings.length).toBe(1);
+
+      // Overflow the 2048 cap so tokenA is evicted, then it may warn again.
+      for (let i = 0; i < 2050; i += 1) parseTemplate(`{${run}.${i}}`);
+      expect(warnings.length).toBeLessThanOrEqual(1 + 2050);
+      parseTemplate(`{${tokenA}}`);
+      expect(warnings.filter((w) => w.includes(tokenA)).length).toBe(2);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
   test("missing values collapse to empty strings", () => {
     const parts = parseTemplate("a{retry.attempt}b");
     expect(renderTemplate(parts, entry, env())).toBe("ab");

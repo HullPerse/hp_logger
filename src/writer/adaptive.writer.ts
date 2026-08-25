@@ -1,5 +1,6 @@
-import { LruCache } from "../brain/lru.utils";
+import { GroupCounter } from "../brain/group.utils";
 import { cachedTimestamp } from "../format/timestamp.format";
+import { countSummary } from "../lib/transport.utils";
 import type { AdaptiveSettings, LogEntry } from "../types/logger";
 import type { Transport, TransportStats } from "../types/transport";
 
@@ -36,7 +37,7 @@ export class AdaptiveTransport implements Transport {
 
   private readonly errorRate: number;
   private readonly errors: number[] = [];
-  private readonly groups: LruCache<string, StormGroup>;
+  private readonly groups: GroupCounter<string, StormGroup>;
 
   private readonly inner: Transport;
   private readonly sample: number;
@@ -50,7 +51,7 @@ export class AdaptiveTransport implements Transport {
     this.errorRate = options.errorRate ?? 20;
     this.sample = options.sample ?? 0.1;
     this.cooldownMs = options.cooldownMs ?? 30_000;
-    this.groups = new LruCache<string, StormGroup>(500);
+    this.groups = new GroupCounter<string, StormGroup>(500);
   }
 
   write(entry: LogEntry): void {
@@ -135,26 +136,15 @@ export class AdaptiveTransport implements Transport {
 
   private groupError(entry: LogEntry): void {
     const key = stormKey(entry);
-    const group = this.groups.get(key);
-    if (group !== undefined) {
-      group.count += 1;
-      return;
-    }
-    this.groups.set(key, { count: 1, entry });
+    if (this.groups.absorb(key)) return;
+    this.groups.start(key, { count: 1, entry });
   }
 
   private flushGroupSummaries(): void {
-    if (this.groups.size === 0) return;
-    for (const key of this.groups.keys()) {
-      const group = this.groups.peek(key);
-      this.groups.delete(key);
-      if (group === undefined || group.count <= 1) continue;
-      this.inner.write({
-        ...group.entry,
-        context: { ...group.entry.context, count: group.count },
-        message: `${group.entry.message} ×${group.count}`,
-      });
-    }
+    this.groups.drain((group) => {
+      if (group.count <= 1) return;
+      this.inner.write(countSummary(group.entry, group.count));
+    });
   }
 
   private notify(message: string, level: "info" | "warn"): void {

@@ -1,6 +1,5 @@
 import type { LazyContext, LazyMessage, LogEntry, LogLevel, LoggerState } from "../types/logger";
 import type { Transport } from "../types/transport";
-import { buildEntry } from "./entry.core";
 
 const globalTransports: Transport[] = [];
 
@@ -36,7 +35,7 @@ export const writeEntry = (
   if (!state.enabled) return;
   let entry: LogEntry | null = null;
   try {
-    entry = buildEntry(state, level, message, context);
+    entry = state.entryPlan(state, level, message, context);
   } catch {
     // Hostile context (throwing getters, toJSON) never crashes the caller.
     return;

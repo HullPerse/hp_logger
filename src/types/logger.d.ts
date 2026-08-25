@@ -398,6 +398,17 @@ export interface LoggerState {
   redactKeys: RegExp | null;
   timestamp: () => string;
   transport: Transport;
+  /**
+   * Entry builder compiled at settings time: the specialized fast builder
+   * when redaction, serializers, mixin, filters, and schema stamping are all
+   * off; the full builder otherwise.
+   */
+  entryPlan: (
+    state: LoggerState,
+    level: LogLevel,
+    message: LazyMessage,
+    context: LazyContext | undefined,
+  ) => LogEntry | null;
   /** Flight-recorder ring; entries are pushed post-filter, post-redaction. */
   readonly blackbox?: { push: (entry: LogEntry) => void } | undefined;
   /** Per-key context transformers, applied before redaction. */

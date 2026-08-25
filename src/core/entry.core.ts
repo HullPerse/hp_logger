@@ -144,3 +144,50 @@ export const buildEntry = (
   if (hasFilters && isFiltered(filters, entry)) return null;
   return entry;
 };
+
+/**
+ * Specialized builder for loggers with redaction, serializers, mixin,
+ * filters, and schema stamping all off: same output as buildEntry for those
+ * states, minus the per-entry feature branches. Selected once per settings
+ * change in applyHotSettings, not per entry.
+ */
+export const buildEntryFast = (
+  state: LoggerState,
+  level: LogLevel,
+  message: LazyMessage,
+  lazyContext: LazyContext | undefined,
+): LogEntry | null => {
+  const raw = typeof message === "function" ? message() : message;
+  const text = typeof raw === "string" ? raw : String(raw);
+  const { maxMessageLength } = state;
+  const safeMessage = text.length > maxMessageLength ? text.slice(0, maxMessageLength) : text;
+
+  let resolvedContext: LogContext | undefined;
+  if (lazyContext !== undefined) {
+    resolvedContext = typeof lazyContext === "function" ? lazyContext() : lazyContext;
+  }
+  let finalContext: LogContext;
+  try {
+    finalContext = mergeEntryContext(
+      state.context,
+      state.hasStaticContext,
+      resolvedContext,
+      getAsyncContext(),
+    );
+  } catch {
+    // Hostile context (throwing getters) still logs, with a marker instead.
+    finalContext = { contextError: "unserializable context" };
+  }
+  const entryContext = level === "fatal" ? attachFatalSnapshot(finalContext) : finalContext;
+
+  const entry: LogEntry = {
+    author: state.author,
+    context: entryContext,
+    level,
+    message: safeMessage,
+    timestamp: state.timestamp(),
+  };
+  const spanPath = getActiveSpanPath();
+  if (spanPath !== undefined && spanPath.length > 0) entry.spanPath = spanPath;
+  return entry;
+};

@@ -1,6 +1,13 @@
 import type { LogEntry } from "../types/logger";
 import type { Transport } from "../types/transport";
 
+/** Summary entry for an aggregated group: the first entry plus an xN marker. */
+export const countSummary = (entry: LogEntry, count: number): LogEntry => ({
+  ...entry,
+  context: { ...entry.context, count },
+  message: `${entry.message} ×${count}`,
+});
+
 /** Send a batch through a transport: `writeBatch` when present, else one `write` per entry. */
 export const dispatchBatch = async (transport: Transport, entries: LogEntry[]): Promise<void> => {
   if (transport.writeBatch) {

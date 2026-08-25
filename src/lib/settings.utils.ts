@@ -63,7 +63,19 @@ export const matchEnvModule = (
   return best?.level ?? modules.get("*");
 };
 
-type ResolvedTagSettings = Pick<
+/**
+ * One settings feature: how its slice of `LoggerSettings` resolves to the
+ * runtime shape, and how a patch folds over an already resolved base. Blocks
+ * keep both directions next to each other so a new field cannot update one
+ * and forget the other; `resolveSettings` and `mergeSettings` stay explicit
+ * so TypeScript still forces every `ResolvedSettings` key to appear.
+ */
+interface SettingsBlock<K extends keyof ResolvedSettings> {
+  merge: (base: ResolvedSettings[K], patch: LoggerSettings) => ResolvedSettings[K];
+  resolve: (settings: LoggerSettings) => ResolvedSettings[K];
+}
+
+type TagSettings = Pick<
   ResolvedSettings,
   | "colorizeContext"
   | "emoji"
@@ -77,199 +89,285 @@ type ResolvedTagSettings = Pick<
   | "tagCase"
 >;
 
-const resolveTagSettings = (settings: LoggerSettings): ResolvedTagSettings => ({
-  colorizeContext: settings.colorizeContext ?? false,
-  emoji: settings.emoji ?? false,
-  showAuthor: settings.showAuthor ?? true,
-  showDate: settings.showDate ?? false,
-  showElapsed: settings.showElapsed ?? false,
-  showLevel: settings.showLevel ?? false,
-  showTime: settings.showTime ?? true,
-  showYear: settings.showYear ?? false,
-  stripControl: settings.stripControl ?? false,
-  tagCase: settings.tagCase ?? "upper",
-});
+/** Single source for every pretty-tag default; resolve and merge read it. */
+const TAG_DEFAULTS: TagSettings = {
+  colorizeContext: false,
+  emoji: false,
+  showAuthor: true,
+  showDate: false,
+  showElapsed: false,
+  showLevel: false,
+  showTime: true,
+  showYear: false,
+  stripControl: false,
+  tagCase: "upper",
+};
 
-const DEFAULT_TASK_SETTINGS = { level: "debug" as LogLevel, progress: false };
+const TAG_KEYS = Object.keys(TAG_DEFAULTS) as (keyof TagSettings)[];
 
-const resolveTaskSettings = (settings: LoggerSettings): ResolvedSettings["task"] => ({
-  level: settings.task?.level ?? DEFAULT_TASK_SETTINGS.level,
-  progress: settings.task?.progress ?? DEFAULT_TASK_SETTINGS.progress,
-});
+const pickTags = (source: Record<keyof TagSettings, unknown>): TagSettings =>
+{
+  // Keyed writes need the record view: TypeScript cannot correlate a union
+  // key with its value type in a direct assignment.
+  const out = {} as Record<keyof TagSettings, unknown>;
+  for (const key of TAG_KEYS) out[key] = source[key];
+  return out as TagSettings;
+};
 
-const mergeTaskSettings = (
-  base: ResolvedSettings["task"],
-  patch: LoggerSettings,
-): ResolvedSettings["task"] => ({
-  level: patch.task?.level ?? base.level,
-  progress: patch.task?.progress ?? base.progress,
-});
+/** Pretty-console tag switches: ten flat fields driven by one defaults table. */
+const tagBlock = {
+  merge(base: TagSettings, patch: LoggerSettings): TagSettings {
+    const source = {} as Record<keyof TagSettings, unknown>;
+    for (const key of TAG_KEYS) source[key] = patch[key] ?? base[key];
+    return pickTags(source);
+  },
+  resolve(settings: LoggerSettings): TagSettings {
+    const source = {} as Record<keyof TagSettings, unknown>;
+    for (const key of TAG_KEYS) source[key] = settings[key] ?? TAG_DEFAULTS[key];
+    return pickTags(source);
+  },
+};
+
+const TASK_DEFAULTS: NonNullable<ResolvedSettings["task"]> = { level: "debug", progress: false };
+
+/** Pending-task entries via logger.task(). */
+const taskBlock: SettingsBlock<"task"> = {
+  merge(base, patch) {
+    return {
+      level: patch.task?.level ?? base.level,
+      progress: patch.task?.progress ?? base.progress,
+    };
+  },
+  resolve(settings) {
+    return {
+      level: settings.task?.level ?? TASK_DEFAULTS.level,
+      progress: settings.task?.progress ?? TASK_DEFAULTS.progress,
+    };
+  },
+};
 
 const DEFAULT_BLACKBOX_SIZE = 1000;
 
-const resolveBlackbox = (settings: LoggerSettings): ResolvedSettings["blackbox"] => {
-  const box = settings.blackbox;
-  return box ? { path: box.path, size: Math.max(1, box.size ?? DEFAULT_BLACKBOX_SIZE) } : false;
+const buildBlackbox = (box: Exclude<LoggerSettings["blackbox"], undefined | false>) => ({
+  path: box.path,
+  size: Math.max(1, box.size ?? DEFAULT_BLACKBOX_SIZE),
+});
+
+/** Flight-recorder ring dumped on crash or via logger.dump(). */
+const blackboxBlock: SettingsBlock<"blackbox"> = {
+  merge(base, patch) {
+    const { blackbox } = patch;
+    if (blackbox === false) return false;
+    if (blackbox === undefined) return base;
+    return buildBlackbox(blackbox);
+  },
+  resolve(settings) {
+    const { blackbox } = settings;
+    return blackbox ? buildBlackbox(blackbox) : false;
+  },
 };
 
-const mergeBlackbox = (
-  base: ResolvedSettings["blackbox"],
-  patch: LoggerSettings,
-): ResolvedSettings["blackbox"] => {
-  const box = patch.blackbox;
-  if (box === false) return false;
-  if (box === undefined) return base;
-  return { path: box.path, size: Math.max(1, box.size ?? DEFAULT_BLACKBOX_SIZE) };
-};
-
-const DEFAULT_BOX: NonNullable<ResolvedSettings["box"]> = {
+const BOX_DEFAULTS: NonNullable<ResolvedSettings["box"]> = {
   error: false,
   fatal: false,
   storm: false,
 };
 
-const resolveBoxSettings = (settings: LoggerSettings): ResolvedSettings["box"] => {
-  const { box } = settings;
-  if (!box) return false;
-  return {
-    error: box.error ?? false,
-    fatal: box.fatal ?? false,
-    storm: box.storm ?? false,
-  };
+/** ASCII frames around dense pretty-console blocks. */
+const boxBlock: SettingsBlock<"box"> = {
+  merge(base, patch) {
+    const { box } = patch;
+    if (box === false) return false;
+    if (box === undefined) return base;
+    const source = base === false ? BOX_DEFAULTS : base;
+    return {
+      error: box.error ?? source.error,
+      fatal: box.fatal ?? source.fatal,
+      storm: box.storm ?? source.storm,
+    };
+  },
+  resolve(settings) {
+    const { box } = settings;
+    if (!box) return false;
+    return {
+      error: box.error ?? BOX_DEFAULTS.error,
+      fatal: box.fatal ?? BOX_DEFAULTS.fatal,
+      storm: box.storm ?? BOX_DEFAULTS.storm,
+    };
+  },
 };
 
-const mergeBoxSettings = (
-  base: ResolvedSettings["box"],
-  patch: LoggerSettings,
-): ResolvedSettings["box"] => {
-  const { box } = patch;
-  if (box === false) return false;
-  if (box === undefined) return base;
-  const source = base === false ? DEFAULT_BOX : base;
-  return {
-    error: box.error ?? source.error,
-    fatal: box.fatal ?? source.fatal,
-    storm: box.storm ?? source.storm,
-  };
-};
-
-const resolveProfile = (settings: LoggerSettings): ResolvedSettings["profile"] => {
-  const { profile } = settings;
-  if (!profile) return false;
+const buildProfile = (profile: Exclude<LoggerSettings["profile"], undefined | false>) => {
   const maxOperations =
     profile === true ? DEFAULT_MAX_OPERATIONS : (profile.maxOperations ?? DEFAULT_MAX_OPERATIONS);
   return { maxOperations: Math.max(1, maxOperations) };
 };
 
-const mergeProfile = (
-  base: ResolvedSettings["profile"],
-  patch: LoggerSettings,
-): ResolvedSettings["profile"] => {
-  const { profile } = patch;
-  if (!profile) return profile === undefined ? base : false;
-  return resolveProfile({ profile });
+/** Aggregation of time()/span()/task() durations into operation histograms. */
+const profileBlock: SettingsBlock<"profile"> = {
+  merge(base, patch) {
+    const { profile } = patch;
+    if (profile === undefined) return base;
+    if (!profile) return false;
+    return buildProfile(profile);
+  },
+  resolve(settings) {
+    const { profile } = settings;
+    if (!profile) return false;
+    return buildProfile(profile);
+  },
 };
 
-const resolveRedactionSettings = (settings: LoggerSettings) => ({
-  redactDepth: settings.redactDepth ?? 2,
-  redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
-  redactPaths: settings.redactPaths ?? [],
-});
-
-const resolveSamplingSettings = (settings: LoggerSettings): ResolvedSettings["sampling"] =>
-  settings.sampling
-    ? { perTrace: settings.sampling.perTrace ?? true, rate: settings.sampling.rate }
-    : false;
-
-const mergeTagSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedTagSettings => ({
-  colorizeContext: patch.colorizeContext ?? base.colorizeContext,
-  emoji: patch.emoji ?? base.emoji,
-  showAuthor: patch.showAuthor ?? base.showAuthor,
-  showDate: patch.showDate ?? base.showDate,
-  showElapsed: patch.showElapsed ?? base.showElapsed,
-  showLevel: patch.showLevel ?? base.showLevel,
-  showTime: patch.showTime ?? base.showTime,
-  showYear: patch.showYear ?? base.showYear,
-  stripControl: patch.stripControl ?? base.stripControl,
-  tagCase: patch.tagCase ?? base.tagCase,
-});
-
-export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings => ({
-  adaptive: settings.adaptive ?? false,
-  autoCounters: settings.autoCounters ?? false,
-  batching: settings.batching ?? false,
-  blackbox: resolveBlackbox(settings),
-  box: resolveBoxSettings(settings),
-  colors: settings.colors ?? {},
-  database: settings.database ?? false,
-  enabled: settings.enabled ?? true,
-  file: settings.file ?? false,
-  filters: settings.filters ?? [],
-  format: settings.format,
-  formatContext: settings.formatContext ?? "json",
-  formatTimestamp: settings.formatTimestamp ?? "iso",
-  level: settings.level ?? "info",
-  maxMessageLength: settings.maxMessageLength ?? 2000,
-  mixin: settings.mixin,
-  mode: settings.mode ?? defaultMode(),
-  prettyTruncate: settings.prettyTruncate ?? false,
-  prettyWrap: settings.prettyWrap ?? false,
-  profile: resolveProfile(settings),
-  ...resolveRedactionSettings(settings),
-  repeat: settings.repeat ?? false,
-  sampling: resolveSamplingSettings(settings),
-  schemaVersion: settings.schemaVersion ?? false,
-  serializers: settings.serializers,
-  task: resolveTaskSettings(settings),
-  ...resolveTagSettings(settings),
-});
-
-const mergeFormatSettings = (base: ResolvedSettings, patch: LoggerSettings) => ({
-  format: patch.format ?? base.format,
-  formatContext: patch.formatContext ?? base.formatContext,
-  formatTimestamp: patch.formatTimestamp ?? base.formatTimestamp,
-  level: patch.level ?? base.level,
-  maxMessageLength: patch.maxMessageLength ?? base.maxMessageLength,
-  mixin: patch.mixin ?? base.mixin,
-  mode: patch.mode ?? base.mode,
-  prettyTruncate: patch.prettyTruncate ?? base.prettyTruncate,
-  prettyWrap: patch.prettyWrap ?? base.prettyWrap,
-});
-
-const mergeSamplingSettings = (
-  base: ResolvedSettings["sampling"],
-  patch: LoggerSettings,
-): ResolvedSettings["sampling"] => {
-  const incoming = patch.sampling;
-  if (incoming === undefined) return base;
-  if (incoming === false) return false;
-  return { perTrace: incoming.perTrace ?? true, rate: incoming.rate };
+/** Trace-coherent sampling; error/fatal always pass (enforced in the pipeline). */
+const samplingBlock: SettingsBlock<"sampling"> = {
+  merge(base, patch) {
+    const incoming = patch.sampling;
+    if (incoming === undefined) return base;
+    if (incoming === false) return false;
+    return { perTrace: incoming.perTrace ?? true, rate: incoming.rate };
+  },
+  resolve(settings) {
+    const { sampling } = settings;
+    return sampling ? { perTrace: sampling.perTrace ?? true, rate: sampling.rate } : false;
+  },
 };
 
-const mergeRedactionSettings = (base: ResolvedSettings, patch: LoggerSettings) => ({
-  redactDepth: patch.redactDepth ?? base.redactDepth,
-  redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
-  redactPaths: patch.redactPaths ?? base.redactPaths,
-});
+/** Redaction knobs; `redactKeys: null` explicitly disables the denylist. */
+const redactionBlock = {
+  merge(base: ResolvedSettings, patch: LoggerSettings) {
+    return {
+      redactDepth: patch.redactDepth ?? base.redactDepth,
+      redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
+      redactPaths: patch.redactPaths ?? base.redactPaths,
+    };
+  },
+  resolve(settings: LoggerSettings) {
+    return {
+      redactDepth: settings.redactDepth ?? 2,
+      redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
+      redactPaths: settings.redactPaths ?? [],
+    };
+  },
+};
 
-export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedSettings => ({
-  adaptive: patch.adaptive ?? base.adaptive,
-  autoCounters: patch.autoCounters ?? base.autoCounters,
-  batching: patch.batching ?? base.batching,
-  blackbox: mergeBlackbox(base.blackbox, patch),
-  box: mergeBoxSettings(base.box, patch),
-  colors: patch.colors ?? base.colors,
-  database: patch.database ?? base.database,
-  enabled: patch.enabled ?? base.enabled,
-  file: patch.file ?? base.file,
-  filters: patch.filters ?? base.filters,
-  ...mergeFormatSettings(base, patch),
-  ...mergeRedactionSettings(base, patch),
-  profile: mergeProfile(base.profile, patch),
-  repeat: patch.repeat ?? base.repeat,
-  sampling: mergeSamplingSettings(base.sampling, patch),
-  schemaVersion: patch.schemaVersion ?? base.schemaVersion,
-  serializers: patch.serializers ?? base.serializers,
-  task: mergeTaskSettings(base.task, patch),
-  ...mergeTagSettings(base, patch),
-});
+/** Output shaping: mode, format callbacks, limits. */
+const formatBlock = {
+  merge(base: ResolvedSettings, patch: LoggerSettings) {
+    return {
+      format: patch.format ?? base.format,
+      formatContext: patch.formatContext ?? base.formatContext,
+      formatTimestamp: patch.formatTimestamp ?? base.formatTimestamp,
+      level: patch.level ?? base.level,
+      maxMessageLength: patch.maxMessageLength ?? base.maxMessageLength,
+      mixin: patch.mixin ?? base.mixin,
+      mode: patch.mode ?? base.mode,
+      prettyTruncate: patch.prettyTruncate ?? base.prettyTruncate,
+      prettyWrap: patch.prettyWrap ?? base.prettyWrap,
+    };
+  },
+  resolve(settings: LoggerSettings) {
+    return {
+      format: settings.format,
+      formatContext: settings.formatContext ?? "json",
+      formatTimestamp: settings.formatTimestamp ?? "iso",
+      level: settings.level ?? "info",
+      maxMessageLength: settings.maxMessageLength ?? 2000,
+      mixin: settings.mixin,
+      mode: settings.mode ?? defaultMode(),
+      prettyTruncate: settings.prettyTruncate ?? false,
+      prettyWrap: settings.prettyWrap ?? false,
+    };
+  },
+};
+
+export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings => {
+  const fmt = formatBlock.resolve(settings);
+  const redaction = redactionBlock.resolve(settings);
+  const tags = tagBlock.resolve(settings);
+  return {
+    adaptive: settings.adaptive ?? false,
+    autoCounters: settings.autoCounters ?? false,
+    batching: settings.batching ?? false,
+    blackbox: blackboxBlock.resolve(settings),
+    box: boxBlock.resolve(settings),
+    colorizeContext: tags.colorizeContext,
+    colors: settings.colors ?? {},
+    database: settings.database ?? false,
+    emoji: tags.emoji,
+    enabled: settings.enabled ?? true,
+    file: settings.file ?? false,
+    filters: settings.filters ?? [],
+    format: fmt.format,
+    formatContext: fmt.formatContext,
+    formatTimestamp: fmt.formatTimestamp,
+    level: fmt.level,
+    maxMessageLength: fmt.maxMessageLength,
+    mixin: fmt.mixin,
+    mode: fmt.mode,
+    prettyTruncate: fmt.prettyTruncate,
+    prettyWrap: fmt.prettyWrap,
+    profile: profileBlock.resolve(settings),
+    redactDepth: redaction.redactDepth,
+    redactKeys: redaction.redactKeys,
+    redactPaths: redaction.redactPaths,
+    repeat: settings.repeat ?? false,
+    sampling: samplingBlock.resolve(settings),
+    schemaVersion: settings.schemaVersion ?? false,
+    serializers: settings.serializers,
+    showAuthor: tags.showAuthor,
+    showDate: tags.showDate,
+    showElapsed: tags.showElapsed,
+    showLevel: tags.showLevel,
+    showTime: tags.showTime,
+    showYear: tags.showYear,
+    stripControl: tags.stripControl,
+    tagCase: tags.tagCase,
+    task: taskBlock.resolve(settings),
+  };
+};
+
+export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): ResolvedSettings => {
+  const fmt = formatBlock.merge(base, patch);
+  const redaction = redactionBlock.merge(base, patch);
+  const tags = tagBlock.merge(base, patch);
+  return {
+    adaptive: patch.adaptive ?? base.adaptive,
+    autoCounters: patch.autoCounters ?? base.autoCounters,
+    batching: patch.batching ?? base.batching,
+    blackbox: blackboxBlock.merge(base.blackbox, patch),
+    box: boxBlock.merge(base.box, patch),
+    colorizeContext: tags.colorizeContext,
+    colors: patch.colors ?? base.colors,
+    database: patch.database ?? base.database,
+    emoji: tags.emoji,
+    enabled: patch.enabled ?? base.enabled,
+    file: patch.file ?? base.file,
+    filters: patch.filters ?? base.filters,
+    format: fmt.format,
+    formatContext: fmt.formatContext,
+    formatTimestamp: fmt.formatTimestamp,
+    level: fmt.level,
+    maxMessageLength: fmt.maxMessageLength,
+    mixin: fmt.mixin,
+    mode: fmt.mode,
+    prettyTruncate: fmt.prettyTruncate,
+    prettyWrap: fmt.prettyWrap,
+    profile: profileBlock.merge(base.profile, patch),
+    redactDepth: redaction.redactDepth,
+    redactKeys: redaction.redactKeys,
+    redactPaths: redaction.redactPaths,
+    repeat: patch.repeat ?? base.repeat,
+    sampling: samplingBlock.merge(base.sampling, patch),
+    schemaVersion: patch.schemaVersion ?? base.schemaVersion,
+    serializers: patch.serializers ?? base.serializers,
+    showAuthor: tags.showAuthor,
+    showDate: tags.showDate,
+    showElapsed: tags.showElapsed,
+    showLevel: tags.showLevel,
+    showTime: tags.showTime,
+    showYear: tags.showYear,
+    stripControl: tags.stripControl,
+    tagCase: tags.tagCase,
+    task: taskBlock.merge(base.task, patch),
+  };
+};

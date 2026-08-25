@@ -1,4 +1,5 @@
-import { LruCache } from "../brain/lru.utils";
+import { GroupCounter } from "../brain/group.utils";
+import { countSummary, startUnrefTimeout, stopTimeout } from "../lib/transport.utils";
 import type { LogContext, LogEntry, RepeatSettings } from "../types/logger";
 import type { Transport, TransportStats } from "../types/transport";
 
@@ -29,18 +30,19 @@ const repeatKey = (entry: LogEntry): string =>
  * grouped by their signature (name, message, first stack frame).
  */
 export class RepeatTransport implements Transport {
-  private readonly groups: LruCache<string, RepeatGroup>;
+  private readonly groups: GroupCounter<string, RepeatGroup>;
   private readonly inner: Transport;
-  private readonly maxKeys: number;
   private readonly windowMs: number;
   private closed = false;
 
   constructor(inner: Transport, options: RepeatSettings = {}) {
     this.inner = inner;
     this.windowMs = options.windowMs ?? 1000;
-    this.maxKeys = options.maxKeys ?? 1000;
-    this.groups = new LruCache<string, RepeatGroup>(this.maxKeys, (key, group) => {
-      this.flushGroup(key, group);
+    const maxKeys = options.maxKeys ?? 1000;
+    // Evicted groups never reach their window timer: flush them now.
+    this.groups = new GroupCounter<string, RepeatGroup>(maxKeys, (_key, group) => {
+      stopTimeout(group.timer);
+      this.writeSummary(group);
     });
   }
 
@@ -59,14 +61,12 @@ export class RepeatTransport implements Transport {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    // Snapshot the keys: flushGroup deletes from the cache while iterating.
-    for (const key of this.groups.keys()) this.flushGroup(key);
+    this.drainAll();
     await this.inner.close?.();
   }
 
   async flush(): Promise<void> {
-    // Snapshot the keys: flushGroup deletes from the cache while iterating.
-    for (const key of this.groups.keys()) this.flushGroup(key);
+    this.drainAll();
     await this.inner.flush?.();
   }
 
@@ -74,31 +74,31 @@ export class RepeatTransport implements Transport {
     if (this.closed) return;
     for (const entry of entries) {
       const key = repeatKey(entry);
-      const group = this.groups.get(key);
-      if (group) {
-        group.count += 1;
-        continue;
-      }
+      if (this.groups.absorb(key)) continue;
       this.inner.write(entry);
-      const timer = setTimeout(() => {
+      const timer = startUnrefTimeout(() => {
         this.flushGroup(key);
       }, this.windowMs);
-      timer.unref();
-      this.groups.set(key, { count: 1, entry, timer });
+      this.groups.start(key, { count: 1, entry, timer });
     }
   }
 
-  private flushGroup(key: string, known?: RepeatGroup): void {
-    const group = known ?? this.groups.get(key);
-    if (group === undefined) return;
-    this.groups.delete(key);
-    if (group.timer !== null) clearTimeout(group.timer);
-    if (group.count <= 1) return;
-    const { entry } = group;
-    this.inner.write({
-      ...entry,
-      context: { ...entry.context, count: group.count },
-      message: `${entry.message} ×${group.count}`,
+  private drainAll(): void {
+    this.groups.drain((group) => {
+      stopTimeout(group.timer);
+      this.writeSummary(group);
     });
+  }
+
+  private flushGroup(key: string): void {
+    const group = this.groups.take(key);
+    if (group === undefined) return;
+    stopTimeout(group.timer);
+    this.writeSummary(group);
+  }
+
+  private writeSummary(group: RepeatGroup): void {
+    if (group.count <= 1) return;
+    this.inner.write(countSummary(group.entry, group.count));
   }
 }

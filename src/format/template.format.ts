@@ -1,3 +1,4 @@
+import { LruCache } from "../brain/lru.utils";
 import { SPINNER_FRAMES, TASK_GLYPHS } from "../config/colors.config";
 import { applyColor } from "../lib/color.utils";
 import { stripControlCharacters } from "../lib/json.utils";
@@ -53,7 +54,10 @@ const KNOWN_TOKENS = new Set([
   "timestamp.year",
 ]);
 
-const warnedTokens = new Set<string>();
+// Warn-once bookkeeping for unknown tokens, capped so hostile or generated
+// templates cannot grow module state without bound (mirrors the redact memo
+// cap). After eviction a token may warn again; memory stays bounded.
+const warnedTokens = new LruCache<string, true>(2048);
 
 const ISO_FIELD_RANGES: Record<string, [number, number]> = {
   day: [8, 10],
@@ -127,7 +131,7 @@ export const parseTemplate = (source: string): TemplatePart[] => {
       (name !== "" && !name.includes("."));
     if (!known) {
       if (!warnedTokens.has(raw)) {
-        warnedTokens.add(raw);
+        warnedTokens.set(raw, true);
         console.warn(`hp_logger: unknown template token {${raw}}, rendered literally`);
       }
       parts.push({ kind: "literal", value: `{${raw}}` });
