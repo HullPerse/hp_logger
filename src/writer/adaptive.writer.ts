@@ -14,20 +14,12 @@ interface StormGroup {
   entry: LogEntry;
 }
 
-/** Context status marking adaptive storm notices, read by console attention. */
-type StormStatus = "storm-ended" | "storm-started";
-
 const stormKey = (entry: LogEntry): string =>
   `${entry.level}\u0000${entry.author}\u0000${entry.message}`;
 
-const makeNotice = (
-  message: string,
-  level: "info" | "warn",
-  status: StormStatus,
-  errors?: number,
-): LogEntry => ({
+const makeNotice = (message: string, level: "info" | "warn"): LogEntry => ({
   author: "adaptive",
-  context: errors === undefined ? { status } : { errors, status },
+  context: {},
   level,
   message,
   timestamp: cachedTimestamp(),
@@ -121,14 +113,9 @@ export class AdaptiveTransport implements Transport {
       this.throttled = true;
       this.cooldownStart = null;
       stormStarted = true;
-      const count = this.errors.length;
-      this.inner.write(
-        makeNotice(
-          `storm: ${count} errors in ${this.windowMs}ms - sampling verbose levels`,
-          "warn",
-          "storm-started",
-          count,
-        ),
+      this.notify(
+        `storm: ${this.errors.length} errors in ${this.windowMs}ms - sampling verbose levels`,
+        "warn",
       );
     }
     if (!this.throttled) return false;
@@ -142,7 +129,7 @@ export class AdaptiveTransport implements Transport {
       this.throttled = false;
       this.cooldownStart = null;
       this.flushGroupSummaries();
-      this.inner.write(makeNotice("storm over - full logging resumed", "info", "storm-ended"));
+      this.notify("storm over - full logging resumed", "info");
     }
     return stormStarted;
   }
@@ -158,5 +145,9 @@ export class AdaptiveTransport implements Transport {
       if (group.count <= 1) return;
       this.inner.write(countSummary(group.entry, group.count));
     });
+  }
+
+  private notify(message: string, level: "info" | "warn"): void {
+    this.inner.write(makeNotice(message, level));
   }
 }
