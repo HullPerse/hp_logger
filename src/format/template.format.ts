@@ -59,14 +59,30 @@ const KNOWN_TOKENS = new Set([
 // cap). After eviction a token may warn again; memory stays bounded.
 const warnedTokens = new LruCache<string, true>(2048);
 
-const ISO_FIELD_RANGES: Record<string, [number, number]> = {
-  day: [8, 10],
-  hour: [11, 13],
-  minute: [14, 16],
-  month: [5, 7],
-  ms: [20, 23],
-  second: [17, 19],
-  year: [0, 4],
+/**
+ * User-registered token renderers. Names must be dotless (dotted namespaces
+ * belong to built-ins) and cannot shadow reserved tokens; registration wins
+ * over context keys of the same name, and re-registering updates the
+ * renderer.
+ */
+const customTokens = new Map<string, (entry: LogEntry) => string>();
+
+/** Formatters for every `{timestamp.*}` subfield, keyed by suffix ("" = full ISO). */
+const ISO_FORMATTERS: Record<string, ((iso: string) => string) | undefined> = {
+  "": (iso) => iso,
+  date: (iso) => iso.slice(5, 10),
+  day: (iso) => iso.slice(8, 10),
+  hour: (iso) => iso.slice(11, 13),
+  minute: (iso) => iso.slice(14, 16),
+  month: (iso) => iso.slice(5, 7),
+  ms: (iso) => iso.slice(20, 23),
+  second: (iso) => iso.slice(17, 19),
+  time: (iso) => iso.slice(11, 19),
+  weekday: (iso) => {
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? "" : date.toUTCString().slice(0, 3);
+  },
+  year: (iso) => iso.slice(0, 4),
 };
 
 /**
@@ -127,7 +143,7 @@ export const parseTemplate = (source: string): TemplatePart[] => {
     const color = colonAt === -1 ? spanColor : (raw.slice(colonAt + 1) as ColorName);
     const known =
       KNOWN_TOKENS.has(name) ||
-      ISO_FIELD_RANGES[name] !== undefined ||
+      (name !== "" && name in ISO_FORMATTERS) ||
       (name !== "" && !name.includes("."));
     if (!known) {
       if (!warnedTokens.has(raw)) {
@@ -166,96 +182,73 @@ export const compiledTemplate = (settings: { template: string }): CompiledTempla
   return compiled;
 };
 
-const resolveTimestampField = (field: string, iso: string): string => {
-  switch (field) {
-    case "": {
-      return iso;
-    }
-    case "date": {
-      return iso.slice(5, 10);
-    }
-    case "time": {
-      return iso.slice(11, 19);
-    }
-    case "weekday": {
-      const date = new Date(iso);
-      return Number.isNaN(date.getTime()) ? "" : date.toUTCString().slice(0, 3);
-    }
-    default: {
-      const range = ISO_FIELD_RANGES[field];
-      if (range === undefined) return "";
-      const [start, end] = range;
-      return iso.slice(start, end);
-    }
-  }
-};
+const resolveTimestampField = (field: string, iso: string): string =>
+  ISO_FORMATTERS[field]?.(iso) ?? "";
 
 /** Tokens fed by task progress and database retry bookkeeping. */
 const TASK_TOKENS = new Set(["retry.attempt", "task", "task.frame", "task.glyph"]);
 
-const resolveTaskToken = (name: string, entry: LogEntry): string => {
-  switch (name) {
-    case "retry.attempt": {
-      const { attempt, attempts } = entry.context;
-      return typeof attempt === "number"
-        ? `${attempt}/${typeof attempts === "number" ? attempts : "?"}`
-        : "";
-    }
-    case "task": {
-      return typeof entry.context.task === "string" ? (entry.context.task as string) : "";
-    }
-    case "task.frame": {
-      const { frame } = entry.context;
-      return typeof frame === "number" ? (SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "") : "";
-    }
-    default: {
-      // "task.glyph": the only remaining task token.
-      const { status } = entry.context;
-      return typeof status === "string" ? (TASK_GLYPHS[status] ?? "") : "";
-    }
-  }
+const TASK_RENDERERS: Record<string, ((entry: LogEntry) => string) | undefined> = {
+  "retry.attempt": (entry) => {
+    const { attempt, attempts } = entry.context;
+    return typeof attempt === "number"
+      ? `${attempt}/${typeof attempts === "number" ? attempts : "?"}`
+      : "";
+  },
+  task: (entry) => (typeof entry.context.task === "string" ? (entry.context.task as string) : ""),
+  "task.frame": (entry) => {
+    const { frame } = entry.context;
+    return typeof frame === "number" ? (SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "") : "";
+  },
+  "task.glyph": (entry) => {
+    const { status } = entry.context;
+    return typeof status === "string" ? (TASK_GLYPHS[status] ?? "") : "";
+  },
 };
 
-const resolveToken = (name: string, entry: LogEntry, env: TemplateEnv): string => {
-  if (TASK_TOKENS.has(name)) return resolveTaskToken(name, entry);
-  switch (name) {
-    case "author": {
-      return env.authorName(entry.author);
-    }
-    case "context": {
-      return formatContext(entry.context, "json");
-    }
-    case "context.kv": {
-      return formatContext(entry.context, "kv");
-    }
-    case "elapsed": {
-      return env.elapsedMs === null ? "" : `+${formatDuration(Math.round(env.elapsedMs()))}`;
-    }
-    case "group.indent": {
+const resolveTaskToken = (name: string, entry: LogEntry): string =>
+  TASK_RENDERERS[name]?.(entry) ?? "";
+
+/** Built-in token renderers that need neither task bookkeeping nor the context fallback. */
+const TOKEN_RENDERERS: Record<string, ((entry: LogEntry, env: TemplateEnv) => string) | undefined> =
+  {
+    author: (entry, env) => env.authorName(entry.author),
+    context: (entry) => formatContext(entry.context, "json"),
+    "context.kv": (entry) => formatContext(entry.context, "kv"),
+    elapsed: (_entry, env) =>
+      env.elapsedMs === null ? "" : `+${formatDuration(Math.round(env.elapsedMs()))}`,
+    "group.indent": (entry) => {
       const { group } = entry.context;
       return typeof group === "string" && group !== ""
         ? "  ".repeat(Math.max(0, group.split(".").length - 1))
         : "";
-    }
-    case "level": {
-      return entry.level;
-    }
-    case "level.tag": {
-      return `[${caseTag(entry.level, env.tagCase)}]`;
-    }
-    case "message": {
-      return entry.message;
-    }
-    default: {
-      if (name.startsWith("timestamp.")) {
-        return resolveTimestampField(name.slice("timestamp.".length), entry.timestamp);
-      }
-      const value = entry.context[name];
-      if (value === undefined) return "";
-      if (typeof value === "object") return JSON.stringify(value);
-      return String(value);
+    },
+    level: (entry) => entry.level,
+    "level.tag": (entry, env) => `[${caseTag(entry.level, env.tagCase)}]`,
+    message: (entry) => entry.message,
+  };
+
+const resolveToken = (name: string, entry: LogEntry, env: TemplateEnv): string => {
+  if (TASK_TOKENS.has(name)) return resolveTaskToken(name, entry);
+  const custom = customTokens.get(name);
+  if (custom !== undefined) {
+    try {
+      return custom(entry);
+    } catch {
+      // A broken renderer degrades to a visible marker instead of killing
+      // the line; the throw surfaces in the caller's own console anyway.
+      return "[TOKEN ERROR]";
     }
   }
+  const builtin = TOKEN_RENDERERS[name];
+  if (builtin !== undefined) return builtin(entry, env);
+  if (name.startsWith("timestamp.")) {
+    return resolveTimestampField(name.slice("timestamp.".length), entry.timestamp);
+  }
+  const value = entry.context[name];
+  if (value === undefined) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
 };
 
 /** Render a parsed template for an entry; colors only when `env.colorize`. */
@@ -285,3 +278,22 @@ export const renderTemplateSettings = (
   entry: LogEntry,
   env: TemplateEnv,
 ): string => renderTemplate(compiledTemplate(settings).parts, entry, env);
+
+const TOKEN_NAME = /^[A-Za-z_]\w*$/u;
+
+/**
+ * Register a custom `{name}` token renderer. Names must be dotless (dotted
+ * namespaces belong to built-ins) and cannot shadow reserved tokens;
+ * registered tokens win over context keys of the same name, and
+ * re-registering updates the renderer. A throwing renderer degrades to a
+ * visible `[TOKEN ERROR]` marker instead of dropping the line.
+ */
+export const registerToken = (name: string, render: (entry: LogEntry) => string): void => {
+  if (!TOKEN_NAME.test(name)) {
+    throw new Error(`hp_logger: invalid token name "${name}" - use letters, digits, underscore`);
+  }
+  if (KNOWN_TOKENS.has(name) || TASK_TOKENS.has(name) || name in ISO_FORMATTERS) {
+    throw new Error(`hp_logger: token "${name}" is reserved by a built-in`);
+  }
+  customTokens.set(name, render);
+};

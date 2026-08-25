@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { DEFAULT_REDACT_KEYS } from "@/config/redaction.config";
 import { mergeEntryContext } from "@/core/context.core";
+import type { Logger } from "@/index.logger";
 import { redact } from "@/redact/index.redact";
 import type { LogEntry, LogLevel } from "@/types/logger";
-import type { Logger } from "@/index.logger";
+
 import { captureLogger } from "./test.transport";
 
 // Timestamps can straddle a millisecond boundary between two writes.
@@ -89,11 +90,7 @@ describe("entry plan selection", () => {
     expect(fastSetup.logger.entryPlan.name).toBe("buildEntryFast");
     expect(slowSetup.logger.entryPlan.name).toBe("buildEntry");
 
-    const inputs: [
-      LogLevel,
-      string | (() => string),
-      Record<string, string> | undefined,
-    ][] = [
+    const inputs: [LogLevel, string | (() => string), Record<string, string> | undefined][] = [
       ["info", "hello", undefined],
       ["debug", () => "lazy", { requestId: "r1" }],
       ["warn", "with context", { userId: "u7" }],

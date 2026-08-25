@@ -25,6 +25,8 @@ const sanitizeMessage = (
   return text.length > maxMessageLength ? text.slice(0, maxMessageLength) : text;
 };
 
+let mixinThrowWarned = false;
+
 const sanitizeContext = (
   context: LogContext,
   needsRedaction: boolean,
@@ -103,7 +105,7 @@ export const buildEntry = (
   }
   // Mixin fields sit under explicit data: the spread order makes call-site
   // and async context win. A throwing mixin contributes nothing, and so does
-  // a non-object return.
+  // a non-object return; the first throw warns once so bugs stay visible.
   if (mixin !== undefined) {
     let injected: LogContext | undefined;
     try {
@@ -111,6 +113,10 @@ export const buildEntry = (
       injected =
         typeof outcome === "object" && outcome !== null ? (outcome as LogContext) : undefined;
     } catch {
+      if (!mixinThrowWarned) {
+        mixinThrowWarned = true;
+        console.warn("hp_logger: settings.mixin threw - its fields are skipped");
+      }
       injected = undefined;
     }
     if (injected !== undefined && Object.keys(injected).length > 0) {

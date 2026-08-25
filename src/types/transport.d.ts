@@ -91,6 +91,12 @@ export interface FileSettings {
   maxFiles?: number;
   /** Size rotation: gzip rotated segments. Defaults to false. */
   gzip?: boolean;
+  /**
+   * Run fsync on the file descriptor when close() drains the transport, so
+   * buffered entries survive a hard power loss. Adds shutdown latency.
+   * Defaults to false.
+   */
+  fsync?: boolean;
 }
 
 /** Options shared by FileTransport and DateBasedFileTransport. */

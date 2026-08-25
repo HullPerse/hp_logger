@@ -60,6 +60,8 @@ export { SizeBasedFileTransport } from "./writer/sizeBased.writer";
 export { BaseFileTransport } from "./writer/base.writer";
 export { buildTransports } from "./writer/factory.writer";
 
+export { registerToken } from "./format/template.format";
+
 export {
   BaseMetric,
   Counter,

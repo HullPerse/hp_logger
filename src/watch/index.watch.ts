@@ -1,5 +1,6 @@
 import { DEFAULT_INTERVAL, DEFAULT_TIMEOUT } from "../config/watch.config";
 import { attemptAsync } from "../lib/result.utils";
+import { applyJitter } from "../lib/retry.utils";
 import type { ProbeOutcome, WatchHooks, WatchOptions, WatchReason, Watcher } from "../types/watch";
 
 class StatusMismatchError extends Error {
@@ -12,16 +13,28 @@ class StatusMismatchError extends Error {
   }
 }
 
+const CODE_REASONS: Record<string, WatchReason> = {
+  EAI_AGAIN: "dns",
+  ECONNREFUSED: "refused",
+  ENOTFOUND: "dns",
+};
+
 const classifyError = (error: Error): { reason: WatchReason; normalized: Error } => {
   if (error instanceof StatusMismatchError) return { normalized: error, reason: "status" };
   if (error.name === "AbortError" || error.name === "TimeoutError") {
     return { normalized: error, reason: "timeout" };
   }
   const { code } = error as NodeJS.ErrnoException;
-  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return { normalized: error, reason: "dns" };
-  if (code === "ECONNREFUSED") return { normalized: error, reason: "refused" };
+  const byCode = code === undefined ? undefined : CODE_REASONS[code];
+  if (byCode !== undefined) return { normalized: error, reason: byCode };
   return { normalized: error, reason: "status" };
 };
+
+/** Backoff delay before the Nth retry probe (1-based), capped at maxMs. */
+export const watchBackoffMs = (
+  failures: number,
+  opts: { interval: number; maxMs: number },
+): number => Math.min(opts.interval * 2 ** Math.max(0, failures - 1), opts.maxMs);
 
 const probeOnce = async (options: WatchOptions, timeout: number): Promise<ProbeOutcome> => {
   const startedAt = performance.now();
@@ -69,13 +82,19 @@ export const startWatcher = (
 ): Watcher => {
   const interval = rawOptions.interval ?? DEFAULT_INTERVAL;
   const timeout = rawOptions.timeout ?? DEFAULT_TIMEOUT;
+  const backoff = rawOptions.backoff === false ? undefined : rawOptions.backoff;
+  const backoffMaxMs = backoff?.maxMs ?? interval * 10;
+  const backoffJitter = backoff?.jitter ?? 0.25;
   if (!rawOptions.url && !rawOptions.probe) {
     throw new Error("watch requires a url or a probe function");
   }
 
-  let stopped = false;
-  let timer: ReturnType<typeof setInterval> | null = null;
+  // One shared lifecycle flag as an object property: a plain boolean gets
+  // literal-narrowed inside closures, which breaks the scheduled-probe guard.
+  const lifecycle = { stopped: false };
+  let timer: ReturnType<typeof setTimeout> | null = null;
   let up: boolean | null = null;
+  let consecutiveFailures = 0;
 
   const failReasonOf = (outcome: ProbeOutcome): WatchReason => {
     if (!outcome.error) return "status";
@@ -138,26 +157,43 @@ export const startWatcher = (
   };
 
   const runProbe = async (): Promise<void> => {
-    if (stopped) return;
+    if (lifecycle.stopped) return;
     const outcome = await probeOnce(rawOptions, timeout);
-    if (outcome.ok) handleSuccess(outcome);
-    else handleFailure(outcome);
+    if (outcome.ok) {
+      consecutiveFailures = 0;
+      handleSuccess(outcome);
+    } else {
+      consecutiveFailures += 1;
+      handleFailure(outcome);
+    }
+    // A stop() landing mid-probe leaves one harmless no-op timer behind;
+    // the top-of-runProbe guard swallows it.
+    let delay = interval;
+    if (!outcome.ok && backoff !== undefined) {
+      delay = applyJitter(
+        watchBackoffMs(consecutiveFailures, { interval, maxMs: backoffMaxMs }),
+        backoffJitter,
+      );
+    }
+    timer = setTimeout(() => {
+      runProbe();
+    }, delay);
+    timer.unref();
   };
 
   const stop = (): void => {
-    stopped = true;
+    lifecycle.stopped = true;
     if (timer !== null) {
-      clearInterval(timer);
+      clearTimeout(timer);
       timer = null;
     }
   };
 
   // runProbe never rejects: probeOnce normalizes every failure into an outcome.
-  runProbe();
-  timer = setInterval(() => {
+  const probe = (): void => {
     runProbe();
-  }, interval);
-  timer.unref();
+  };
+  probe();
 
   return {
     runProbe,

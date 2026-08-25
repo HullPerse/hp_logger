@@ -1,4 +1,4 @@
-import { createWriteStream } from "node:fs";
+import { createWriteStream, fsync } from "node:fs";
 import type { WriteStream } from "node:fs";
 import { finished } from "node:stream/promises";
 import { promisify } from "node:util";
@@ -22,6 +22,7 @@ export abstract class BaseFileTransport implements Transport {
   protected readonly contextFormat: ContextFormat;
   protected readonly flushInterval: number;
   protected readonly format: EntryFormatter | FormatSettings | undefined;
+  protected readonly fsyncOnClose: boolean;
   protected readonly maxBufferSize: number;
   protected readonly mode: "json" | "pretty";
   protected readonly stripControl: boolean;
@@ -33,6 +34,7 @@ export abstract class BaseFileTransport implements Transport {
   constructor(options: Omit<FileTransportOptions, "path">) {
     this.contextFormat = options.contextFormat ?? "json";
     this.format = options.format;
+    this.fsyncOnClose = options.fsync === true;
     this.maxBufferSize = options.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE;
     this.flushInterval = options.flushInterval ?? DEFAULT_FLUSH_INTERVAL;
     this.mode = options.mode ?? "json";
@@ -128,6 +130,17 @@ export abstract class BaseFileTransport implements Transport {
     stopInterval(this.flushTimer);
     this.flushTimer = null;
     await this.flush();
+    // Strict durability: push the fd's dirty pages to the disk before the
+    // stream closes. Best-effort - a failing fsync warns but still closes.
+    if (this.fsyncOnClose && this.stream !== null) {
+      const { fd } = this.stream;
+      if (typeof fd === "number") {
+        const outcome = await attemptAsync(() => promisify(fsync)(fd));
+        if (!outcome.ok) {
+          console.error(`hp_logger: fsync failed: ${outcome.error.message}`);
+        }
+      }
+    }
     await this.closeStream();
   }
 }

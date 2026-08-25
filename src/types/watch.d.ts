@@ -3,6 +3,19 @@ export type WatchReason = "timeout" | "dns" | "refused" | "status";
 export interface WatchOptions {
   /** Custom availability check: return falsy or throw to mark the target down. */
   probe?: () => Promise<unknown> | unknown;
+  /**
+   * Grow the delay between probes after failures: interval doubled per
+   * consecutive failure up to maxMs, with a random jitter share to avoid
+   * thundering herds on flapping endpoints. Reset on success. Off by default.
+   */
+  backoff?:
+    | {
+        /** Upper bound of a single wait. Defaults to interval * 10. */
+        maxMs?: number;
+        /** Random share (0-1) of each wait added and subtracted. Defaults to 0.25. */
+        jitter?: number;
+      }
+    | false;
   /** Poll interval in milliseconds. */
   interval?: number;
   logProbes?: boolean;
