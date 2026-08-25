@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-import { DEFAULT_TABLE_NAME } from "../config/writer.config";
+import { DEFAULT_TABLE_NAME, LOG_SCHEMA_VERSION } from "../config/writer.config";
 import type { LogEntry } from "../types/logger";
 import type { DatabaseAdapter, LogRow, SqliteAdapterOptions } from "../types/transport";
 
@@ -15,18 +15,26 @@ const EXPECTED_COLUMNS: Record<string, string> = {
   timestamp: "TEXT",
 };
 
+// With schemaVersion the row carries a version column; existing tables
+// without it fail validation with a migration hint instead of silently
+// writing unversioned rows.
+const VERSION_COLUMN = "version";
+
 const SQL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 
 /** Fail early when an existing table has a different schema than the logger. */
-const assertSchema = (database: Database, table: string): void => {
+const assertSchema = (database: Database, table: string, schemaVersion: boolean): void => {
   const columns = database.query(`PRAGMA table_info(${table})`).all() as {
     name: string;
     type: string;
   }[];
   const found = new Map(columns.map((column) => [column.name, column.type.toUpperCase()]));
+  const expected: Record<string, string> = schemaVersion
+    ? { ...EXPECTED_COLUMNS, [VERSION_COLUMN]: "INTEGER" }
+    : EXPECTED_COLUMNS;
   const missing: string[] = [];
   const mismatched: string[] = [];
-  for (const [name, expectedType] of Object.entries(EXPECTED_COLUMNS)) {
+  for (const [name, expectedType] of Object.entries(expected)) {
     const actualType = found.get(name);
     if (actualType === undefined) {
       missing.push(name);
@@ -39,7 +47,11 @@ const assertSchema = (database: Database, table: string): void => {
       missing.length > 0 ? `missing columns: ${missing.join(", ")}` : "",
       mismatched.length > 0 ? `unexpected column types: ${mismatched.join(", ")}` : "",
     ].filter(Boolean);
-    throw new Error(`sqlite table ${table} has an unexpected schema (${parts.join("; ")})`);
+    const hint =
+      schemaVersion && missing.includes(VERSION_COLUMN)
+        ? " - add it with ALTER TABLE or drop the schemaVersion option"
+        : "";
+    throw new Error(`sqlite table ${table} has an unexpected schema (${parts.join("; ")})${hint}`);
   }
 };
 
@@ -51,6 +63,7 @@ export const createSqliteAdapter = (
   if (!SQL_IDENTIFIER.test(table)) {
     throw new Error(`Invalid sqlite table name: ${table}`);
   }
+  const schemaVersion = options.schemaVersion === true;
 
   database.run(`
     CREATE TABLE IF NOT EXISTS ${table} (
@@ -59,19 +72,33 @@ export const createSqliteAdapter = (
       level TEXT NOT NULL,
       author TEXT NOT NULL,
       message TEXT NOT NULL,
-      context TEXT NOT NULL DEFAULT '{}'
+      context TEXT NOT NULL DEFAULT '{}'${schemaVersion ? `,\n      ${VERSION_COLUMN} INTEGER NOT NULL DEFAULT ${LOG_SCHEMA_VERSION}` : ""}
     )
   `);
 
-  assertSchema(database, table);
+  assertSchema(database, table, schemaVersion);
 
   const insert = database.prepare(
-    `INSERT INTO ${table} (timestamp, level, author, message, context) VALUES (?, ?, ?, ?, ?)`,
+    schemaVersion
+      ? `INSERT INTO ${table} (timestamp, level, author, message, context, ${VERSION_COLUMN}) VALUES (?, ?, ?, ?, ?, ?)`
+      : `INSERT INTO ${table} (timestamp, level, author, message, context) VALUES (?, ?, ?, ?, ?)`,
   );
 
   const insertMany = database.transaction((rows: LogRow[]) => {
-    for (const row of rows)
-      insert.run(row.timestamp, row.level, row.author, row.message, row.context);
+    if (schemaVersion) {
+      for (const row of rows)
+        insert.run(
+          row.timestamp,
+          row.level,
+          row.author,
+          row.message,
+          row.context,
+          LOG_SCHEMA_VERSION,
+        );
+    } else {
+      for (const row of rows)
+        insert.run(row.timestamp, row.level, row.author, row.message, row.context);
+    }
   });
 
   return {

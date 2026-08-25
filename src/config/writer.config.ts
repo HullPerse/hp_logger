@@ -7,3 +7,5 @@ export const DEFAULT_LOG_DIR = "logs";
 export const DEFAULT_TABLE_NAME = "logs";
 export const DEFAULT_MAX_BYTES = 10_485_760;
 export const DEFAULT_MAX_FILES = 5;
+/** Current log schema version written when schema stamping is enabled. */
+export const LOG_SCHEMA_VERSION = 1;

@@ -2,6 +2,7 @@ import type { sliceAnsi, wrapAnsi } from "bun";
 
 import { DEFAULT_LEVEL_COLORS, LEVEL_EMOJIS } from "../config/colors.config";
 import { LEVEL_NAMES } from "../config/levels.config";
+import { drawBox } from "../format/box.format";
 import { colorizeJsonString } from "../format/colorize.format";
 import { formatContext } from "../format/context.format";
 import { formatDuration } from "../format/duration.format";
@@ -109,9 +110,9 @@ export class ConsoleTransport implements Transport {
     return tag;
   }
 
-  private renderDefault(entry: LogEntry): string {
-    const levelColor = this.levelColors[entry.level];
-    const tag = (value: string): string => applyColor(levelColor, `[${value}]`);
+  /** Leading tag block of the default renderer: indent, time, level, author. */
+  private renderTags(entry: LogEntry): string {
+    const tag = (value: string): string => applyColor(this.levelColors[entry.level], `[${value}]`);
     let output = "";
 
     const { group } = entry.context;
@@ -133,6 +134,12 @@ export class ConsoleTransport implements Transport {
     if (this.settings.emoji) output += `${tag(LEVEL_EMOJIS[entry.level])} `;
     if (this.settings.showLevel) output += `${this.levelTags[entry.level]} `;
     if (this.settings.showAuthor) output += `${tag(this.authorName(entry.author))} `;
+    return output;
+  }
+
+  private renderDefault(entry: LogEntry): string {
+    const levelColor = this.levelColors[entry.level];
+    let output = this.renderTags(entry);
 
     // stripControl sanitizes only user-controlled text (message and
     // context) before tags/colors are applied, so our own ANSI codes and
@@ -142,24 +149,52 @@ export class ConsoleTransport implements Transport {
       this.settings.stripControl && entry.message
         ? stripControlCharacters(entry.message)
         : entry.message;
+    const box = this.settings.box === false ? undefined : this.settings.box;
     const errorBlock = formatPrettyErrorBlock(entry.context);
     if (errorBlock !== null) {
       // The block carries no styling of our own, so a full pass is safe.
       const block = this.settings.stripControl ? stripControlCharacters(errorBlock) : errorBlock;
+      if (box?.error === true) {
+        const framed = drawBox(block.split("\n"), {
+          color: levelColor,
+          width: this.boxWidth(),
+        });
+        return this.finalize(`${output}${message}\n${framed.join("\n")}`);
+      }
       output += `${message}\n${block}`;
       return this.finalize(output);
     }
-    const rawContext = formatContext(entry.context, this.settings.formatContext);
-    // Strip the data before coloring so our own color codes survive the pass.
-    let contextStr = rawContext;
-    if (this.settings.colorizeContext && this.settings.formatContext === "json") {
-      contextStr = colorizeJsonString(stripControlCharacters(rawContext));
-    } else if (this.settings.stripControl) {
-      contextStr = stripControlCharacters(rawContext);
+    if (box?.storm === true && entry.author === "adaptive") {
+      const framed = drawBox(message.split("\n"), { color: levelColor, width: this.boxWidth() });
+      return this.finalize(`${output.trimEnd()}\n${framed.join("\n")}`);
+    }
+    const contextStr = this.renderContext(entry);
+    if (box?.fatal === true && entry.level === "fatal") {
+      const framed = drawBox(`${message}${contextStr}`.split("\n"), {
+        color: levelColor,
+        width: this.boxWidth(),
+      });
+      return this.finalize(`${output.trimEnd()}\n${framed.join("\n")}`);
     }
     output += `${message}${contextStr}`;
 
     return this.finalize(output);
+  }
+
+  /** Inner width available for box content when prettyWrap is set. */
+  private boxWidth(): number | undefined {
+    return typeof this.settings.prettyWrap === "number"
+      ? Math.max(1, this.settings.prettyWrap - 4)
+      : undefined;
+  }
+
+  /** Context text with strip/color passes applied so our own ANSI codes survive. */
+  private renderContext(entry: LogEntry): string {
+    const raw = formatContext(entry.context, this.settings.formatContext);
+    if (this.settings.colorizeContext && this.settings.formatContext === "json") {
+      return colorizeJsonString(stripControlCharacters(raw));
+    }
+    return this.settings.stripControl ? stripControlCharacters(raw) : raw;
   }
 
   /** Apply prettyTruncate/prettyWrap to a rendered line, ANSI-safe on Bun. */
@@ -199,6 +234,8 @@ export class ConsoleTransport implements Transport {
       level: entry.level,
       message: entry.message,
       timestamp: entry.timestamp,
+      ...(entry.v === undefined ? {} : { v: entry.v }),
+      ...(entry.spanPath === undefined ? {} : { spanPath: entry.spanPath }),
       ...entry.context,
     });
     writeTracked(entry.level, output, false);

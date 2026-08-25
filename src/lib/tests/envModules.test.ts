@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveEnvModules } from "@/lib/settings.utils";
+import { matchEnvModule, resolveEnvModules } from "@/lib/settings.utils";
 import { captureLogger } from "@/lib/tests/test.transport";
 
 describe("resolveEnvModules", () => {
@@ -62,5 +62,44 @@ describe("LOG_MODULES application", () => {
     const messages = entries.map((item) => item.message);
     expect(messages).toContain("traced via star");
     expect(messages).not.toContain("suppressed by exact pair");
+  });
+});
+
+describe("LOG_MODULES wildcard prefixes", () => {
+  test("a trailing * matches the module and its children", () => {
+    const map = resolveEnvModules({ LOG_MODULES: "web*:debug" });
+    expect(matchEnvModule(map, "web")).toBe("debug");
+    expect(matchEnvModule(map, "web/api")).toBe("debug");
+    expect(matchEnvModule(map, "network")).toBeUndefined();
+  });
+
+  test("exact pairs beat wildcards, longer prefixes beat shorter ones", () => {
+    const map = resolveEnvModules({
+      LOG_MODULES: "web*:debug,web/api:trace,web/db*:fatal,*:warn",
+    });
+    expect(matchEnvModule(map, "web/api")).toBe("trace");
+    expect(matchEnvModule(map, "web/db/pool")).toBe("fatal");
+    expect(matchEnvModule(map, "web/other")).toBe("debug");
+    expect(matchEnvModule(map, "unrelated")).toBe("warn");
+  });
+
+  test("wildcards apply through logger.module()", () => {
+    const envModuleLevels = resolveEnvModules({ LOG_MODULES: "auth*:trace" });
+    const { entries, logger, transport } = captureLogger(
+      { level: "warn", mode: "json" },
+      envModuleLevels,
+    );
+
+    const authApi = logger.module("auth/api");
+    authApi.transport = transport;
+    authApi.trace("traced through wildcard");
+
+    const other = logger.module("other");
+    other.transport = transport;
+    other.trace("still suppressed");
+
+    const messages = entries.map((item) => item.message);
+    expect(messages).toContain("traced through wildcard");
+    expect(messages).not.toContain("still suppressed");
   });
 });

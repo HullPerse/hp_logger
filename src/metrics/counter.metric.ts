@@ -1,4 +1,4 @@
-import type { LabelValues } from "../types/metrics";
+import type { LabelValues, MetricSnapshot } from "../types/metrics";
 import { BaseMetric } from "./base.metric";
 
 /** Monotonically increasing counter. */
@@ -15,6 +15,15 @@ export class Counter extends BaseMetric {
   /** Current value for the given labels. */
   get(labels: LabelValues = {}): number {
     return this.values.get(this.labelKey(labels)) ?? 0;
+  }
+
+  snapshot(): MetricSnapshot {
+    return {
+      help: this.help,
+      name: this.name,
+      rows: BaseMetric.sortedSamples(this.values).map(([key, value]) => ({ key, value })),
+      type: this.type,
+    };
   }
 
   toText(): string {

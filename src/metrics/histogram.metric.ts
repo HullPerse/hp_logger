@@ -1,5 +1,10 @@
 import { DEFAULT_BUCKETS as defaultBuckets } from "../config/metrics.config";
-import type { HistogramEntry, HistogramOptions, LabelValues } from "../types/metrics";
+import type {
+  HistogramEntry,
+  HistogramOptions,
+  LabelValues,
+  MetricSnapshot,
+} from "../types/metrics";
 import { BaseMetric } from "./base.metric";
 
 /** Distribution of observations over configured buckets. */
@@ -25,23 +30,7 @@ export class Histogram extends BaseMetric {
     if (!Number.isFinite(q) || q < 0 || q > 1) {
       throw new Error("quantile must be a finite number between 0 and 1");
     }
-    const entry = this.entries.get(this.labelKey(labels));
-    if (entry === undefined || entry.count === 0) return Number.NaN;
-    const target = q * entry.count;
-    let previousCount = 0;
-    for (let i = 0; i < this.buckets.length; i += 1) {
-      const bucket = this.buckets[i];
-      const bucketCount = entry.bucketCounts[i] ?? 0;
-      if (bucket === undefined) continue;
-      if (bucketCount >= target) {
-        const inBucket = bucketCount - previousCount;
-        const previousBucket = i > 0 ? (this.buckets[i - 1] ?? 0) : 0;
-        const rankInBucket = inBucket === 0 ? 0 : (target - previousCount) / inBucket;
-        return previousBucket + (bucket - previousBucket) * rankInBucket;
-      }
-      previousCount = bucketCount;
-    }
-    return Number.NaN;
+    return this.quantileOf(this.entries.get(this.labelKey(labels)), q);
   }
 
   /** Record one observation for the given labels. */
@@ -66,6 +55,21 @@ export class Histogram extends BaseMetric {
     }
   }
 
+  snapshot(): MetricSnapshot {
+    return {
+      help: this.help,
+      name: this.name,
+      rows: this.sortedEntries().map(([key, entry]) => ({
+        count: entry.count,
+        key,
+        p50: this.quantileOf(entry, 0.5),
+        p95: this.quantileOf(entry, 0.95),
+        sum: entry.sum,
+      })),
+      type: this.type,
+    };
+  }
+
   toText(): string {
     const lines = this.headerLines();
     for (const [key, entry] of this.sortedEntries()) {
@@ -81,6 +85,25 @@ export class Histogram extends BaseMetric {
       );
     }
     return lines.join("\n");
+  }
+
+  private quantileOf(entry: HistogramEntry | undefined, q: number): number {
+    if (entry === undefined || entry.count === 0) return Number.NaN;
+    const target = q * entry.count;
+    let previousCount = 0;
+    for (let i = 0; i < this.buckets.length; i += 1) {
+      const bucket = this.buckets[i];
+      const bucketCount = entry.bucketCounts[i] ?? 0;
+      if (bucket === undefined) continue;
+      if (bucketCount >= target) {
+        const inBucket = bucketCount - previousCount;
+        const previousBucket = i > 0 ? (this.buckets[i - 1] ?? 0) : 0;
+        const rankInBucket = inBucket === 0 ? 0 : (target - previousCount) / inBucket;
+        return previousBucket + (bucket - previousBucket) * rankInBucket;
+      }
+      previousCount = bucketCount;
+    }
+    return Number.NaN;
   }
 
   private sortedEntries(): [string, HistogramEntry][] {

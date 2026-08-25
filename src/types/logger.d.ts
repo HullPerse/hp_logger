@@ -123,6 +123,25 @@ export interface BlackboxSettings {
   path?: string;
 }
 
+/** Which pretty-console blocks get an ASCII frame via `settings.box`. */
+export interface BoxSettings {
+  /** Frame error cause-chain blocks (context.error / context.reason). */
+  error?: boolean;
+  /** Frame the message and context of every fatal entry. */
+  fatal?: boolean;
+  /** Frame adaptive storm start/end notices (author "adaptive"). */
+  storm?: boolean;
+}
+
+/** Profiler aggregation options for measured durations. */
+export interface ProfileSettings {
+  /**
+   * Maximum distinct operation names tracked before new ones collapse into
+   * the `_other` label. Defaults to 64.
+   */
+  maxOperations?: number;
+}
+
 /** Options for a single `logger.task()` call. */
 export interface TaskOptions {
   /** Overrides settings.task.level for every entry of this task. */
@@ -182,6 +201,15 @@ export interface LoggerSettings {
   level?: LogLevel;
   /** Truncate message and context to this many characters. */
   maxMessageLength?: number;
+  /**
+   * Enrichment hook merged under every entry's context before serializers
+   * and redaction: request ids, tenant ids, feature flags. Receives the
+   * merged context and the entry level; returns the fields to add (an empty
+   * object adds nothing). Explicit call-site data wins over mixin fields;
+   * a throwing mixin contributes nothing. Mixin output is treated as
+   * untrusted input and passes through redaction like any other context.
+   */
+  mixin?: (context: LogContext, level: LogLevel) => LogContext;
   /** `pretty` tagged console output, `json` single-line structured output. */
   mode?: "pretty" | "json";
   /** Wrap pretty lines to this many terminal columns (Bun only, ANSI-safe). `false` disables. */
@@ -204,6 +232,12 @@ export interface LoggerSettings {
    * serializer masks the key with `[SERIALIZER ERROR]`.
    */
   serializers?: Record<string, (value: unknown) => unknown>;
+  /**
+   * Stamp every entry with `v: 1` (the current log schema version) so JSONL
+   * lines, black box dumps and database rows survive future format changes.
+   * Defaults to false - no field is added.
+   */
+  schemaVersion?: boolean;
   /**
    * Trace-coherent sampling: `rate` 0..1. Entries sharing a traceId are
    * kept or dropped as a whole trace; entries without a traceId are sampled
@@ -239,6 +273,20 @@ export interface LoggerSettings {
   task?: TaskSettings;
   /** Flight recorder ring dumped on crash or via `logger.dump()`. `false` disables. */
   blackbox?: BlackboxSettings | false;
+  /**
+   * ASCII box frames around dense pretty-console blocks (error cause chains,
+   * fatal snapshots, adaptive storm notices). Off by default; each element
+   * is opt-in. Applies to the default pretty renderer only - JSON, file and
+   * template output are untouched.
+   */
+  box?: BoxSettings | false;
+  /**
+   * Aggregate every measured duration (`time()`, `span()`, `task()`) into a
+   * per-operation histogram `hp_logger_operation_ms{operation}` shown by
+   * `logger.metricsBox()` and `metricsText()`. Distinct operation names are
+   * capped; overflow lands under `_other`. `false` disables.
+   */
+  profile?: boolean | ProfileSettings;
 }
 
 /**
@@ -283,12 +331,14 @@ export interface ResolvedSettings {
   formatTimestamp: TimestampFormat;
   level: LogLevel;
   maxMessageLength: number;
+  mixin: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
   mode: "pretty" | "json";
   prettyTruncate: number | false;
   prettyWrap: number | false;
   redactDepth: number;
   redactKeys: RegExp | null;
   redactPaths: string[];
+  schemaVersion: boolean;
   serializers: Record<string, (value: unknown) => unknown> | undefined;
   sampling: { perTrace: boolean; rate: number } | false;
   repeat: RepeatSettings | false;
@@ -302,6 +352,8 @@ export interface ResolvedSettings {
   tagCase: TagCase;
   task: { level: LogLevel; progress: boolean };
   blackbox: { path: string | undefined; size: number } | false;
+  box: { error: boolean; fatal: boolean; storm: boolean } | false;
+  profile: { maxOperations: number } | false;
 }
 
 export interface LogEntry {
@@ -309,6 +361,16 @@ export interface LogEntry {
   context: LogContext;
   level: LogLevel;
   message: string;
+  /**
+   * Schema version stamped on every entry when `settings.schemaVersion` is
+   * enabled, so stored JSONL lines can be detected and migrated later.
+   */
+  v?: number;
+  /**
+   * Active span names, root to leaf, for entries written inside a span or
+   * task callback. Logger-generated metadata outside the redacted context.
+   */
+  spanPath?: readonly string[];
   timestamp: string;
 }
 
@@ -340,6 +402,10 @@ export interface LoggerState {
   readonly blackbox?: { push: (entry: LogEntry) => void } | undefined;
   /** Per-key context transformers, applied before redaction. */
   readonly serializers?: Record<string, (value: unknown) => unknown> | undefined;
+  /** Enrichment hook merged under every entry context; undefined disables it. */
+  readonly mixin?: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
+  /** Stamp entries with the schema version field; undefined or false disables. */
+  readonly schemaVersion?: boolean | undefined;
   /** Sampling decision for a built entry; undefined disables sampling. */
   readonly sampler?: ((entry: LogEntry) => boolean) | undefined;
 }

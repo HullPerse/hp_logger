@@ -1,9 +1,15 @@
 import { writeFile } from "node:fs/promises";
 
+import { LruCache } from "../brain/lru.utils";
 import { RingBuffer } from "../brain/ring.utils";
 import { LOG_LEVELS } from "../config/levels.config";
 import { DEFAULT_AUTHOR } from "../config/logger.config";
-import { getAsyncContext, runWithContext } from "../core/context.core";
+import {
+  DEFAULT_OPERATION_BUCKETS,
+  OPERATION_METRIC_NAME,
+  PROFILE_OVERFLOW_LABEL,
+} from "../config/metrics.config";
+import { getAsyncContext, runWithContext, runWithSpanPath } from "../core/context.core";
 import {
   addGlobalTransport,
   clearGlobalTransports,
@@ -11,13 +17,16 @@ import {
   writeEntry,
 } from "../core/pipeline.core";
 import { getSpanRegistry, nextSpanId, nextTraceId } from "../core/span.core";
+import { drawBox } from "../format/box.format";
 import { formatDuration } from "../format/duration.format";
+import { renderMetricsTable } from "../format/metrics.format";
 import { renderSpanTree } from "../format/span.format";
 import { renderTable } from "../format/table.format";
 import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
 import { attemptAsync } from "../lib/result.utils";
 import { createSampler } from "../lib/sampling.utils";
 import {
+  matchEnvModule,
   mergeSettings,
   resolveEnvLevel,
   resolveEnvModules,
@@ -87,6 +96,8 @@ export class Logger implements LoggerState {
   redactValue!: (value: unknown) => unknown;
   sampler!: ((entry: LogEntry) => boolean) | undefined;
   serializers!: Record<string, (value: unknown) => unknown> | undefined;
+  mixin!: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
+  schemaVersion!: boolean | undefined;
   private currentSettings: ResolvedSettings;
   private readonly envModuleLevels: Map<string, LogLevel> | undefined;
   private blackboxRing: RingBuffer<LogEntry> | null = null;
@@ -94,6 +105,11 @@ export class Logger implements LoggerState {
   private metricsRegistryInstance: Registry | null = null;
   private autoCounter: Counter | null = null;
   private watchHandles: WatchHandle[] = [];
+  // Profiler state: operation name -> bounded label, plus the shared
+  // histogram. Both null when settings.profile is off (one null check on
+  // the measurement path).
+  private profileCache: LruCache<string, string> | null = null;
+  private profileHistogram: Histogram | null = null;
 
   constructor(
     author: string,
@@ -128,6 +144,8 @@ export class Logger implements LoggerState {
     this.hasFilters = settings.filters.length > 0;
     this.needsRedaction = settings.redactKeys !== null || settings.redactPaths.length > 0;
     this.serializers = settings.serializers;
+    this.mixin = settings.mixin;
+    this.schemaVersion = settings.schemaVersion ? true : undefined;
     this.sampler = settings.sampling
       ? createSampler(settings.sampling.rate, settings.sampling.perTrace)
       : undefined;
@@ -140,6 +158,21 @@ export class Logger implements LoggerState {
       this.blackboxRing ??= new RingBuffer(settings.blackbox.size);
     } else {
       this.blackboxRing = null;
+    }
+    if (settings.profile) {
+      // The cache bounds distinct operation labels before they reach the
+      // histogram, so its label map can never grow past the cap.
+      this.profileCache ??= new LruCache(settings.profile.maxOperations);
+      this.profileHistogram ??= new Histogram({
+        buckets: DEFAULT_OPERATION_BUCKETS,
+        help: "Duration of measured operations (time/span/task)",
+        labelNames: ["operation"],
+        name: OPERATION_METRIC_NAME,
+        registers: [this.metricsRegistry()],
+      });
+    } else {
+      this.profileCache = null;
+      this.profileHistogram = null;
     }
   }
 
@@ -199,6 +232,38 @@ export class Logger implements LoggerState {
   }
 
   /**
+   * Record one measured duration in the profiler histogram. The operation
+   * name is translated through an LRU so label cardinality stays bounded;
+   * names beyond the cap share the `_other` label. No-op when profiling is
+   * disabled.
+   */
+  private recordDuration(name: string, durationMs: number): void {
+    const cache = this.profileCache;
+    const histogram = this.profileHistogram;
+    if (cache === null || histogram === null) return;
+    let operation = cache.get(name);
+    if (operation === undefined) {
+      const limit =
+        this.currentSettings.profile === false ? 0 : this.currentSettings.profile.maxOperations;
+      operation = cache.size >= limit ? PROFILE_OVERFLOW_LABEL : name;
+      cache.set(name, operation);
+    }
+    histogram.observe({ operation }, durationMs);
+  }
+
+  /**
+   * Render every metric of this logger's registry as an ASCII-framed table
+   * and write it at the given level. Pretty console shows the frame; JSON,
+   * file and database transports receive the same plain-text table.
+   */
+  metricsBox(level: LogLevel = "info"): void {
+    const snapshots = this.metricsRegistryInstance?.snapshots() ?? [];
+    const body =
+      snapshots.length === 0 ? ["no metrics recorded"] : renderMetricsTable(snapshots).split("\n");
+    this.write(level, drawBox(body, { title: "metrics" }).join("\n"));
+  }
+
+  /**
    * Poll a url or a custom probe and log availability edges. Transitions are
    * logged automatically (success/warn); single probes stay silent unless
    * options.logProbes is set. Watchers are stopped by close().
@@ -232,7 +297,7 @@ export class Logger implements LoggerState {
 
   /** Create a named child module with optional settings override. */
   module(name: string, settingsOverride?: LoggerSettings): Logger {
-    const envLevel = this.envModuleLevels?.get(name) ?? this.envModuleLevels?.get("*");
+    const envLevel = matchEnvModule(this.envModuleLevels, name);
     const settings = settingsOverride
       ? mergeSettings(this.currentSettings, settingsOverride)
       : this.currentSettings;
@@ -373,6 +438,7 @@ export class Logger implements LoggerState {
   ): void {
     const slow = options.maxMs !== undefined && durationMs > options.maxMs;
     const level = slow ? "warn" : (options.level ?? "success");
+    this.recordDuration(name, durationMs);
     this.write(level, `${name} completed in ${formatDuration(durationMs)}`, {
       durationMs,
       operation: name,
@@ -467,18 +533,20 @@ export class Logger implements LoggerState {
 
     if (callback === undefined) return handle;
 
-    return runWithContext(spanContext, async () => {
-      try {
-        const result = (await callback(handle)) as T;
-        if (handle.ended) return result;
-        handle.end();
-        return result;
-      } catch (error: unknown) {
-        if (handle.ended) throw error;
-        handle.end("error");
-        throw error;
-      }
-    });
+    return runWithSpanPath(name, () =>
+      runWithContext(spanContext, async () => {
+        try {
+          const result = (await callback(handle)) as T;
+          if (handle.ended) return result;
+          handle.end();
+          return result;
+        } catch (error: unknown) {
+          if (handle.ended) throw error;
+          handle.end("error");
+          throw error;
+        }
+      }),
+    );
   }
 
   /** Render the span tree for a trace (default: most recent) as an ASCII tree. */
@@ -544,6 +612,7 @@ export class Logger implements LoggerState {
           ? `${name} done in ${formatDuration(durationMs)}${suffix}`
           : `${name} failed in ${formatDuration(durationMs)}${suffix}`;
         const level: LogLevel = ok ? "success" : "error";
+        this.recordDuration(name, durationMs);
         this.write(level, message, {
           durationMs,
           ...(error === undefined ? {} : { error }),
@@ -599,16 +668,18 @@ export class Logger implements LoggerState {
 
     if (callback === undefined) return handle;
 
-    return runWithContext({ ...spanContext, group: childGroup }, async () => {
-      try {
-        const result = (await callback(handle)) as T;
-        finish(true);
-        return result;
-      } catch (error: unknown) {
-        finish(false, error instanceof Error ? error : String(error));
-        throw error;
-      }
-    });
+    return runWithSpanPath(name, () =>
+      runWithContext({ ...spanContext, group: childGroup }, async () => {
+        try {
+          const result = (await callback(handle)) as T;
+          finish(true);
+          return result;
+        } catch (error: unknown) {
+          finish(false, error instanceof Error ? error : String(error));
+          throw error;
+        }
+      }),
+    );
   }
 
   /** Render rows as a plain-text table and log it at the given level. */

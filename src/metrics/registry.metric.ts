@@ -1,4 +1,4 @@
-import type { Metric } from "../types/metrics";
+import type { Metric, MetricSnapshot, MetricSnapshotProvider } from "../types/metrics";
 
 /** Collects metrics and renders them in Prometheus text format. */
 export class Registry {
@@ -24,5 +24,19 @@ export class Registry {
       .map((metric) => metric.toText())
       .join("\n")
       .concat("\n");
+  }
+
+  /**
+   * Plain-data views of all metrics sorted by name. Foreign Metric
+   * implementations without snapshot support are skipped.
+   */
+  snapshots(): MetricSnapshot[] {
+    const sorted = [...this.registered.values()].toSorted((a, b) => a.name.localeCompare(b.name));
+    const out: MetricSnapshot[] = [];
+    for (const metric of sorted) {
+      const snapshot = (metric as Partial<MetricSnapshotProvider>).snapshot?.call(metric);
+      if (snapshot !== undefined) out.push(snapshot);
+    }
+    return out;
   }
 }

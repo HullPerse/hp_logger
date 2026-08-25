@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { EMPTY_CONTEXT } from "../config/context.config";
+import { SPAN_PATH_MAX_DEPTH } from "../config/logger.config";
 import type { LogContext } from "../types/logger";
 
 const asyncStorage = new AsyncLocalStorage<LogContext>();
@@ -17,6 +18,33 @@ export const runWithContext = <T>(context: LogContext, fn: () => T): T => {
 /** The async-local context of the current call, if any was ever created. */
 export const getAsyncContext = (): LogContext | undefined =>
   asyncContextUsed ? asyncStorage.getStore() : undefined;
+
+/**
+ * Active span names, root to leaf, tracked beside the log context so
+ * redaction (which summarizes arrays) never touches them. Appending stops
+ * at SPAN_PATH_MAX_DEPTH to bound hostile recursion.
+ */
+const spanPathStorage = new AsyncLocalStorage<readonly string[]>();
+let spanPathUsed = false;
+
+/** Run a function with one more span name appended to the active path. */
+export const runWithSpanPath = <T>(name: string, fn: () => T): T => {
+  spanPathUsed = true;
+  const inherited = spanPathStorage.getStore();
+  let next: readonly string[];
+  if (inherited === undefined) {
+    next = [name];
+  } else if (inherited.length < SPAN_PATH_MAX_DEPTH) {
+    next = [...inherited, name];
+  } else {
+    next = inherited;
+  }
+  return spanPathStorage.run(next, fn);
+};
+
+/** The active span path of the current call, if any was ever created. */
+export const getActiveSpanPath = (): readonly string[] | undefined =>
+  spanPathUsed ? spanPathStorage.getStore() : undefined;
 
 /** Merge static, lazy and async contexts into the final entry context. */
 export const mergeEntryContext = (

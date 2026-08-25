@@ -1,5 +1,5 @@
 import { LABEL_NAME_PATTERN, METRIC_NAME_PATTERN } from "../config/metrics.config";
-import type { LabelValues, MetricOptions, MetricType } from "../types/metrics";
+import type { LabelValues, MetricOptions, MetricSnapshot, MetricType } from "../types/metrics";
 
 /** Base class with name validation and label serialization. */
 export abstract class BaseMetric {
@@ -9,6 +9,8 @@ export abstract class BaseMetric {
   abstract readonly type: MetricType;
   /** Prometheus text format lines for this metric. */
   abstract toText(): string;
+  /** Plain-data view for table rendering. */
+  abstract snapshot(): MetricSnapshot;
 
   constructor(options: MetricOptions) {
     if (!METRIC_NAME_PATTERN.test(options.name)) {

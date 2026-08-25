@@ -1,4 +1,5 @@
 import { EMPTY_CONTEXT } from "../config/context.config";
+import { LOG_SCHEMA_VERSION } from "../config/writer.config";
 import type {
   LazyContext,
   LazyMessage,
@@ -7,7 +8,7 @@ import type {
   LogLevel,
   LoggerState,
 } from "../types/logger";
-import { getAsyncContext, mergeEntryContext } from "./context.core";
+import { getActiveSpanPath, getAsyncContext, mergeEntryContext } from "./context.core";
 import { isFiltered } from "./filter.core";
 
 const sanitizeMessage = (
@@ -81,8 +82,10 @@ export const buildEntry = (
     hasFilters,
     hasStaticContext,
     maxMessageLength,
+    mixin,
     needsRedaction,
     redactValue,
+    schemaVersion,
   } = state;
 
   const safeMessage = sanitizeMessage(message, needsRedaction, redactValue, maxMessageLength);
@@ -97,6 +100,22 @@ export const buildEntry = (
   } catch {
     // Hostile context (throwing getters) still logs, with a marker instead.
     finalContext = { contextError: "unserializable context" };
+  }
+  // Mixin fields sit under explicit data: the spread order makes call-site
+  // and async context win. A throwing mixin contributes nothing, and so does
+  // a non-object return.
+  if (mixin !== undefined) {
+    let injected: LogContext | undefined;
+    try {
+      const outcome: unknown = mixin(finalContext, level);
+      injected =
+        typeof outcome === "object" && outcome !== null ? (outcome as LogContext) : undefined;
+    } catch {
+      injected = undefined;
+    }
+    if (injected !== undefined && Object.keys(injected).length > 0) {
+      finalContext = { ...injected, ...finalContext };
+    }
   }
   let safeContext: LogContext;
   try {
@@ -117,6 +136,10 @@ export const buildEntry = (
     message: safeMessage,
     timestamp: state.timestamp(),
   };
+  if (schemaVersion) entry.v = LOG_SCHEMA_VERSION;
+  // Logger-generated metadata, outside context so redaction never masks it.
+  const spanPath = getActiveSpanPath();
+  if (spanPath !== undefined && spanPath.length > 0) entry.spanPath = spanPath;
 
   if (hasFilters && isFiltered(filters, entry)) return null;
   return entry;

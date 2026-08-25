@@ -29,6 +29,30 @@ export interface HistogramOptions extends MetricOptions {
   buckets?: readonly number[];
 }
 
+/** One label set of a metric with its current values. */
+export interface MetricRow {
+  count?: number;
+  /** Serialized label key as in Prometheus text, "" when unlabeled. */
+  key: string;
+  p50?: number;
+  p95?: number;
+  sum?: number;
+  value?: number;
+}
+
+/** Plain-data view of one metric for table rendering (`logger.metricsBox`). */
+export interface MetricSnapshot {
+  help: string;
+  name: string;
+  rows: MetricRow[];
+  type: MetricType;
+}
+
+/** Implemented by the built-in metrics so registries can expose snapshots. */
+export interface MetricSnapshotProvider {
+  snapshot: () => MetricSnapshot;
+}
+
 /** Per-label-set histogram state. */
 export interface HistogramEntry {
   bucketCounts: number[];

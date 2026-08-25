@@ -135,6 +135,12 @@ export interface QueuedEntry {
 export interface SqliteAdapterOptions {
   /** Table name for log entries. Defaults to `logs`. */
   table?: string;
+  /**
+   * Add and require a `version` INTEGER column holding the current log
+   * schema version. Tables created without the column fail validation with
+   * a migration hint. Defaults to false.
+   */
+  schemaVersion?: boolean;
 }
 
 /** Row shape persisted by the sqlite adapter. */
