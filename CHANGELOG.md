@@ -3,7 +3,7 @@
 Notable changes to hp_logger. Versions follow semver; the package is 0.x, so
 minor bumps may contain breaking renames.
 
-## 0.8.0 - 2026-08-25
+## 0.8.1 - 2026-08-25
 
 ### Added
 
