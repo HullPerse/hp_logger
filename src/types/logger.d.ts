@@ -177,6 +177,13 @@ export interface LoggerSettings {
   adaptive?: AdaptiveSettings | false;
   /** Async batching for the console/file transports. `false` disables. */
   batching?: BatchingSettings | false;
+  /**
+   * Attach the caller location ("file:line:col", first stack frame outside
+   * this package) to every error and fatal entry as a clickable link in
+   * pretty output. Costs one stack capture per qualifying entry; info and
+   * debug never pay it. Defaults to false.
+   */
+  callSite?: boolean;
   /** Per-level colors in pretty mode. `false` disables all colors. */
   colors?: false | LevelColors;
   /** Persist entries to a database through an adapter. `false` disables. */
@@ -318,6 +325,7 @@ export interface FormatSettings {
 export interface ResolvedSettings {
   adaptive: AdaptiveSettings | false;
   batching: BatchingSettings | false;
+  callSite: boolean;
   colorizeContext: boolean;
   colors: false | LevelColors;
   stripControl: boolean;
@@ -371,6 +379,11 @@ export interface LogEntry {
    * task callback. Logger-generated metadata outside the redacted context.
    */
   spanPath?: readonly string[];
+  /**
+   * Caller location ("path:line:col", first frame outside this package) on
+   * error and fatal entries when `settings.callSite` is enabled.
+   */
+  callSite?: string;
   timestamp: string;
 }
 
@@ -417,6 +430,8 @@ export interface LoggerState {
   readonly mixin?: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
   /** Stamp entries with the schema version field; undefined or false disables. */
   readonly schemaVersion?: boolean | undefined;
+  /** Attach caller location to error/fatal entries; undefined or false disables. */
+  readonly callSite?: boolean | undefined;
   /** Sampling decision for a built entry; undefined disables sampling. */
   readonly sampler?: ((entry: LogEntry) => boolean) | undefined;
 }

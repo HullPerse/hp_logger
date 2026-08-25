@@ -1,3 +1,4 @@
+import { captureCaller } from "../lib/callsite.utils";
 import type { LazyContext, LazyMessage, LogEntry, LogLevel, LoggerState } from "../types/logger";
 import type { Transport } from "../types/transport";
 
@@ -41,6 +42,11 @@ export const writeEntry = (
     return;
   }
   if (entry === null) return;
+  // Call-site capture sits after the builders so the compiled fast path
+  // stays untouched; only error/fatal entries pay for the stack walk.
+  if (state.callSite && (level === "error" || level === "fatal")) {
+    entry.callSite = captureCaller();
+  }
   state.blackbox?.push(entry);
   // Sampling sits after the black box: the flight recorder keeps everything,
   // only the transports are sampled. error/fatal always pass.

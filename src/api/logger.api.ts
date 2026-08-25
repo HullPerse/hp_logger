@@ -99,6 +99,7 @@ export class Logger implements LoggerState {
   serializers!: Record<string, (value: unknown) => unknown> | undefined;
   mixin!: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
   schemaVersion!: boolean | undefined;
+  callSite!: boolean | undefined;
   entryPlan!: (
     state: LoggerState,
     level: LogLevel,
@@ -153,6 +154,7 @@ export class Logger implements LoggerState {
     this.serializers = settings.serializers;
     this.mixin = settings.mixin;
     this.schemaVersion = settings.schemaVersion ? true : undefined;
+    this.callSite = settings.callSite ? true : undefined;
     this.sampler = settings.sampling
       ? createSampler(settings.sampling.rate, settings.sampling.perTrace)
       : undefined;

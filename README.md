@@ -39,14 +39,16 @@ logger.info("server started", { port: 3000 });
 - **Levels** - trace to fatal, per-module loggers, runtime setting patches.
 - **Mixin hook** - merge request ids or tenant ids under every entry; explicit data wins, output still passes redaction.
 - **Redaction** - passwords, tokens and bearer strings are masked before any transport sees them; `redactPaths` targets exact dot paths like `user.password`.
-- **Output modes** - tagged pretty output on TTY, JSON lines in pipes and files, template-based custom lines, custom formatters.
-- **File output** - single file, daily rotation, or size-based rotation with retention and optional gzip; optional per-level files (`app.error.log`).
+- **Output modes** - tagged pretty output on TTY, JSON lines in pipes and files, template-based custom lines, custom formatters, registered custom tokens (`registerToken`).
+- **File output** - single file, daily rotation, or size-based rotation with retention and optional gzip; optional per-level files (`app.error.log`); optional fsync on close.
 - **Database output** - ready-made SQLite adapter plus a generic adapter interface; self-healing rebuilds a dead adapter from a factory and drains the backlog.
 - **Batching** - async batched writes with a bounded queue, delivery stats and severity-triggered flushes.
 - **Flood control** - collapse repeats, once/throttle keys, adaptive sampling during error storms.
 - **Spans and traces** - manual and callback spans with AsyncLocalStorage propagation, a trace tree renderer, and `spanPath` on entries written inside a scope.
+- **Call-site links** - opt-in `callSite` attaches a clickable `path:line:col` to error and fatal entries.
 - **Black box** - a ring of recent entries dumped to a JSONL file and flushed on crash, so buffered logs survive process death.
-- **Watch** - poll endpoints or custom probes and log availability edges.
+- **Watch** - poll endpoints or custom probes and log availability edges, with optional exponential backoff and jitter on failures.
+- **Worker offload** - `hp_logger/worker` moves serialization and IO to a background thread that restarts itself after a crash.
 - **Metrics** - zero-dependency Counter, Gauge, Histogram and Registry in Prometheus text format, with snapshot helpers.
 - **Box drawing** - optional ASCII frames around error chains, fatal bodies and storm notices in pretty output.
 - **Web viewer** - optional HTTP endpoint serving the last N entries from memory.

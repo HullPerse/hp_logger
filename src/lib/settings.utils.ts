@@ -105,8 +105,7 @@ const TAG_DEFAULTS: TagSettings = {
 
 const TAG_KEYS = Object.keys(TAG_DEFAULTS) as (keyof TagSettings)[];
 
-const pickTags = (source: Record<keyof TagSettings, unknown>): TagSettings =>
-{
+const pickTags = (source: Record<keyof TagSettings, unknown>): TagSettings => {
   // Keyed writes need the record view: TypeScript cannot correlate a union
   // key with its value type in a direct assignment.
   const out = {} as Record<keyof TagSettings, unknown>;
@@ -290,6 +289,7 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
     batching: settings.batching ?? false,
     blackbox: blackboxBlock.resolve(settings),
     box: boxBlock.resolve(settings),
+    callSite: settings.callSite ?? false,
     colorizeContext: tags.colorizeContext,
     colors: settings.colors ?? {},
     database: settings.database ?? false,
@@ -336,6 +336,7 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
     batching: patch.batching ?? base.batching,
     blackbox: blackboxBlock.merge(base.blackbox, patch),
     box: boxBlock.merge(base.box, patch),
+    callSite: patch.callSite ?? base.callSite,
     colorizeContext: tags.colorizeContext,
     colors: patch.colors ?? base.colors,
     database: patch.database ?? base.database,

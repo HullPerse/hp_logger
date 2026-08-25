@@ -150,6 +150,8 @@ export class ConsoleTransport implements Transport {
         ? stripControlCharacters(entry.message)
         : entry.message;
     const box = this.settings.box === false ? undefined : this.settings.box;
+    // The pipeline attaches callSite only to error/fatal entries; presence alone gates rendering.
+    const site = entry.callSite ? ` ${this.callSiteLink(entry.callSite)}` : "";
     const errorBlock = formatPrettyErrorBlock(entry.context);
     if (errorBlock !== null) {
       // The block carries no styling of our own, so a full pass is safe.
@@ -159,9 +161,9 @@ export class ConsoleTransport implements Transport {
           color: levelColor,
           width: this.boxWidth(),
         });
-        return this.finalize(`${output}${message}\n${framed.join("\n")}`);
+        return this.finalize(`${output}${message}\n${framed.join("\n")}${site}`);
       }
-      output += `${message}\n${block}`;
+      output += `${message}${site}\n${block}`;
       return this.finalize(output);
     }
     if (box?.storm === true && entry.author === "adaptive") {
@@ -174,9 +176,9 @@ export class ConsoleTransport implements Transport {
         color: levelColor,
         width: this.boxWidth(),
       });
-      return this.finalize(`${output.trimEnd()}\n${framed.join("\n")}`);
+      return this.finalize(`${output.trimEnd()}\n${framed.join("\n")}${site}`);
     }
-    output += `${message}${contextStr}`;
+    output += `${message}${contextStr}${site}`;
 
     return this.finalize(output);
   }
@@ -186,6 +188,18 @@ export class ConsoleTransport implements Transport {
     return typeof this.settings.prettyWrap === "number"
       ? Math.max(1, this.settings.prettyWrap - 4)
       : undefined;
+  }
+
+  /**
+   * Terminal hyperlink for the entry's captured call site. The OSC 8
+   * sequence is logger-generated (never logged data), so stripControl
+   * deliberately does not touch it.
+   */
+  private callSiteLink(raw: string): string {
+    const posix = raw.replaceAll("\\", "/");
+    const href = `file://${posix.startsWith("/") ? "" : "/"}${encodeURI(posix)}`;
+    const styled = this.settings.colors === false ? raw : applyColor("gray", raw);
+    return `\u001B]8;;${href}\u0007${styled}\u001B]8;;\u0007`;
   }
 
   /** Context text with strip/color passes applied so our own ANSI codes survive. */
@@ -235,7 +249,8 @@ export class ConsoleTransport implements Transport {
       message: entry.message,
       timestamp: entry.timestamp,
       ...(entry.v === undefined ? {} : { v: entry.v }),
-      ...(entry.spanPath === undefined ? {} : { spanPath: entry.spanPath }),
+      ...(entry.spanPath ? { spanPath: entry.spanPath } : {}),
+      ...(entry.callSite ? { callSite: entry.callSite } : {}),
       ...entry.context,
     });
     writeTracked(entry.level, output, false);
