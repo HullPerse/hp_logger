@@ -1,7 +1,7 @@
-import { createLogger } from "./logger.api";
-import type { Logger } from "./logger.api";
 import { resolveEnvLevel } from "../lib/settings.utils";
 import type { LoggerSettings } from "../types/logger";
+import { createLogger } from "./logger.api";
+import type { Logger } from "./logger.api";
 
 const isFalse = (value: string | undefined): boolean =>
   value !== undefined && (value === "0" || value.toLowerCase() === "false");

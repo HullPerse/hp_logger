@@ -1,5 +1,4 @@
 import { EMPTY_CONTEXT } from "../config/context.config";
-
 import type {
   LazyContext,
   LazyMessage,
@@ -101,7 +100,11 @@ export const buildEntry = (
   }
   let safeContext: LogContext;
   try {
-    safeContext = sanitizeContext(applySerializers(finalContext, state.serializers), needsRedaction, redactValue);
+    safeContext = sanitizeContext(
+      applySerializers(finalContext, state.serializers),
+      needsRedaction,
+      redactValue,
+    );
   } catch {
     safeContext = { contextError: "unserializable context" };
   }

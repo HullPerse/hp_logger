@@ -2,8 +2,8 @@ import { SPINNER_FRAMES, TASK_GLYPHS } from "../config/colors.config";
 import { applyColor } from "../lib/color.utils";
 import { stripControlCharacters } from "../lib/json.utils";
 import type { ColorName, ContextFormat, LogEntry, LogLevel, TagCase } from "../types/logger";
-import { formatDuration } from "./duration.format";
 import { formatContext } from "./context.format";
+import { formatDuration } from "./duration.format";
 import { caseTag } from "./tag.format";
 
 /** A `{name}` or `{:color}text{:/}` piece of a parsed template. */
@@ -83,7 +83,7 @@ export const parseTemplate = (source: string): TemplatePart[] => {
     }
   };
 
-  for (let i = 0; i < source.length; ) {
+  for (let i = 0; i < source.length;) {
     const char = source[i];
     if (char === "\\" && (source[i + 1] === "{" || source[i + 1] === "}")) {
       literal += source[i + 1];
@@ -202,9 +202,7 @@ const resolveTaskToken = (name: string, entry: LogEntry): string => {
     }
     case "task.frame": {
       const { frame } = entry.context;
-      return typeof frame === "number"
-        ? (SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "")
-        : "";
+      return typeof frame === "number" ? (SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "") : "";
     }
     default: {
       // "task.glyph": the only remaining task token.
@@ -248,7 +246,7 @@ const resolveToken = (name: string, entry: LogEntry, env: TemplateEnv): string =
       if (name.startsWith("timestamp.")) {
         return resolveTimestampField(name.slice("timestamp.".length), entry.timestamp);
       }
-        const value = entry.context[name];
+      const value = entry.context[name];
       if (value === undefined) return "";
       if (typeof value === "object") return JSON.stringify(value);
       return String(value);
@@ -257,7 +255,11 @@ const resolveToken = (name: string, entry: LogEntry, env: TemplateEnv): string =
 };
 
 /** Render a parsed template for an entry; colors only when `env.colorize`. */
-export const renderTemplate = (parts: TemplatePart[], entry: LogEntry, env: TemplateEnv): string => {
+export const renderTemplate = (
+  parts: TemplatePart[],
+  entry: LogEntry,
+  env: TemplateEnv,
+): string => {
   let output = "";
   for (const part of parts) {
     const raw = part.kind === "literal" ? part.value : resolveToken(part.value, entry, env);

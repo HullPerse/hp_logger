@@ -15,7 +15,10 @@ const ANSI_CODES: Record<ColorName, readonly [open: string, close: string]> = {
   yellow: ["\u001B[33m", "\u001B[39m"],
 };
 
-const style = (open: string, close: string) => (text: string): string => `${open}${text}${close}`;
+const style =
+  (open: string, close: string) =>
+  (text: string): string =>
+    `${open}${text}${close}`;
 
 /** Bold text. */
 export const bold = style("\u001B[1m", "\u001B[22m");

@@ -144,7 +144,6 @@ export interface TaskHandle {
   update: (text: string, context?: LogContext) => void;
 }
 
-
 /** A node in the rendered span tree. */
 export interface SpanNode {
   record: SpanRecord;

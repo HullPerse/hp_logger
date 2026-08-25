@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { RepeatTransport } from "@/writer/repeat.writer";
 import type { LogEntry } from "@/types/logger";
+import { RepeatTransport } from "@/writer/repeat.writer";
 
 const entry = (message: string, context: Record<string, unknown> = {}): LogEntry => ({
   author: "TEST",
@@ -57,9 +57,21 @@ describe("RepeatTransport", () => {
 
   test("errors group by message, name and first stack frame", async () => {
     const { entries, transport } = captured();
-    const errorA = { message: "db down", name: "DatabaseError", stack: "DatabaseError: db down\n    at query (src/db.ts:5)" };
-    const errorB = { message: "db down", name: "DatabaseError", stack: "DatabaseError: db down\n    at query (src/db.ts:5)" };
-    const errorC = { message: "db down", name: "DatabaseError", stack: "DatabaseError: db down\n    at other (src/db.ts:9)" };
+    const errorA = {
+      message: "db down",
+      name: "DatabaseError",
+      stack: "DatabaseError: db down\n    at query (src/db.ts:5)",
+    };
+    const errorB = {
+      message: "db down",
+      name: "DatabaseError",
+      stack: "DatabaseError: db down\n    at query (src/db.ts:5)",
+    };
+    const errorC = {
+      message: "db down",
+      name: "DatabaseError",
+      stack: "DatabaseError: db down\n    at other (src/db.ts:9)",
+    };
 
     transport.write(entry("boom", { error: errorA }));
     transport.write(entry("boom", { error: errorB }));
@@ -91,12 +103,7 @@ describe("RepeatTransport", () => {
     // Duplicates are not re-written; the overflowing least-recently-used
     // group (first, which only received a duplicate) is evicted and its
     // summary is flushed.
-    expect(entries.map((item) => item.message)).toEqual([
-      "first",
-      "second",
-      "third",
-      "first ×2",
-    ]);
+    expect(entries.map((item) => item.message)).toEqual(["first", "second", "third", "first ×2"]);
     await transport.close();
   });
 

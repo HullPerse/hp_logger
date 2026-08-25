@@ -3,10 +3,15 @@ import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import {
+  buildTraceparent,
+  parseTraceparent,
+  randomSpanId,
+  randomTraceId,
+} from "@/core/traceparent.core";
 import { createLogger } from "@/index.logger";
-import { captureLogger } from "@/testing";
-import { buildTraceparent, parseTraceparent, randomSpanId, randomTraceId } from "@/core/traceparent.core";
 import { createSampler } from "@/lib/sampling.utils";
+import { captureLogger } from "@/testing";
 import type { LogEntry } from "@/types/logger";
 
 const TRACE = "4bf92f3577b34da6a3ce929d0e0e4736";
@@ -49,9 +54,13 @@ describe("span trace seeding", () => {
     const { entries, logger } = captureLogger({ mode: "json" });
     const parent = parseTraceparent(buildTraceparent({ spanId: SPAN, traceId: TRACE }));
 
-    await logger.span("downstream", { parentSpanId: parent?.spanId, traceId: parent?.traceId }, async () => {
-      logger.info("inside downstream");
-    });
+    await logger.span(
+      "downstream",
+      { parentSpanId: parent?.spanId, traceId: parent?.traceId },
+      async () => {
+        logger.info("inside downstream");
+      },
+    );
 
     const started = entries[0] as LogEntry;
     expect(started.context.traceId).toBe(TRACE);

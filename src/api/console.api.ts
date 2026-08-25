@@ -1,7 +1,7 @@
-import type { Logger } from "./logger.api";
-import { isLoggerWriting } from "../writer/console.writer";
 import { safeStringify } from "../lib/json.utils";
 import type { LogLevel } from "../types/logger";
+import { isLoggerWriting } from "../writer/console.writer";
+import type { Logger } from "./logger.api";
 
 /** Handle returned by `captureConsole` - call `restore()` to undo. */
 export interface ConsoleCaptureHandle {

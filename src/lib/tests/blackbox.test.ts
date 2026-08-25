@@ -34,7 +34,10 @@ describe("black box", () => {
   });
 
   test("dump appends consecutive dumps to the same file", async () => {
-    const { logger } = captureLogger({ blackbox: { path: path.join(workdir, "append.jsonl") }, level: "debug" });
+    const { logger } = captureLogger({
+      blackbox: { path: path.join(workdir, "append.jsonl") },
+      level: "debug",
+    });
 
     logger.info("first-wave");
     expect(await logger.dump()).toBe(path.join(workdir, "append.jsonl"));

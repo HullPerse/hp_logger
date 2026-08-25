@@ -1,27 +1,33 @@
+import { writeFile } from "node:fs/promises";
+
+import { RingBuffer } from "../brain/ring.utils";
 import { LOG_LEVELS } from "../config/levels.config";
 import { DEFAULT_AUTHOR } from "../config/logger.config";
-import { RingBuffer } from "../brain/ring.utils";
 import { getAsyncContext, runWithContext } from "../core/context.core";
-import { getSpanRegistry, nextSpanId, nextTraceId } from "../core/span.core";
-import { Counter } from "../metrics/counter.metric";
-import { Gauge } from "../metrics/gauge.metric";
-import { Histogram } from "../metrics/histogram.metric";
-import { Registry } from "../metrics/registry.metric";
 import {
   addGlobalTransport,
   clearGlobalTransports,
   removeGlobalTransport,
   writeEntry,
 } from "../core/pipeline.core";
+import { getSpanRegistry, nextSpanId, nextTraceId } from "../core/span.core";
 import { formatDuration } from "../format/duration.format";
 import { renderSpanTree } from "../format/span.format";
 import { renderTable } from "../format/table.format";
 import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
 import { attemptAsync } from "../lib/result.utils";
 import { createSampler } from "../lib/sampling.utils";
-import { mergeSettings, resolveEnvLevel, resolveEnvModules, resolveSettings } from "../lib/settings.utils";
+import {
+  mergeSettings,
+  resolveEnvLevel,
+  resolveEnvModules,
+  resolveSettings,
+} from "../lib/settings.utils";
+import { Counter } from "../metrics/counter.metric";
+import { Gauge } from "../metrics/gauge.metric";
+import { Histogram } from "../metrics/histogram.metric";
+import { Registry } from "../metrics/registry.metric";
 import { redact } from "../redact/index.redact";
-import { writeFile } from "node:fs/promises";
 import type {
   CreateLoggerOptions,
   LazyContext,
@@ -32,13 +38,13 @@ import type {
   LogLevel,
   LoggerSettings,
   LoggerState,
-   ResolvedSettings,
-   SpanHandle,
-   TaskHandle,
-   TaskOptions,
-   TimeOptions,
-   TimestampFormat,
- } from "../types/logger";
+  ResolvedSettings,
+  SpanHandle,
+  TaskHandle,
+  TaskOptions,
+  TimeOptions,
+  TimestampFormat,
+} from "../types/logger";
 import type { MetricOptions } from "../types/metrics";
 import type { Transport } from "../types/transport";
 import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch";
@@ -129,8 +135,7 @@ export class Logger implements LoggerState {
     this.redactValue =
       redactKeys === null && settings.redactPaths.length === 0
         ? identity
-        : (value) =>
-            redact(value, redactKeys, settings.redactDepth, 0, settings.redactPaths);
+        : (value) => redact(value, redactKeys, settings.redactDepth, 0, settings.redactPaths);
     if (settings.blackbox) {
       this.blackboxRing ??= new RingBuffer(settings.blackbox.size);
     } else {
@@ -182,7 +187,9 @@ export class Logger implements LoggerState {
   }
 
   /** Create a histogram bound to this logger's registry. */
-  histogram(options: Omit<MetricOptions, "registers"> & { buckets?: readonly number[] }): Histogram {
+  histogram(
+    options: Omit<MetricOptions, "registers"> & { buckets?: readonly number[] },
+  ): Histogram {
     return new Histogram({ ...options, registers: [this.metricsRegistry()] });
   }
 
@@ -225,13 +232,19 @@ export class Logger implements LoggerState {
 
   /** Create a named child module with optional settings override. */
   module(name: string, settingsOverride?: LoggerSettings): Logger {
-    const envLevel =
-      this.envModuleLevels?.get(name) ?? this.envModuleLevels?.get("*");
+    const envLevel = this.envModuleLevels?.get(name) ?? this.envModuleLevels?.get("*");
     const settings = settingsOverride
       ? mergeSettings(this.currentSettings, settingsOverride)
       : this.currentSettings;
     if (envLevel === undefined || envLevel === settings.level) {
-      return new Logger(name, settings, { ...this.context }, false, undefined, this.envModuleLevels);
+      return new Logger(
+        name,
+        settings,
+        { ...this.context },
+        false,
+        undefined,
+        this.envModuleLevels,
+      );
     }
     return new Logger(
       name,
@@ -399,13 +412,15 @@ export class Logger implements LoggerState {
    * inside the callback (including child spans) carry the span and trace ids.
    */
   span<T>(name: string, callback: (span: SpanHandle) => T | Promise<T>): Promise<T>;
-  span<T>(name: string, options: TimeOptions, callback: (span: SpanHandle) => T | Promise<T>): Promise<T>;
+  span<T>(
+    name: string,
+    options: TimeOptions,
+    callback: (span: SpanHandle) => T | Promise<T>,
+  ): Promise<T>;
   span(name: string, options?: TimeOptions): SpanHandle;
   span<T>(
     name: string,
-    optionsOrCallback?:
-      | TimeOptions
-      | ((span: SpanHandle) => T | Promise<T>),
+    optionsOrCallback?: TimeOptions | ((span: SpanHandle) => T | Promise<T>),
     maybeCallback?: (span: SpanHandle) => T | Promise<T>,
   ): SpanHandle | Promise<T> {
     const thirdIsCallback = typeof maybeCallback === "function";
@@ -497,7 +512,9 @@ export class Logger implements LoggerState {
   ): TaskHandle | Promise<T> {
     const isCallback = typeof optionsOrCallback === "function";
     const options: TaskOptions = isCallback ? {} : (optionsOrCallback ?? {});
-    const callback = isCallback ? (optionsOrCallback as (task: TaskHandle) => T | Promise<T>) : undefined;
+    const callback = isCallback
+      ? (optionsOrCallback as (task: TaskHandle) => T | Promise<T>)
+      : undefined;
 
     const inherited = getAsyncContext();
     const prefix = typeof inherited?.group === "string" ? (inherited.group as string) : "";
@@ -505,7 +522,8 @@ export class Logger implements LoggerState {
     // Trailing dot is load-bearing: it makes child entries indent one level deeper.
     const childGroup = `${ownGroup}.`;
 
-    const traceId = inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string);
+    const traceId =
+      inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string);
     const parentId = inherited?.spanId === undefined ? undefined : (inherited.spanId as string);
     const spanId = nextSpanId();
     const spanContext = { parentId, spanId, traceId };

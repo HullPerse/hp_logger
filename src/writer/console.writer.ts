@@ -7,11 +7,11 @@ import { formatContext } from "../format/context.format";
 import { formatDuration } from "../format/duration.format";
 import { formatPrettyErrorBlock } from "../format/error.format";
 import { caseTag } from "../format/tag.format";
+import { renderTemplateSettings } from "../format/template.format";
 import { applyColor } from "../lib/color.utils";
 import { stripControlCharacters } from "../lib/json.utils";
 import type { ColorName, LogEntry, LogLevel, ResolvedSettings, TagCase } from "../types/logger";
 import type { Transport } from "../types/transport";
-import { renderTemplateSettings } from "../format/template.format";
 
 type LevelTagMap = Record<LogLevel, string>;
 type LevelColorMap = Record<LogLevel, ColorName | false | undefined>;
@@ -69,9 +69,7 @@ export class ConsoleTransport implements Transport {
       ]),
     ) as LevelTagMap;
     this.writeCompiled =
-      settings.mode === "json"
-        ? ConsoleTransport.writeJson
-        : (entry) => this.writePretty(entry);
+      settings.mode === "json" ? ConsoleTransport.writeJson : (entry) => this.writePretty(entry);
   }
 
   write(entry: LogEntry): void {
@@ -90,7 +88,7 @@ export class ConsoleTransport implements Transport {
     } else if (typeof format === "function") {
       output = this.finalize(format(entry));
     } else {
-        output = renderTemplateSettings(format, entry, {
+      output = renderTemplateSettings(format, entry, {
         authorName: (author) => this.authorName(author),
         colorize: true,
         contextFormat: this.settings.formatContext,
@@ -147,9 +145,7 @@ export class ConsoleTransport implements Transport {
     const errorBlock = formatPrettyErrorBlock(entry.context);
     if (errorBlock !== null) {
       // The block carries no styling of our own, so a full pass is safe.
-      const block = this.settings.stripControl
-        ? stripControlCharacters(errorBlock)
-        : errorBlock;
+      const block = this.settings.stripControl ? stripControlCharacters(errorBlock) : errorBlock;
       output += `${message}\n${block}`;
       return this.finalize(output);
     }

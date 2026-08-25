@@ -97,9 +97,11 @@ describe("serializers", () => {
   test("a throwing serializer masks the key", () => {
     const { entries, logger } = captureLogger({
       mode: "json",
-      serializers: { boom: () => {
-        throw new Error("serializer bomb");
-      } },
+      serializers: {
+        boom: () => {
+          throw new Error("serializer bomb");
+        },
+      },
     });
 
     logger.info("x", { boom: { a: 1 } });

@@ -106,7 +106,11 @@ describe("renderTemplate tokens", () => {
     expect(span).toContain("ok");
 
     // Level-colored tags inherit the level color only in color mode.
-    const inherited = renderTemplate(parseTemplate("[{level.tag}]"), entry, env({ colorize: true }));
+    const inherited = renderTemplate(
+      parseTemplate("[{level.tag}]"),
+      entry,
+      env({ colorize: true }),
+    );
     expect(inherited).not.toBe("[INFO]");
   });
 

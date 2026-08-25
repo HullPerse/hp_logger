@@ -1,5 +1,5 @@
-import { DEFAULT_LOG_DIR } from "../config/writer.config";
 import { LEVEL_NAMES } from "../config/levels.config";
+import { DEFAULT_LOG_DIR } from "../config/writer.config";
 import type { ResolvedSettings } from "../types/logger";
 import type { FileTransportOptions, Transport } from "../types/transport";
 import { AdaptiveTransport } from "./adaptive.writer";
@@ -8,8 +8,8 @@ import { ConsoleTransport } from "./console.writer";
 import { DatabaseTransport } from "./database.writer";
 import { DateBasedFileTransport } from "./dateBased.writer";
 import { FileTransport } from "./file.writer";
-import { LeveledTransport } from "./leveled.writer";
 import { MultiTransport } from "./group.writer";
+import { LeveledTransport } from "./leveled.writer";
 import { RepeatTransport } from "./repeat.writer";
 import { SizeBasedFileTransport } from "./sizeBased.writer";
 

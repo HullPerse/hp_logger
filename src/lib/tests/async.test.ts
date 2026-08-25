@@ -44,7 +44,12 @@ describe("AsyncTransport flushOn", () => {
   test("levels outside flushOn keep waiting for batchSize or the interval", () => {
     let batches = 0;
     const asyncTransport = new AsyncTransport(
-      { write() {}, writeBatch() { batches += 1; } },
+      {
+        write() {},
+        writeBatch() {
+          batches += 1;
+        },
+      },
       { batchSize: 10, flushOn: ["fatal"] },
     );
 
@@ -57,7 +62,12 @@ describe("AsyncTransport flushOn", () => {
   test("without flushOn, entries below batchSize are not flushed", () => {
     let batches = 0;
     const asyncTransport = new AsyncTransport(
-      { write() {}, writeBatch() { batches += 1; } },
+      {
+        write() {},
+        writeBatch() {
+          batches += 1;
+        },
+      },
       { batchSize: 10 },
     );
 

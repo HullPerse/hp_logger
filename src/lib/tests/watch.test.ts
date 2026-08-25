@@ -92,22 +92,30 @@ describe("watcher", () => {
       globalThis.fetch = fakeFetch(
         Promise.reject<Response>(Object.assign(new Error("aborted"), { name: "AbortError" })),
       );
-      const timeoutWatcher = startWatcher(noop, { url: "http://localhost/health" }, {
-        onError: ({ reason }) => {
-          reasons.push(reason);
-          timeoutReason.resolve(reason);
+      const timeoutWatcher = startWatcher(
+        noop,
+        { url: "http://localhost/health" },
+        {
+          onError: ({ reason }) => {
+            reasons.push(reason);
+            timeoutReason.resolve(reason);
+          },
         },
-      });
+      );
       expect(await timeoutReason.promise).toBe("timeout");
       timeoutWatcher.stop();
 
       globalThis.fetch = fakeFetch(Promise.resolve(new Response(null, { status: 503 })));
-      const statusWatcher = startWatcher(noop, { url: "http://localhost/health" }, {
-        onError: ({ reason }) => {
-          reasons.push(reason);
-          statusReason.resolve(reason);
+      const statusWatcher = startWatcher(
+        noop,
+        { url: "http://localhost/health" },
+        {
+          onError: ({ reason }) => {
+            reasons.push(reason);
+            statusReason.resolve(reason);
+          },
         },
-      });
+      );
       expect(await statusReason.promise).toBe("status");
       statusWatcher.stop();
     } finally {
@@ -123,17 +131,21 @@ describe("watcher", () => {
     let nextError: Error = refused;
     const reasons: string[] = [];
     const firstError = Promise.withResolvers<string>();
-    const watcher = startWatcher(noop, {
-      interval: 60_000,
-      probe: () => {
-        throw nextError;
+    const watcher = startWatcher(
+      noop,
+      {
+        interval: 60_000,
+        probe: () => {
+          throw nextError;
+        },
       },
-    }, {
-      onError: ({ reason }) => {
-        reasons.push(reason);
-        if (reasons.length === 1) firstError.resolve(reason);
+      {
+        onError: ({ reason }) => {
+          reasons.push(reason);
+          if (reasons.length === 1) firstError.resolve(reason);
+        },
       },
-    });
+    );
 
     expect(await firstError.promise).toBe("refused");
     nextError = missing;
@@ -210,18 +222,24 @@ describe("watcher", () => {
       settings: {
         level: "debug",
         mode: "json",
-        watch: { interval: 60_000, probe: () => {
-          parentCalls += 1;
-          return true;
-        } },
+        watch: {
+          interval: 60_000,
+          probe: () => {
+            parentCalls += 1;
+            return true;
+          },
+        },
       },
     });
     const child = logger.module("CHILD");
     child.settings({
-      watch: { interval: 60_000, probe: () => {
-        childCalls += 1;
-        return true;
-      } },
+      watch: {
+        interval: 60_000,
+        probe: () => {
+          childCalls += 1;
+          return true;
+        },
+      },
     });
 
     await Promise.resolve();
@@ -234,10 +252,13 @@ describe("watcher", () => {
   test("close stops registered watchers", async () => {
     let calls = 0;
     const logger = makeLogger();
-    logger.watch({ interval: 60_000, probe: () => {
-      calls += 1;
-      return true;
-    } });
+    logger.watch({
+      interval: 60_000,
+      probe: () => {
+        calls += 1;
+        return true;
+      },
+    });
 
     await Promise.resolve();
     await logger.close();
@@ -303,12 +324,16 @@ describe("watcher", () => {
     const statuses: number[] = [];
     globalThis.fetch = fakeFetch(Promise.resolve(new Response(null, { status: 204 })));
     try {
-      const watcher = startWatcher(noop, {
-        isUp: (status) => status === 204,
-        url: "http://localhost/health",
-      }, {
-        onSuccess: ({ status }) => statuses.push(status),
-      });
+      const watcher = startWatcher(
+        noop,
+        {
+          isUp: (status) => status === 204,
+          url: "http://localhost/health",
+        },
+        {
+          onSuccess: ({ status }) => statuses.push(status),
+        },
+      );
       await watcher.runProbe();
       watcher.stop();
     } finally {

@@ -24,7 +24,11 @@ describe("LeveledTransport", () => {
   test("min-level mode passes the level and everything above it", async () => {
     const seen: string[] = [];
     const gate = new LeveledTransport(
-      { write: (e) => { seen.push(e.message); } },
+      {
+        write: (e) => {
+          seen.push(e.message);
+        },
+      },
       "warn",
     );
 
@@ -37,7 +41,15 @@ describe("LeveledTransport", () => {
 
   test("exact mode passes only the exact level", async () => {
     const seen: string[] = [];
-    const gate = new LeveledTransport({ write: (e) => { seen.push(e.message); } }, "error", true);
+    const gate = new LeveledTransport(
+      {
+        write: (e) => {
+          seen.push(e.message);
+        },
+      },
+      "error",
+      true,
+    );
 
     gate.write(entry("warn", "warn"));
     gate.write(entry("fatal", "fatal"));
@@ -53,7 +65,11 @@ describe("addTransport level option", () => {
   test("a leveled global transport receives only its level and above", async () => {
     const seen: string[] = [];
     Logger.addTransport(
-      { write: (e) => { seen.push(e.message); } },
+      {
+        write: (e) => {
+          seen.push(e.message);
+        },
+      },
       { level: "warn" },
     );
     const { logger } = captureLogger({ level: "debug", mode: "json" });
@@ -68,7 +84,11 @@ describe("addTransport level option", () => {
 
   test("removeTransport unwraps a leveled registration", () => {
     const seen: string[] = [];
-    const target: Transport = { write: (e) => { seen.push(e.message); } };
+    const target: Transport = {
+      write: (e) => {
+        seen.push(e.message);
+      },
+    };
     Logger.addTransport(target, { level: "error" });
     Logger.removeTransport(target);
     const { logger } = captureLogger({ level: "debug", mode: "json" });

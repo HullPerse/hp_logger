@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { Logger } from "@/index.logger";
 import { captureLogger as captureTestLogger } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
 import { bunServe } from "@/plugins/bun.server";
 import { fastifyPlugin } from "@/plugins/fastify.plugin";
 import { honoMiddleware } from "@/plugins/hono.plugin";
 import { nodeServer } from "@/plugins/node.server";
 import { levelForStatus, pathFromUrl, resolveCorrelationId } from "@/plugins/shared.plugin";
+import type { LogEntry } from "@/types/logger";
 
 const captureLogger = (): { entries: LogEntry[]; logger: Logger } =>
   captureTestLogger({ level: "trace", mode: "json" });
@@ -42,13 +42,12 @@ describe("request integration helpers", () => {
 describe("bunServe", () => {
   test("returns the handler response and logs its status and path", async () => {
     const { entries, logger } = captureLogger();
-    const handler = bunServe(
-      () => new Response("ok", { status: 201 }),
-      logger,
+    const handler = bunServe(() => new Response("ok", { status: 201 }), logger);
+    const response = await handler(
+      new Request("http://localhost/items", {
+        headers: { "x-correlation-id": "req-1" },
+      }),
     );
-    const response = await handler(new Request("http://localhost/items", {
-      headers: { "x-correlation-id": "req-1" },
-    }));
 
     expect(response.status).toBe(201);
     expect(entries).toHaveLength(1);
@@ -71,9 +70,11 @@ describe("bunServe", () => {
       return new Response("ok");
     }, logger);
 
-    await handler(new Request("http://localhost/items", {
-      headers: { "x-correlation-id": "req-ctx" },
-    }));
+    await handler(
+      new Request("http://localhost/items", {
+        headers: { "x-correlation-id": "req-ctx" },
+      }),
+    );
 
     const inside = entries.find((entry) => entry.message === "inside");
     expect(inside?.context.correlationId).toBe("req-ctx");
@@ -118,7 +119,11 @@ describe("fastifyPlugin", () => {
     } as never;
     fastifyPlugin(fastify, logger);
 
-    const request = { headers: { "x-correlation-id": "req-3" }, method: "GET", url: "/items" } as never;
+    const request = {
+      headers: { "x-correlation-id": "req-3" },
+      method: "GET",
+      url: "/items",
+    } as never;
     const reply = { statusCode: 202 } as never;
     hooks.get("onRequest")?.(request, reply, () => {});
     hooks.get("onResponse")?.(request, reply, () => {});
@@ -145,9 +150,9 @@ describe("fastifyPlugin", () => {
         logger.info("inside route");
       },
     };
-    const onRoute = hooks.get("onRoute") as unknown as (
-      options: { handler: (request: never, reply: never) => void },
-    ) => void;
+    const onRoute = hooks.get("onRoute") as unknown as (options: {
+      handler: (request: never, reply: never) => void;
+    }) => void;
     onRoute(routeOptions);
 
     routeOptions.handler(

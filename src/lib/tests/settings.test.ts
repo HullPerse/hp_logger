@@ -70,6 +70,8 @@ describe("settings", () => {
     ["unknown", "info"],
     [undefined, "info"],
   ] as const)("resolves LOG_LEVEL %s to %s", (configured, expected) => {
-    expect(resolveEnvLevel(configured === undefined ? {} : { LOG_LEVEL: configured })).toBe(expected);
+    expect(resolveEnvLevel(configured === undefined ? {} : { LOG_LEVEL: configured })).toBe(
+      expected,
+    );
   });
 });

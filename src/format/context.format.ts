@@ -6,8 +6,7 @@ export const formatContext = (context: LogContext, contextFormat: ContextFormat)
   if (context === EMPTY_CONTEXT || Object.keys(context).length === 0) return "";
   if (contextFormat === "json") return ` ${safeStringify(context)}`;
   const pairs = Object.entries(context).map(([key, entryValue]) => {
-    const rendered =
-      typeof entryValue === "string" ? `"${entryValue}"` : safeStringify(entryValue);
+    const rendered = typeof entryValue === "string" ? `"${entryValue}"` : safeStringify(entryValue);
     return `${key}=${rendered}`;
   });
   return ` ${pairs.join(" ")}`;

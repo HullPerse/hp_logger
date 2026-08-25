@@ -1,7 +1,7 @@
 import { DEFAULT_PROCESS_METRICS_INTERVAL } from "../config/metrics.config";
 import { startUnrefInterval, stopInterval } from "../lib/transport.utils";
-import type { Registry } from "./registry.metric";
 import { Gauge } from "./gauge.metric";
+import type { Registry } from "./registry.metric";
 
 export interface ProcessMetricsHandle {
   stop: () => void;

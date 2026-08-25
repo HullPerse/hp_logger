@@ -7,7 +7,13 @@ import { DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_BUFFER_SIZE } from "../config/write
 import { formatEntry } from "../format/entry.format";
 import { attemptAsync } from "../lib/result.utils";
 import { startUnrefInterval, stopInterval } from "../lib/transport.utils";
-import type { ContextFormat, EntryFormatter, FormatSettings, LogEntry, TagCase } from "../types/logger";
+import type {
+  ContextFormat,
+  EntryFormatter,
+  FormatSettings,
+  LogEntry,
+  TagCase,
+} from "../types/logger";
 import type { FileTransportOptions, Transport, TransportStats } from "../types/transport";
 
 /** Common buffered file writing shared by fixed-path and daily-rotating transports. */
@@ -49,7 +55,14 @@ export abstract class BaseFileTransport implements Transport {
   private pushEntries(entries: LogEntry[]): void {
     for (const entry of entries) {
       this.buffer.push(
-        formatEntry(entry, this.mode, this.contextFormat, this.format, this.tagCase, this.stripControl),
+        formatEntry(
+          entry,
+          this.mode,
+          this.contextFormat,
+          this.format,
+          this.tagCase,
+          this.stripControl,
+        ),
       );
     }
     if (this.buffer.length >= this.maxBufferSize) {
@@ -63,7 +76,7 @@ export abstract class BaseFileTransport implements Transport {
     const filepath = await this.targetFilepath();
     if (!filepath) return;
     if (this.stream === null) {
-        const created = createWriteStream(filepath, { flags: "a" });
+      const created = createWriteStream(filepath, { flags: "a" });
       // Without a listener a stream error becomes an uncaughtException.
       // Self-healing: destroy the dead stream so the next flush re-opens
       // it fresh (deleted file, bad path, full disk).

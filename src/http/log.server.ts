@@ -108,7 +108,8 @@ export const createLogServer = (
 
   const server = Bun.serve({
     fetch: (request) => {
-      const authorized = token === undefined || request.headers.get("authorization") === `Bearer ${token}`;
+      const authorized =
+        token === undefined || request.headers.get("authorization") === `Bearer ${token}`;
       if (!authorized) {
         return json({ error: "unauthorized" }, 401);
       }

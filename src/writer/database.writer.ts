@@ -150,10 +150,14 @@ export class DatabaseTransport implements Transport {
     if (this.recovering) {
       this.recovering = false;
       this.reconnectAttempt = 0;
-      this.emitNotice("info", `adapter recovered - draining ${this.buffer.length} buffered entries`, {
-        buffered: this.buffer.length,
-        operation: "database.reconnect",
-      });
+      this.emitNotice(
+        "info",
+        `adapter recovered - draining ${this.buffer.length} buffered entries`,
+        {
+          buffered: this.buffer.length,
+          operation: "database.reconnect",
+        },
+      );
     }
     this.resetRetry();
     this.pump();

@@ -40,7 +40,16 @@ export const resolveEnvModules = (
 
 type ResolvedTagSettings = Pick<
   ResolvedSettings,
-  "colorizeContext" | "emoji" | "showAuthor" | "showDate" | "showElapsed" | "showLevel" | "showTime" | "showYear" | "stripControl" | "tagCase"
+  | "colorizeContext"
+  | "emoji"
+  | "showAuthor"
+  | "showDate"
+  | "showElapsed"
+  | "showLevel"
+  | "showTime"
+  | "showYear"
+  | "stripControl"
+  | "tagCase"
 >;
 
 const resolveTagSettings = (settings: LoggerSettings): ResolvedTagSettings => ({

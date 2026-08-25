@@ -1,9 +1,9 @@
-import { AsyncTransport } from "../writer/buffer.writer";
-import { DEFAULT_AUTHOR } from "../config/logger.config";
 import { Logger } from "../api/logger.api";
+import { DEFAULT_AUTHOR } from "../config/logger.config";
 import { resolveSettings } from "../lib/settings.utils";
 import type { LogEntry, LogLevel, LoggerSettings } from "../types/logger";
 import type { Transport } from "../types/transport";
+import { AsyncTransport } from "../writer/buffer.writer";
 
 /** In-memory transport for tests: every entry lands in `entries`. */
 export const createCaptureTransport = (): { entries: LogEntry[]; transport: Transport } => {
@@ -74,4 +74,3 @@ export const withMutedConsole = async <T>(fn: () => T | Promise<T>): Promise<T> 
     muted.restore();
   }
 };
-

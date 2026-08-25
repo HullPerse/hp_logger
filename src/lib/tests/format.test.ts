@@ -42,9 +42,7 @@ describe("formatContext", () => {
   });
 
   test("renders key-value context with quoted strings", () => {
-    expect(formatContext({ method: "GET", status: 200 }, "kv")).toBe(
-      ' method="GET" status=200',
-    );
+    expect(formatContext({ method: "GET", status: 200 }, "kv")).toBe(' method="GET" status=200');
   });
 });
 
@@ -69,17 +67,17 @@ describe("formatEntry", () => {
     // The ESC byte is removed; the leftover `[2J` text is inert without it.
     const hostile = { ...entry, message: "done\u001B[2J" };
     expect(formatEntry(hostile, "pretty", "json", undefined, "upper", true)).toBe(
-      "[2026-08-24 10:11:12] [API] [INFO] done[2J {\"method\":\"GET\",\"status\":200}",
+      '[2026-08-24 10:11:12] [API] [INFO] done[2J {"method":"GET","status":200}',
     );
     expect(formatEntry(hostile, "pretty", "json")).toBe(
-      "[2026-08-24 10:11:12] [API] [INFO] done\u001B[2J {\"method\":\"GET\",\"status\":200}",
+      '[2026-08-24 10:11:12] [API] [INFO] done\u001B[2J {"method":"GET","status":200}',
     );
   });
 
   test("strips control characters from custom formatter output when enabled", () => {
-    expect(formatEntry(entry, "pretty", "json", (value) => `${value.message}\u0000`, "upper", true)).toBe(
-      "request finished",
-    );
+    expect(
+      formatEntry(entry, "pretty", "json", (value) => `${value.message}\u0000`, "upper", true),
+    ).toBe("request finished");
   });
 });
 
@@ -111,8 +109,8 @@ describe("colorizeJsonString", () => {
     const colored = colorizeJsonString('{"method":"GET","status":200,"ok":true}');
     expect(colored).toContain('\u001B[36m"method"\u001B[39m');
     expect(colored).toContain('\u001B[32m"GET"\u001B[39m');
-    expect(colored).toContain('\u001B[33m200\u001B[39m');
-    expect(colored).toContain('\u001B[35mtrue\u001B[39m');
+    expect(colored).toContain("\u001B[33m200\u001B[39m");
+    expect(colored).toContain("\u001B[35mtrue\u001B[39m");
   });
 });
 
@@ -144,7 +142,7 @@ describe("formatPrettyErrorBlock", () => {
       query: "SELECT 1",
     });
     expect(block).toBe(
-      "✗ DatabaseError: down\n  ✗ ConnectionTimeout: timed out\n  query=\"SELECT 1\"",
+      '✗ DatabaseError: down\n  ✗ ConnectionTimeout: timed out\n  query="SELECT 1"',
     );
   });
 

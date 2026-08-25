@@ -41,11 +41,17 @@ export class ThreadTransport implements Transport {
   private async ensureWorker(): Promise<void> {
     if (this.ready !== null) await this.ready;
     // Tests run from src (TypeScript), the published package from dist (JS).
-    const sibling = import.meta.url.endsWith(".ts") ? "./worker.transport.ts" : "./worker.transport.js";
+    const sibling = import.meta.url.endsWith(".ts")
+      ? "./worker.transport.ts"
+      : "./worker.transport.js";
     const url = new URL(sibling, import.meta.url);
     const worker = new Worker(url);
     this.worker = worker;
-    const { promise: ready, reject: rejectReady, resolve: resolveReady } = Promise.withResolvers<true>();
+    const {
+      promise: ready,
+      reject: rejectReady,
+      resolve: resolveReady,
+    } = Promise.withResolvers<true>();
     worker.addEventListener("message", (event: MessageEvent<WorkerOutbound>): void => {
       const { data } = event;
       if (data.type === "ready") {

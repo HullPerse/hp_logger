@@ -1,7 +1,7 @@
-import { buildTransports } from "../writer/factory.writer";
 import { resolveSettings } from "../lib/settings.utils";
 import type { LogEntry, LoggerSettings, ResolvedSettings } from "../types/logger";
 import type { Transport } from "../types/transport";
+import { buildTransports } from "../writer/factory.writer";
 
 type WorkerInbound =
   | { type: "init"; settings: LoggerSettings }
@@ -12,7 +12,11 @@ type WorkerInbound =
 type WorkerOutbound =
   | { type: "ready" }
   | { type: "acked"; id: number }
-  | { type: "stats"; id: number; stats: { dropped: number; queued: number; transportErrors: number } };
+  | {
+      type: "stats";
+      id: number;
+      stats: { dropped: number; queued: number; transportErrors: number };
+    };
 
 let transport: Transport | null = null;
 

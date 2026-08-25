@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { captureLogger } from "@/lib/tests/test.transport";
 import { resolveEnvModules } from "@/lib/settings.utils";
+import { captureLogger } from "@/lib/tests/test.transport";
 
 describe("resolveEnvModules", () => {
   test("parses name:level pairs and skips garbage", () => {
@@ -26,7 +26,10 @@ describe("resolveEnvModules", () => {
 describe("LOG_MODULES application", () => {
   test("an env pair raises one module's level above the logger default", () => {
     const envModuleLevels = resolveEnvModules({ LOG_MODULES: "auth:debug" });
-    const { entries, logger, transport } = captureLogger({ level: "warn", mode: "json" }, envModuleLevels);
+    const { entries, logger, transport } = captureLogger(
+      { level: "warn", mode: "json" },
+      envModuleLevels,
+    );
 
     const auth = logger.module("auth");
     auth.transport = transport;
@@ -43,7 +46,10 @@ describe("LOG_MODULES application", () => {
 
   test("a * entry applies to modules without their own pair", () => {
     const envModuleLevels = resolveEnvModules({ LOG_MODULES: "*:trace,auth:fatal" });
-    const { entries, logger, transport } = captureLogger({ level: "warn", mode: "json" }, envModuleLevels);
+    const { entries, logger, transport } = captureLogger(
+      { level: "warn", mode: "json" },
+      envModuleLevels,
+    );
 
     const anything = logger.module("anything");
     anything.transport = transport;

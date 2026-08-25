@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { createLogger } from "@/api/logger.api";
 import { setSpanRegistry, SpanRegistry } from "@/core/span.core";
+
 import { captureConsole } from "./test.transport";
 
 interface JsonEntry extends Record<string, unknown> {
@@ -10,9 +11,7 @@ interface JsonEntry extends Record<string, unknown> {
 }
 
 const parseJsonLines = (outputs: string[]): JsonEntry[] =>
-  outputs
-    .filter((line) => line.startsWith("{"))
-    .map((line) => JSON.parse(line) as JsonEntry);
+  outputs.filter((line) => line.startsWith("{")).map((line) => JSON.parse(line) as JsonEntry);
 
 const findMessage = (entries: JsonEntry[], fragment: string): JsonEntry | undefined =>
   entries.find((e) => (e.message ?? "").includes(fragment));

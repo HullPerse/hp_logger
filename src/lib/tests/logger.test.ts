@@ -3,11 +3,7 @@ import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bu
 import { formatEntry } from "@/format/entry.format";
 import { createLogger, Logger } from "@/index.logger";
 import { resolveEnvLevel } from "@/lib/settings.utils";
-import {
-  captureConsole,
-  captureLogger,
-  withMutedConsole,
-} from "@/lib/tests/test.transport";
+import { captureConsole, captureLogger, withMutedConsole } from "@/lib/tests/test.transport";
 import { redact } from "@/redact/index.redact";
 import type { LogEntry, LoggerSettings } from "@/types/logger";
 import type { Transport } from "@/types/transport";
@@ -114,7 +110,9 @@ describe("Logger", () => {
     auth.info("module info");
     child.warn("child warning");
 
-    expect(entries.map(({ author, context, level, message }) => ({ author, context, level, message }))).toEqual([
+    expect(
+      entries.map(({ author, context, level, message }) => ({ author, context, level, message })),
+    ).toEqual([
       { author: "auth", context: {}, level: "debug", message: "module debug" },
       { author: "auth", context: {}, level: "info", message: "module info" },
       { author: "auth", context: { requestId: "123" }, level: "warn", message: "child warning" },
@@ -553,9 +551,11 @@ describe("Logger", () => {
 
   test("time rethrows a failed operation after logging its duration", () => {
     const { entries, logger } = captureEntries({ level: "debug" });
-    expect(logger.time("db.query", () => {
-      throw new Error("database unavailable");
-    })).rejects.toThrow("database unavailable");
+    expect(
+      logger.time("db.query", () => {
+        throw new Error("database unavailable");
+      }),
+    ).rejects.toThrow("database unavailable");
 
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
@@ -1029,7 +1029,7 @@ describe("tagCase", () => {
       restore();
     }
     const line = outputs.at(-1) ?? "";
-    expect(line).toContain("user=\"alice[31m\"");
+    expect(line).toContain('user="alice[31m"');
     expect(line).not.toContain("\u001B");
   });
 

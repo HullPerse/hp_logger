@@ -13,10 +13,7 @@ export const renderTable = (rows: readonly Record<string, unknown>[]): string =>
     }
   }
   const widths = new Map(
-    keys.map((key) => [
-      key,
-      Math.max(key.length, ...rows.map((row) => cell(row[key]).length)),
-    ]),
+    keys.map((key) => [key, Math.max(key.length, ...rows.map((row) => cell(row[key]).length))]),
   );
   const renderRow = (values: string[], alignRight: boolean): string =>
     keys
@@ -30,7 +27,12 @@ export const renderTable = (rows: readonly Record<string, unknown>[]): string =>
   const header = keys.map((key) => key.padEnd(widths.get(key) ?? 0));
   const lines = [header.join("  ").trimEnd()];
   for (const row of rows) {
-    lines.push(renderRow(keys.map((key) => cell(row[key])), true));
+    lines.push(
+      renderRow(
+        keys.map((key) => cell(row[key])),
+        true,
+      ),
+    );
   }
   return lines.join("\n");
 };

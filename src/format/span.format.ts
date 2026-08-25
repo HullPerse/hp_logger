@@ -1,5 +1,5 @@
-import { formatDuration } from "./duration.format";
 import type { SpanNode } from "../types/logger";
+import { formatDuration } from "./duration.format";
 
 const BRANCH = "`-- ";
 const PIPE = "   ";
@@ -9,12 +9,7 @@ const VERTICAL = "|  ";
 const pad = (text: string, width: number): string =>
   text.length >= width ? text : `${text}${" ".repeat(width - text.length)}`;
 
-const renderNode = (
-  node: SpanNode,
-  prefix: string,
-  isLast: boolean,
-  lines: string[],
-): void => {
+const renderNode = (node: SpanNode, prefix: string, isLast: boolean, lines: string[]): void => {
   const connector = isLast ? BRANCH : TEE;
   const { children } = node;
   const { durationMs, name, parentId, spanId } = node.record;

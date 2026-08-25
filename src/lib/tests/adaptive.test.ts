@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { AdaptiveTransport } from "@/writer/adaptive.writer";
 import type { LogEntry } from "@/types/logger";
+import { AdaptiveTransport } from "@/writer/adaptive.writer";
 
 const entry = (message: string, level: LogEntry["level"] = "info"): LogEntry => ({
   author: "test",

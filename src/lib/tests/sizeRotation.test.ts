@@ -18,7 +18,10 @@ const entry = (message: string): LogEntry => ({
 
 const workdir = path.join(tmpdir(), `hp-size-rotation-${Date.now()}`);
 
-const makeTransport = (name: string, options: { maxBytes: number; maxFiles?: number; gzip?: boolean }) => {
+const makeTransport = (
+  name: string,
+  options: { maxBytes: number; maxFiles?: number; gzip?: boolean },
+) => {
   const dir = path.join(workdir, name);
   mkdirSync(dir, { recursive: true });
   const filepath = path.join(dir, "app.log");

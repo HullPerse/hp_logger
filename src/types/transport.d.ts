@@ -1,4 +1,11 @@
-import type { ContextFormat, EntryFormatter, FormatSettings, LogEntry, LogLevel, TagCase } from "./logger";
+import type {
+  ContextFormat,
+  EntryFormatter,
+  FormatSettings,
+  LogEntry,
+  LogLevel,
+  TagCase,
+} from "./logger";
 
 export interface DatabaseAdapter {
   close?: () => void | Promise<void>;
