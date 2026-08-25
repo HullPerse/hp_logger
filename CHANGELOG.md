@@ -3,6 +3,13 @@
 Notable changes to hp_logger. Versions follow semver; the package is 0.x, so
 minor bumps may contain breaking renames.
 
+## 0.9.1 - 2026-08-25
+
+### Fixed
+
+- Rebuilt the package from a clean `dist/` so stale resolver artifacts from
+  an earlier local rename cannot enter the npm tarball.
+
 ## 0.9.0 - 2026-08-25
 
 ### Added
