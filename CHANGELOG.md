@@ -3,6 +3,32 @@
 Notable changes to hp_logger. Versions follow semver; the package is 0.x, so
 minor bumps may contain breaking renames.
 
+## 0.10.0 - 2026-08-26
+
+### Added
+
+- `settings.bufferedConsole` (default off) - coalesce rendered console lines
+  into one stdio write per flush window (unref timer, 64-line cap,
+  `flush()`/`close()`, process-exit tail drain). About 3x faster end to end
+  on real redirected output. Trades away the log/debug method split inside a
+  chunk and the tail since the last flush on a hard kill; both documented.
+- `Logger.stats()` gains an optional `caches` section: frozen snapshots from
+  the brain primitives (`stats()`/`resetStats()` on LruCache, Memoize,
+  RingBuffer, GroupCounter) plus logger-owned blackbox ring and profiler
+  cache, keyed by name through the new module-level registry.
+
+### Changed
+
+- Top-level `error`/`reason` context values that are `Error` instances now
+  serialize to name/message/stack/cause before the redaction branch. Without
+  redaction JSON output carried `"error":{}` (non-enumerable fields); with
+  redaction enabled the replacement behavior is unchanged (a non-enumerable
+  brand keeps the serialized form visible to sinks while staying invisible
+  to the redaction scan).
+- Console transport dispatch no longer wraps synchronous writes in an async
+  frame; argument normalization is allocation-free. Paired bench medians:
+  plain +65% (~4.1M ops/s), json +47%, redaction-on +51%, child +30%.
+
 ## 0.9.1 - 2026-08-25
 
 ### Fixed
