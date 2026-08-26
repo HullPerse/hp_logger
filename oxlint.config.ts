@@ -1,10 +1,9 @@
-import { defineConfig } from "oxlint";
+﻿import { defineConfig } from "oxlint";
 import core from "ultracite/oxlint/core";
-import react from "ultracite/oxlint/react";
 
 export default defineConfig({
-  extends: [core, react],
-  ignorePatterns: core.ignorePatterns?.concat(react.ignorePatterns!),
+  extends: [core],
+  ignorePatterns: core.ignorePatterns,
   options: {
     typeAware: true,
     typeCheck: true,
@@ -37,17 +36,17 @@ export default defineConfig({
     {
       files: ["src/core/pipeline.core.ts"],
       rules: {
-        // dispatchToTransport exists to keep an async frame off the hot
-        // path; swallowing the rejection inline is the point, not a
-        // chaining habit.
+        /* dispatchToTransport exists to keep an async frame off the hot
+           path; swallowing the rejection inline is the point, not a
+           chaining habit. */
         "promise/prefer-await-to-then": "off",
       },
     },
     {
       files: ["src/worker/worker.transport.ts"],
       rules: {
-        // The rule targets the DOM window API. Bun worker threads take
-        // postMessage(data) - a targetOrigin argument would break the call.
+        /* The rule targets the DOM window API. Bun worker threads take
+           postMessage(data) - a targetOrigin argument would break the call. */
         "unicorn/require-post-message-target-origin": "off",
       },
     },
@@ -55,8 +54,8 @@ export default defineConfig({
   rules: {
     curly: "off",
     "no-else-return": "off",
-    // The void operator is banned outright, including statement position:
-    // fire-and-forget calls stay bare with a comment naming the guard.
+    /* The void operator is banned outright, including statement position:
+       fire-and-forget calls stay bare with a comment naming the guard. */
     "no-void": "error",
     "typescript/await-thenable": "error",
     "typescript/consistent-return": "warn",
@@ -122,3 +121,4 @@ export default defineConfig({
     "unicorn/throw-new-error": "off",
   },
 });
+
