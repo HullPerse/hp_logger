@@ -1,5 +1,5 @@
 import { RingBuffer } from "../brain/ring.utils";
-import type { SpanNode, SpanRecord } from "../types/logger";
+import type { LogContext, SpanNode, SpanRecord } from "../types/logger";
 
 /** Monotonic counter for short, collision-free span/trace ids. */
 let spanCounter = 0;
@@ -21,6 +21,30 @@ export const nextTraceId = (): string => {
   traceCounter += 1;
   return `t${toHex(traceCounter)}`;
 };
+
+export interface InheritedSpanContext {
+  parentId?: string;
+  spanId: string;
+  traceId: string;
+}
+
+/**
+ * Resolve a new span's identity from the enclosing async context when there
+ * is one, or start a fresh trace otherwise. Explicit options always win.
+ * Shared by span() and task() so both branch the same way.
+ */
+export const inheritSpanContext = (
+  inherited: LogContext | undefined,
+  options: { parentSpanId?: string; traceId?: string } = {},
+): InheritedSpanContext => ({
+  parentId:
+    options.parentSpanId ??
+    (inherited?.spanId === undefined ? undefined : (inherited.spanId as string)),
+  spanId: nextSpanId(),
+  traceId:
+    options.traceId ??
+    (inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string)),
+});
 
 /**
  * Bounded ring of completed spans, grouped by trace. Keeps the last

@@ -35,8 +35,35 @@ const matchesSecretKey = (key: string, secretKey: RegExp): boolean => {
 /**
  * Path redaction: exact dot paths plus a trailing `.*` wildcard that masks
  * everything under the prefix. `user.password` hits only that path;
- * `secrets.*` hits `secrets.token` and anything deeper.
+ * `secrets.*` hits `secrets.token` and anything deeper. Settings-time
+ * callers compile their path list once into set/prefix lookups instead of
+ * re-parsing patterns on every scanned key.
  */
+export interface CompiledRedactPaths {
+  /** Patterns without a wildcard, plus wildcard bases ("secrets" for "secrets.*"). */
+  exact: Set<string>;
+  /** Wildcard bases with a trailing dot ("secrets."). */
+  prefixes: string[];
+}
+
+export const compileRedactPaths = (paths: string[]): CompiledRedactPaths | null => {
+  if (paths.length === 0) return null;
+  const exact = new Set<string>();
+  const prefixes: string[] = [];
+  for (const pattern of paths) {
+    if (pattern.endsWith(".*")) {
+      const base = pattern.slice(0, -2);
+      // The wildcard also masks the bare parent path itself, matching the
+      // historical string-scan semantics.
+      exact.add(base);
+      prefixes.push(`${base}.`);
+    } else {
+      exact.add(pattern);
+    }
+  }
+  return { exact, prefixes };
+};
+
 const readChild = (source: Record<string, unknown>, key: string): unknown => {
   try {
     return source[key];
@@ -44,14 +71,10 @@ const readChild = (source: Record<string, unknown>, key: string): unknown => {
     return "[REDACTED]";
   }
 };
-const pathMatches = (currentPath: string, paths: string[]): boolean => {
-  for (const pattern of paths) {
-    if (pattern.endsWith(".*")) {
-      const prefix = pattern.slice(0, -2);
-      if (currentPath === prefix || currentPath.startsWith(`${prefix}.`)) return true;
-    } else if (pattern === currentPath) {
-      return true;
-    }
+const pathMatches = (currentPath: string, compiled: CompiledRedactPaths): boolean => {
+  if (compiled.exact.has(currentPath)) return true;
+  for (const prefix of compiled.prefixes) {
+    if (currentPath.startsWith(prefix)) return true;
   }
   return false;
 };
@@ -61,9 +84,9 @@ const needsRedactionScan = (
   value: unknown,
   secretKey: RegExp | null,
   childPath: string,
-  paths: string[],
+  compiled: CompiledRedactPaths | null,
 ): boolean => {
-  if (paths.length > 0 && pathMatches(childPath, paths)) return true;
+  if (compiled !== null && pathMatches(childPath, compiled)) return true;
   if (secretKey !== null && matchesSecretKey(key, secretKey)) return true;
   if (typeof value === "string") {
     return secretKey !== null && matchesPattern(MESSAGE_REDACTION_PATTERN, value);
@@ -115,7 +138,7 @@ type RedactFn = (
   secretKey: RegExp | null,
   maxDepth: number,
   depth: number,
-  paths: string[],
+  compiled: CompiledRedactPaths | null,
   currentPath: string,
 ) => unknown;
 
@@ -126,13 +149,13 @@ const resolveRedactChild = (
   secretKey: RegExp | null,
   maxDepth: number,
   depth: number,
-  paths: string[],
+  compiled: CompiledRedactPaths | null,
   currentPath: string,
   redactFn: RedactFn,
 ): unknown => {
-  if (paths.length > 0 && pathMatches(childPath, paths)) return "[REDACTED]";
+  if (compiled !== null && pathMatches(childPath, compiled)) return "[REDACTED]";
   if (secretKey !== null && matchesSecretKey(key, secretKey)) return "[REDACTED]";
-  return redactFn(child, secretKey, maxDepth, depth + 1, paths, childPath);
+  return redactFn(child, secretKey, maxDepth, depth + 1, compiled, childPath);
 };
 
 const redactObject = (
@@ -140,17 +163,17 @@ const redactObject = (
   secretKey: RegExp | null,
   maxDepth: number,
   depth: number,
-  paths: string[],
+  compiled: CompiledRedactPaths | null,
   currentPath: string,
   redactFn: RedactFn,
 ): unknown => {
-  if (secretKey === null && paths.length === 0) return value;
+  if (secretKey === null && compiled === null) return value;
   const keys = Object.keys(value);
   let needsCopy = false;
   for (const key of keys) {
     const child = readChild(value, key);
     const childPath = currentPath === "" ? key : `${currentPath}.${key}`;
-    if (needsRedactionScan(key, child, secretKey, childPath, paths)) {
+    if (needsRedactionScan(key, child, secretKey, childPath, compiled)) {
       needsCopy = true;
       break;
     }
@@ -168,7 +191,7 @@ const redactObject = (
       secretKey,
       maxDepth,
       depth,
-      paths,
+      compiled,
       currentPath,
       redactFn,
     );
@@ -176,13 +199,13 @@ const redactObject = (
   return result;
 };
 
-export const redact = (
+const redactInternal = (
   value: unknown,
   secretKey: RegExp | null,
-  maxDepth = 2,
-  depth = 0,
-  paths: string[] = [],
-  currentPath = "",
+  maxDepth: number,
+  depth: number,
+  compiled: CompiledRedactPaths | null,
+  currentPath: string,
 ): unknown => {
   if (depth > maxDepth) return "[REDACTED]";
 
@@ -206,11 +229,30 @@ export const redact = (
       secretKey,
       maxDepth,
       depth,
-      paths,
+      compiled,
       currentPath,
-      redact,
+      redactInternal,
     );
   }
 
   return value;
 };
+
+/** Public helper: compiles the path list per call (cold path). */
+export const redact = (
+  value: unknown,
+  secretKey: RegExp | null,
+  maxDepth = 2,
+  depth = 0,
+  paths: string[] = [],
+  currentPath = "",
+): unknown =>
+  redactInternal(value, secretKey, maxDepth, depth, compileRedactPaths(paths), currentPath);
+
+/** Settings-time entry point: the path list was compiled once per settings change. */
+export const redactCompiled = (
+  value: unknown,
+  secretKey: RegExp | null,
+  maxDepth: number,
+  compiled: CompiledRedactPaths | null,
+): unknown => redactInternal(value, secretKey, maxDepth, 0, compiled, "");

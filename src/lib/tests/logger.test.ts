@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
+import { ONCE_THROTTLE_CACHE_CAP } from "@/config/logger.config";
 import { formatEntry } from "@/format/entry.format";
 import { createLogger, Logger } from "@/index.logger";
 import { resolveEnvLevel } from "@/lib/settings.utils";
@@ -11,6 +12,20 @@ import type { Transport } from "@/types/transport";
 const captureEntries = (
   settings: LoggerSettings = {},
 ): { entries: LogEntry[]; logger: Logger; transport: Transport } => captureLogger(settings);
+
+const captureWarn = (run: (logger: Logger) => void): string[] => {
+  const outputs: string[] = [];
+  const original = console.warn;
+  console.warn = (value: unknown) => {
+    outputs.push(String(value));
+  };
+  try {
+    run(createLogger({ settings: { level: "debug", mode: "json" } }));
+  } finally {
+    console.warn = original;
+  }
+  return outputs;
+};
 
 describe("Logger", () => {
   let originalEnv: NodeJS.ProcessEnv;
@@ -1084,5 +1099,41 @@ describe("tagCase", () => {
     expect(entry?.message).toBe("payload");
     // The depth-limited redaction turns the deep cycle into a placeholder.
     expect(JSON.stringify(entry)).toContain("payload");
+  });
+});
+
+describe("once/throttle bounded key stores", () => {
+  test("stores expose their stats through Logger.stats().caches", () => {
+    const logger = createLogger({ settings: { mode: "json" } });
+    const caches = logger.stats().caches ?? {};
+    const once = caches["logger.once"] as { capacity: number } | undefined;
+    const throttle = caches["logger.throttle"] as { capacity: number } | undefined;
+    expect(once?.capacity).toBe(ONCE_THROTTLE_CACHE_CAP);
+    expect(throttle?.capacity).toBe(ONCE_THROTTLE_CACHE_CAP);
+  });
+
+  test("an evicted once key may warn again after cache pressure", () => {
+    const outputs = captureWarn((logger) => {
+      logger.once("early-key", "early warning");
+      for (let index = 0; index < ONCE_THROTTLE_CACHE_CAP; index += 1) {
+        logger.once(`flood-${index}`, `flood ${index}`);
+      }
+      // "early-key" fell out of the LRU, so the same key logs again.
+      logger.once("early-key", "early warning");
+    });
+    expect(outputs.filter((out) => out.includes("early warning")).length).toBe(2);
+  });
+
+  test("an evicted throttle key logs again inside its window", () => {
+    const outputs = captureWarn((logger) => {
+      logger.throttle("early-conn", 60_000, "connection failed");
+      for (let index = 0; index < ONCE_THROTTLE_CACHE_CAP; index += 1) {
+        logger.throttle(`flood-${index}`, 60_000, "connection failed");
+      }
+      logger.throttle("early-conn", 60_000, "connection failed");
+    });
+    expect(outputs.filter((out) => out.includes("connection failed")).length).toBe(
+      ONCE_THROTTLE_CACHE_CAP + 2,
+    );
   });
 });

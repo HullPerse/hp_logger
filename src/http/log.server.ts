@@ -65,11 +65,12 @@ export class LogBuffer {
   }
 
   private collect(predicate: (id: number) => boolean): { entries: LogEntry[]; next: number } {
+    const all = this.entries.toArray();
     const entries: LogEntry[] = [];
-    for (const stored of this.entries.toArray()) {
+    for (const stored of all) {
       if (predicate(stored.id)) entries.push(stored.entry);
     }
-    const last = this.entries.toArray().at(-1);
+    const last = all.at(-1);
     return { entries, next: last === undefined ? 0 : last.id };
   }
 

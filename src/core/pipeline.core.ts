@@ -8,9 +8,29 @@ import type {
   LoggerState,
 } from "../types/logger";
 import type { Transport } from "../types/transport";
+import type { LeveledTransport } from "../writer/leveled.writer";
 import { getAsyncContext, mergeEntryContext } from "./context.core";
 
 const globalTransports: Transport[] = [];
+
+// Leveled registrations wrap the caller's transport; removal unwraps it, so
+// callers always hold and pass the original object.
+const leveledWrappers = new Map<Transport, LeveledTransport>();
+
+/** Remember which leveled wrapper belongs to a transport (Logger.addTransport). */
+export const registerLeveledWrapper = (transport: Transport, leveled: LeveledTransport): void => {
+  leveledWrappers.set(transport, leveled);
+};
+
+/**
+ * Pop the wrapper for a transport being removed, or undefined when the
+ * transport was registered without a level.
+ */
+export const takeLeveledWrapper = (transport: Transport): LeveledTransport | undefined => {
+  const leveled = leveledWrappers.get(transport);
+  if (leveled !== undefined) leveledWrappers.delete(transport);
+  return leveled;
+};
 
 /** Rejection sink: a failing async transport must not crash its host. */
 const ignoreTransportRejection = (): void => undefined;

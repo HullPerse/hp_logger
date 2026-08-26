@@ -306,3 +306,25 @@ describe("resolvers: lifecycle", () => {
       await logger.close();
     }));
 });
+
+describe("resolvers: brain stats registration", () => {
+  test("the enrichment cache reports through Logger.stats().caches", async () => {
+    const { logger, entries } = captureLogger({
+      resolvers: {
+        userId: { as: "username", resolve: async (id) => `user-${String(id)}` },
+      },
+    });
+    logger.info("first", { userId: 1 });
+    await settle();
+    expect(firstEntry(entries).context.username).toBe("user-1");
+    const caches = logger.stats().caches ?? {};
+    const enrichment = caches["resolvers.enrichment"] as
+      | { hits: number; misses: number; size: number }
+      | undefined;
+    expect(enrichment).toBeDefined();
+    // The provider aggregates every live ResolverSet in the process, so
+    // exact counters depend on sibling tests; presence and live data only.
+    expect(enrichment?.misses).toBeGreaterThan(0);
+    expect(enrichment?.size).toBeGreaterThan(0);
+  });
+});

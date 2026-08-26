@@ -5,3 +5,4 @@ export * from "./gauge.metric";
 export * from "./histogram.metric";
 export * from "./registry.metric";
 export * from "./process.metric";
+export * from "./profiler.metric";

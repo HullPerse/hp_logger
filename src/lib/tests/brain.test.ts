@@ -4,6 +4,7 @@ import { GroupCounter } from "@/brain/group.utils";
 import { LruCache } from "@/brain/lru.utils";
 import { Memoize } from "@/brain/memo.utils";
 import { RingBuffer } from "@/brain/ring.utils";
+import { TtlCache } from "@/brain/ttl.utils";
 
 interface TestGroup {
   count: number;
@@ -307,5 +308,65 @@ describe("brain primitive stats", () => {
     });
     expect(groups.stats().drained).toBe(1);
     expect(drainedTags).toEqual(["b"]);
+  });
+});
+
+describe("TtlCache", () => {
+  test("returns live values, drops expired ones, and bumps recency on hit", () => {
+    const cache = new TtlCache<string, number>(4);
+    cache.set("a", 1, 100, 1000);
+    cache.set("b", 2, 100, 1000);
+    expect(cache.get("a", 1050)).toBe(1);
+    expect(cache.get("b", 1101)).toBeUndefined();
+    // The expired key no longer counts toward size.
+    expect(cache.size).toBe(1);
+  });
+
+  test("expiry is a subset of misses and shows in the stats", () => {
+    const cache = new TtlCache<string, number>(4);
+    cache.set("a", 1, 10, 0);
+    expect(cache.get("a", 5)).toBe(1);
+    expect(cache.get("missing", 5)).toBeUndefined();
+    expect(cache.get("a", 50)).toBeUndefined();
+    const stats = cache.stats();
+    expect(stats.hits).toBe(1);
+    expect(stats.misses).toBe(2);
+    expect(stats.expired).toBe(1);
+    expect(stats.hitRate).toBeCloseTo(1 / 3);
+  });
+
+  test("overflow evicts the least-recently-used entry", () => {
+    const cache = new TtlCache<string, number>(2);
+    cache.set("a", 1, 10_000, 0);
+    cache.set("b", 2, 10_000, 0);
+    expect(cache.get("a", 1)).toBe(1);
+    cache.set("c", 3, 10_000, 2);
+    expect(cache.get("b", 3)).toBeUndefined();
+    expect(cache.get("a", 3)).toBe(1);
+    expect(cache.get("c", 3)).toBe(3);
+    expect(cache.stats().evictions).toBe(1);
+  });
+
+  test("overwriting an existing key neither evicts nor grows past capacity", () => {
+    const cache = new TtlCache<string, number>(2);
+    cache.set("a", 1, 10_000, 0);
+    cache.set("b", 2, 10_000, 0);
+    cache.set("a", 9, 10_000, 1);
+    expect(cache.size).toBe(2);
+    expect(cache.get("a", 2)).toBe(9);
+    expect(cache.stats().evictions).toBe(0);
+  });
+
+  test("capacity zero clamps to one; peek and delete skip counters", () => {
+    const cache = new TtlCache<string, number>(0);
+    cache.set("a", 1, 10_000, 0);
+    cache.set("b", 2, 10_000, 1);
+    expect(cache.size).toBe(1);
+    expect(cache.peek("b", 2)).toBe(2);
+    expect(cache.peek("a", 2)).toBeUndefined();
+    expect(cache.delete("b")).toBe(true);
+    expect(cache.get("b", 2)).toBeUndefined();
+    cache.resetStats();
+    expect(cache.stats().misses).toBe(0);
   });
 });

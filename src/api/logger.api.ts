@@ -1,24 +1,21 @@
 import { writeFile } from "node:fs/promises";
 
 import { LruCache } from "../brain/lru.utils";
-import { brainSnapshots } from "../brain/registry.utils";
+import { brainSnapshots, registerBrainCache } from "../brain/registry.utils";
 import { RingBuffer } from "../brain/ring.utils";
 import { LOG_LEVELS } from "../config/levels.config";
-import { DEFAULT_AUTHOR } from "../config/logger.config";
-import {
-  DEFAULT_OPERATION_BUCKETS,
-  OPERATION_METRIC_NAME,
-  PROFILE_OVERFLOW_LABEL,
-} from "../config/metrics.config";
+import { DEFAULT_AUTHOR, ONCE_THROTTLE_CACHE_CAP } from "../config/logger.config";
 import { getAsyncContext, runWithContext, runWithSpanPath } from "../core/context.core";
 import { buildEntry, buildEntryFast } from "../core/entry.core";
 import {
   addGlobalTransport,
   clearGlobalTransports,
+  registerLeveledWrapper,
   removeGlobalTransport,
+  takeLeveledWrapper,
   writeEntry,
 } from "../core/pipeline.core";
-import { getSpanRegistry, nextSpanId, nextTraceId } from "../core/span.core";
+import { getSpanRegistry, inheritSpanContext } from "../core/span.core";
 import { drawBox } from "../format/box.format";
 import { formatDuration } from "../format/duration.format";
 import { renderMetricsTable } from "../format/metrics.format";
@@ -37,8 +34,9 @@ import {
 import { Counter } from "../metrics/counter.metric";
 import { Gauge } from "../metrics/gauge.metric";
 import { Histogram } from "../metrics/histogram.metric";
+import { OperationProfiler } from "../metrics/profiler.metric";
 import { Registry } from "../metrics/registry.metric";
-import { redact } from "../redact/index.redact";
+import { compileRedactPaths, redactCompiled } from "../redact/index.redact";
 import { buildResolverSet } from "../resolvers/index.resolver";
 import type {
   CreateLoggerOptions,
@@ -76,9 +74,11 @@ const LEVEL_FATAL = LOG_LEVELS.fatal;
 const EMPTY_STATS: LoggerStats = { dropped: 0, queued: 0, transportErrors: 0 };
 const identity = (value: unknown): unknown => value;
 
-const rateLimits = new Map<string, number>();
-const onceKeys = new Set<string>();
-const leveledWrappers = new Map<Transport, LeveledTransport>();
+const rateLimits = new LruCache<string, number>(ONCE_THROTTLE_CACHE_CAP);
+const onceKeys = new LruCache<string, true>(ONCE_THROTTLE_CACHE_CAP);
+
+registerBrainCache("logger.once", () => onceKeys.stats());
+registerBrainCache("logger.throttle", () => rateLimits.stats());
 
 export class Logger implements LoggerState {
   readonly author: string;
@@ -117,11 +117,10 @@ export class Logger implements LoggerState {
   private metricsRegistryInstance: Registry | null = null;
   private autoCounter: Counter | null = null;
   private watchHandles: WatchHandle[] = [];
-  // Profiler state: operation name -> bounded label, plus the shared
-  // histogram. Both null when settings.profile is off (one null check on
-  // the measurement path).
-  private profileCache: LruCache<string, string> | null = null;
-  private profileHistogram: Histogram | null = null;
+  // Profiler state: one registered histogram plus its bounded label cache.
+  // Null when settings.profile is off (one null check on the measurement
+  // path).
+  private profiler: OperationProfiler | null = null;
 
   constructor(
     author: string,
@@ -166,10 +165,11 @@ export class Logger implements LoggerState {
       ? createSampler(settings.sampling.rate, settings.sampling.perTrace)
       : undefined;
     const { redactKeys } = settings;
+    const compiledPaths = compileRedactPaths(settings.redactPaths);
     this.redactValue =
-      redactKeys === null && settings.redactPaths.length === 0
+      redactKeys === null && compiledPaths === null
         ? identity
-        : (value) => redact(value, redactKeys, settings.redactDepth, 0, settings.redactPaths);
+        : (value) => redactCompiled(value, redactKeys, settings.redactDepth, compiledPaths);
     // Compiled entry plan: the specialized builder only when every optional
     // per-entry feature is off. Recomputed here, so settings() recompiles.
     this.entryPlan =
@@ -186,19 +186,12 @@ export class Logger implements LoggerState {
       this.blackboxRing = null;
     }
     if (settings.profile) {
-      // The cache bounds distinct operation labels before they reach the
-      // histogram, so its label map can never grow past the cap.
-      this.profileCache ??= new LruCache(settings.profile.maxOperations);
-      this.profileHistogram ??= new Histogram({
-        buckets: DEFAULT_OPERATION_BUCKETS,
-        help: "Duration of measured operations (time/span/task)",
-        labelNames: ["operation"],
-        name: OPERATION_METRIC_NAME,
-        registers: [this.metricsRegistry()],
-      });
+      this.profiler ??= new OperationProfiler(
+        this.metricsRegistry(),
+        settings.profile.maxOperations,
+      );
     } else {
-      this.profileCache = null;
-      this.profileHistogram = null;
+      this.profiler = null;
     }
   }
 
@@ -255,26 +248,6 @@ export class Logger implements LoggerState {
   /** All logger metrics in Prometheus text format, ready for a /metrics endpoint. */
   metricsText(): string {
     return this.metricsRegistryInstance?.metrics() ?? "";
-  }
-
-  /**
-   * Record one measured duration in the profiler histogram. The operation
-   * name is translated through an LRU so label cardinality stays bounded;
-   * names beyond the cap share the `_other` label. No-op when profiling is
-   * disabled.
-   */
-  private recordDuration(name: string, durationMs: number): void {
-    const cache = this.profileCache;
-    const histogram = this.profileHistogram;
-    if (cache === null || histogram === null) return;
-    let operation = cache.get(name);
-    if (operation === undefined) {
-      const limit =
-        this.currentSettings.profile === false ? 0 : this.currentSettings.profile.maxOperations;
-      operation = cache.size >= limit ? PROFILE_OVERFLOW_LABEL : name;
-      cache.set(name, operation);
-    }
-    histogram.observe({ operation }, durationMs);
   }
 
   /**
@@ -440,7 +413,7 @@ export class Logger implements LoggerState {
   ): void {
     const slow = options.maxMs !== undefined && durationMs > options.maxMs;
     const level = slow ? "warn" : (options.level ?? "success");
-    this.recordDuration(name, durationMs);
+    this.profiler?.record(name, durationMs);
     this.write(level, `${name} completed in ${formatDuration(durationMs)}`, {
       durationMs,
       operation: name,
@@ -500,15 +473,8 @@ export class Logger implements LoggerState {
     } else if (isCallback) {
       callback = optionsOrCallback as (span: SpanHandle) => T | Promise<T>;
     }
-    const inherited = getAsyncContext();
-    const traceId =
-      options.traceId ??
-      (inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string));
-    const parentId =
-      options.parentSpanId ??
-      (inherited?.spanId === undefined ? undefined : (inherited.spanId as string));
-    const spanId = nextSpanId();
-    const spanContext = { parentId, spanId, traceId };
+    const spanContext = inheritSpanContext(getAsyncContext(), options);
+    const { parentId, spanId, traceId } = spanContext;
     const startedAt = performance.now();
     const stub: SpanHandle = {
       end: () => {
@@ -536,7 +502,7 @@ export class Logger implements LoggerState {
     if (callback === undefined) return handle;
 
     return runWithSpanPath(name, () =>
-      runWithContext(spanContext, async () => {
+      runWithContext({ ...spanContext }, async () => {
         try {
           const result = (await callback(handle)) as T;
           if (handle.ended) return result;
@@ -592,11 +558,7 @@ export class Logger implements LoggerState {
     // Trailing dot is load-bearing: it makes child entries indent one level deeper.
     const childGroup = `${ownGroup}.`;
 
-    const traceId =
-      inherited?.traceId === undefined ? nextTraceId() : (inherited.traceId as string);
-    const parentId = inherited?.spanId === undefined ? undefined : (inherited.spanId as string);
-    const spanId = nextSpanId();
-    const spanContext = { parentId, spanId, traceId };
+    const spanContext = inheritSpanContext(inherited);
 
     const taskLevel: LogLevel = options.level ?? this.currentSettings.task.level;
     const progressEnabled = this.currentSettings.task.progress;
@@ -614,7 +576,7 @@ export class Logger implements LoggerState {
           ? `${name} done in ${formatDuration(durationMs)}${suffix}`
           : `${name} failed in ${formatDuration(durationMs)}${suffix}`;
         const level: LogLevel = ok ? "success" : "error";
-        this.recordDuration(name, durationMs);
+        this.profiler?.record(name, durationMs);
         this.write(level, message, {
           durationMs,
           ...(error === undefined ? {} : { error }),
@@ -630,9 +592,9 @@ export class Logger implements LoggerState {
           message,
           name,
           parentId: spanContext.parentId,
-          spanId,
+          spanId: spanContext.spanId,
           timestamp: this.timestamp(),
-          traceId,
+          traceId: spanContext.traceId,
         });
       }
     };
@@ -692,7 +654,7 @@ export class Logger implements LoggerState {
   /** Log once per key: subsequent calls with the same key are dropped. */
   once(key: string, message: LazyMessage, context?: LazyContext): void {
     if (onceKeys.has(key)) return;
-    onceKeys.add(key);
+    onceKeys.set(key, true);
     this.write("warn", message, context);
   }
 
@@ -768,7 +730,7 @@ export class Logger implements LoggerState {
     const base = this.transport.stats?.() ?? EMPTY_STATS;
     const own: Record<string, object> = {};
     if (this.blackboxRing !== null) own["blackboxRing"] = this.blackboxRing.stats();
-    if (this.profileCache !== null) own["profileCache"] = this.profileCache.stats();
+    if (this.profiler !== null) own["profileCache"] = this.profiler.stats();
     return { ...base, caches: { ...brainSnapshots(), ...own } };
   }
 
@@ -808,11 +770,9 @@ export class Logger implements LoggerState {
 
   /** Register a transport for every logger in the process. */
   static addTransport(transport: Transport, options?: { level?: LogLevel }): void {
-    // A leveled registration wraps the transport; removal unwraps it, so the
-    // caller always passes the original object to removeTransport.
     if (options?.level !== undefined) {
       const leveled = new LeveledTransport(transport, options.level);
-      leveledWrappers.set(transport, leveled);
+      registerLeveledWrapper(transport, leveled);
       addGlobalTransport(leveled);
       return;
     }
@@ -821,9 +781,8 @@ export class Logger implements LoggerState {
 
   /** Remove a previously registered global transport. */
   static removeTransport(transport: Transport): void {
-    const leveled = leveledWrappers.get(transport);
+    const leveled = takeLeveledWrapper(transport);
     if (leveled !== undefined) {
-      leveledWrappers.delete(transport);
       removeGlobalTransport(leveled);
       return;
     }

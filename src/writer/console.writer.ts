@@ -69,6 +69,22 @@ const registerBufferedConsole = (transport: ConsoleTransport): void => {
   installBufferedExitHook();
 };
 
+// Bun's ANSI helpers cannot appear or disappear mid-process and no test
+// rebinds the global, so the runtime probe resolves once (null = checked,
+// absent, e.g. Node).
+let bunAnsi: { sliceAnsi: typeof sliceAnsi; wrapAnsi: typeof wrapAnsi } | null | undefined;
+const resolveBunAnsi = (): { sliceAnsi: typeof sliceAnsi; wrapAnsi: typeof wrapAnsi } | null => {
+  if (bunAnsi !== undefined) return bunAnsi;
+  const bunRuntime = (globalThis as Record<string, unknown>).Bun as
+    | { sliceAnsi?: typeof sliceAnsi; wrapAnsi?: typeof wrapAnsi }
+    | undefined;
+  bunAnsi =
+    bunRuntime?.sliceAnsi && bunRuntime.wrapAnsi
+      ? { sliceAnsi: bunRuntime.sliceAnsi, wrapAnsi: bunRuntime.wrapAnsi }
+      : null;
+  return bunAnsi;
+};
+
 export class ConsoleTransport implements Transport {
   private readonly levelColors: LevelColorMap;
   private readonly levelTags: LevelTagMap;
@@ -285,10 +301,8 @@ export class ConsoleTransport implements Transport {
     const { prettyTruncate, prettyWrap } = this.settings;
     if (prettyTruncate === false && prettyWrap === false) return line;
 
-    const bunRuntime = (globalThis as Record<string, unknown>).Bun as
-      | { sliceAnsi?: typeof sliceAnsi; wrapAnsi?: typeof wrapAnsi }
-      | undefined;
-    if (bunRuntime?.sliceAnsi && bunRuntime.wrapAnsi) {
+    const bunRuntime = resolveBunAnsi();
+    if (bunRuntime !== null) {
       let result = line;
       if (prettyTruncate !== false) {
         result = bunRuntime.sliceAnsi(result, 0, prettyTruncate, "…");

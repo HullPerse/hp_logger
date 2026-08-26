@@ -1,3 +1,5 @@
+import { registerBrainCache } from "../brain/registry.utils";
+import { TtlCache } from "../brain/ttl.utils";
 import { startUnrefTimeout, stopTimeout } from "../lib/transport.utils";
 import type {
   LogContext,
@@ -5,7 +7,6 @@ import type {
   ResolverSet as ResolverSetShape,
   ResolverSettings,
 } from "../types/logger";
-import { ResolverCache } from "./cache.resolver";
 
 /** One configured resolver: how to translate a context key and how to cache. */
 export interface ResolvedResolver {
@@ -25,7 +26,45 @@ interface LookupResult {
 
 const DEFAULT_TTL_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 50;
+const DEFAULT_CACHE_CAP = 8192;
 const ERROR_MARKER = "[RESOLVER ERROR]";
+
+// Every ResolverSet owns its own bounded cache (per-logger isolation), so
+// the brain provider aggregates over live instances. A closed-but-dropped
+// logger stays listed here until process end: the ceiling is one entry per
+// resolver configuration ever created, not per log entry.
+const liveCaches = new Set<TtlCache<string, Record<string, unknown>>>();
+
+registerBrainCache("resolvers.enrichment", () => {
+  let capacity = 0;
+  let evictions = 0;
+  let expired = 0;
+  let hits = 0;
+  let misses = 0;
+  let size = 0;
+  let sizeWatermark = 0;
+  for (const cache of liveCaches) {
+    const stats = cache.stats();
+    capacity = Math.max(capacity, stats.capacity);
+    evictions += stats.evictions;
+    expired += stats.expired;
+    hits += stats.hits;
+    misses += stats.misses;
+    size += stats.size;
+    sizeWatermark = Math.max(sizeWatermark, stats.sizeWatermark);
+  }
+  const reads = hits + misses;
+  return Object.freeze({
+    capacity,
+    evictions,
+    expired,
+    hitRate: reads === 0 ? 0 : hits / reads,
+    hits,
+    misses,
+    size,
+    sizeWatermark,
+  });
+});
 
 const TIMEOUT = Symbol("resolver-timeout");
 const RESOLVER_ERROR = Symbol("resolver-error");
@@ -37,11 +76,12 @@ type ResolveOutcome = unknown | typeof TIMEOUT | typeof RESOLVER_ERROR;
  * on keys. Concurrent lookups for the same value share one in-flight call.
  */
 export class ResolverSet implements ResolverSetShape {
-  private readonly cache = new ResolverCache();
+  private readonly cache = new TtlCache<string, Record<string, unknown>>(DEFAULT_CACHE_CAP);
   private readonly config = new Map<string, ResolvedResolver>();
   private readonly inFlight = new Map<string, Promise<LookupResult | undefined>>();
 
   constructor(settings: ResolverSettings) {
+    liveCaches.add(this.cache);
     for (const [key, entry] of Object.entries(settings)) {
       this.config.set(key, ResolverSet.normalize(entry));
     }

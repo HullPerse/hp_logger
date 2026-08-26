@@ -29,6 +29,9 @@ export abstract class BaseFileTransport implements Transport {
   protected readonly tagCase: TagCase;
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private stream: WriteStream | null = null;
+  // Bound with the stream it belongs to, so pushEntries' flush path pays
+  // no per-flush promisify/bind work.
+  private writeChunk: ((chunk: string) => Promise<void>) | null = null;
   private transportErrors = 0;
   // Bound once so pushEntries pays one call argument instead of six.
   private readonly renderLine: (entry: LogEntry) => string;
@@ -86,16 +89,20 @@ export abstract class BaseFileTransport implements Transport {
       // it fresh (deleted file, bad path, full disk).
       created.on("error", () => {
         created.destroy();
-        if (this.stream === created) this.stream = null;
+        if (this.stream === created) {
+          this.stream = null;
+          this.writeChunk = null;
+        }
       });
       this.stream = created;
+      this.writeChunk = promisify(created.write.bind(created)) as (chunk: string) => Promise<void>;
     }
-    const { stream } = this;
+    const { stream, writeChunk } = this;
+    if (writeChunk === null) return;
     const data = `${this.buffer.join("\n")}\n`;
     this.buffer = [];
     // The write callback fires after the chunk reaches the file descriptor,
     // so callers (size rotation) can stat the file right after the flush.
-    const writeChunk = promisify(stream.write.bind(stream)) as (chunk: string) => Promise<void>;
     const outcome = await attemptAsync(() => writeChunk(data));
     // File write errors are non-fatal for logging; the buffer is already
     // cleared. The stream is destroyed and re-created on the next flush:
@@ -119,6 +126,7 @@ export abstract class BaseFileTransport implements Transport {
       stream.end();
       await finished(stream);
       this.stream = null;
+      this.writeChunk = null;
     }
   }
 
