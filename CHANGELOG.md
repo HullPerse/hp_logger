@@ -3,6 +3,19 @@
 Notable changes to hp_logger. Versions follow semver; the package is 0.x, so
 minor bumps may contain breaking renames.
 
+## 0.10.1 - 2026-08-26
+
+### Fixed
+
+- Published type declarations resolve again. `tsc` does not copy hand-written
+  `src/types/*.d.ts` into `dist/`, so every release since at least 0.8.3
+  shipped declarations with dangling `../types/*` imports: consumers compiling
+  with `skipLibCheck: false` failed with TS2307 storms and default setups
+  silently lost typing that crossed those imports (runtime code unaffected).
+  The build now copies the declarations into `dist/types/`, and a new
+  `verify:dist` gate fails the build when any relative specifier inside an
+  emitted declaration dangles; wired into the publish workflow.
+
 ## 0.10.0 - 2026-08-26
 
 ### Added
