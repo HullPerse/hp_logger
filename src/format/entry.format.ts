@@ -18,7 +18,12 @@ export const formatEntry = (
   tagCase: TagCase = "upper",
   stripControl = false,
 ): string => {
-  if (mode === "json") return safeStringify(entry);
+  if (mode === "json") {
+    const flat = entry.baseFields !== undefined
+      ? { ...entry.baseFields, ...entry }
+      : entry;
+    return safeStringify(flat);
+  }
   if (formatter !== undefined) {
     if (typeof formatter === "function") {
       return stripControl ? stripControlCharacters(formatter(entry)) : formatter(entry);

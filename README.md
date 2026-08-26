@@ -54,9 +54,11 @@ const logger = createLogger({
 logger.info("user logged in", { userId: 42 });
 // context: { userId: 42, username: "alice" }
 ```
-- **Redaction** - passwords, tokens and bearer strings are masked before any transport sees them; `redactPaths` targets exact dot paths like `user.password`.
+- **Redaction** - passwords, tokens and bearer strings are masked before any transport sees them; `redactPaths` targets exact dot paths like `user.password`; opt-in `redactPii` detects emails and card numbers in free text; `redactCensor` replaces the default `[REDACTED]` token.
 - **Output modes** - tagged pretty output on TTY, JSON lines in pipes and files, template-based custom lines, custom formatters, registered custom tokens (`registerToken`).
-- **File output** - single file, daily rotation, or size-based rotation with retention and optional gzip; optional per-level files (`app.error.log`); optional fsync on close.
+- **Base fields** - static metadata (pid, hostname, service) stamped onto every entry as top-level JSON fields via `settings.baseFields`.
+- **Pause/resume** - buffer entries during pause, drain in FIFO order on resume.
+- **File output** - single file, daily rotation, or size-based rotation with retention and optional gzip; optional per-level files (`app.error.log`); optional fsync on close; `logger.rotate()` triggers manual rotation on size-based writers.
 - **Database output** - ready-made SQLite adapter plus a generic adapter interface; self-healing rebuilds a dead adapter from a factory and drains the backlog.
 - **Batching** - async batched writes with a bounded queue, delivery stats and severity-triggered flushes.
 - **Flood control** - collapse repeats, once/throttle keys, adaptive sampling during error storms.

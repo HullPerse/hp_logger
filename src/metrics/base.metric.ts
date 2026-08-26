@@ -51,7 +51,19 @@ export abstract class BaseMetric {
     return [...samples.entries()].toSorted(([a], [b]) => a.localeCompare(b));
   }
 
+  // S2: memoize escapeValue since label values repeat across samples.
+  private static readonly escapeCache = new Map<string, string>();
+  private static readonly ESCAPE_CACHE_CAP = 512;
+
   private static escapeValue(value: string): string {
-    return value.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll('"', '\\"');
+    const cached = BaseMetric.escapeCache.get(value);
+    if (cached !== undefined) return cached;
+    const escaped = value.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll('"', '\\"');
+    if (BaseMetric.escapeCache.size >= BaseMetric.ESCAPE_CACHE_CAP) {
+      const firstKey = BaseMetric.escapeCache.keys().next().value;
+      if (firstKey !== undefined) BaseMetric.escapeCache.delete(firstKey);
+    }
+    BaseMetric.escapeCache.set(value, escaped);
+    return escaped;
   }
 }

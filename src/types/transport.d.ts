@@ -122,6 +122,12 @@ export interface Transport {
    * usable. Used by Logger.flush() and crash handlers.
    */
   flush?: () => void | Promise<void>;
+  /**
+   * Force a rotation now (size-based writers roll to the next numbered
+   * segment). Optional; transports without rotation ignore it through
+   * Logger.rotate().
+   */
+  rotate?: () => void | Promise<void>;
   /** Optional delivery counters exposed through Logger.stats(). */
   stats?: () => TransportStats;
 }

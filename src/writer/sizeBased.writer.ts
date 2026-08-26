@@ -60,7 +60,8 @@ export class SizeBasedFileTransport extends BaseFileTransport {
     return `${base}.${index}${ext}`;
   }
 
-  private async rotate(): Promise<void> {
+  /** Force rotation to the next numbered segment now. */
+  async rotate(): Promise<void> {
     await this.closeStream();
     rmSync(`${this.segment(this.maxFiles)}.gz`, { force: true });
     for (let index = this.maxFiles - 1; index >= 1; index -= 1) {
