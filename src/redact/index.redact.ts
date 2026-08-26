@@ -1,4 +1,5 @@
 import { Memoize } from "../brain/memo.utils";
+import { registerBrainCache } from "../brain/registry.utils";
 import {
   BEARER_PATTERN,
   KEY_VALUE_PATTERN,
@@ -24,6 +25,7 @@ const matchesPattern = (pattern: RegExp, value: string): boolean => {
 // grow without limit when keys vary. Values are not cached: strings carry
 // the bulk of redaction cost and their space is unbounded.
 const secretKeyMemo = new Memoize<string, boolean>(2048);
+registerBrainCache("redact.secretKey", () => secretKeyMemo.stats());
 
 const matchesSecretKey = (key: string, secretKey: RegExp): boolean => {
   if (secretKey !== DEFAULT_REDACT_KEYS) return matchesPattern(secretKey, key);
@@ -71,9 +73,25 @@ const needsRedactionScan = (
 
 const MAX_ERROR_DEPTH = 8;
 
+/**
+ * Brand on serialized errors: redaction and repeated build passes skip
+ * already-expanded errors instead of re-walking their long stack strings
+ * with message regexes. Non-enumerable, so JSON output is unaffected.
+ */
+const SERIALIZED_ERROR_BRAND: unique symbol = Symbol("hp_logger.serializedError") as never;
+
+export const isSerializedError = (value: unknown): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  (value as { [SERIALIZED_ERROR_BRAND]?: boolean })[SERIALIZED_ERROR_BRAND] === true;
+
 // Cycles and shared references are guarded per branch: `seen` is released
 // after each recursion, so a DAG renders fully and only true cycles stop.
-const serializeError = (error: Error, seen = new WeakSet<Error>(), depth = 0): SerializedError => {
+export const serializeError = (
+  error: Error,
+  seen = new WeakSet<Error>(),
+  depth = 0,
+): SerializedError => {
   if (depth > MAX_ERROR_DEPTH) {
     return { message: "[Nested]", name: error.name };
   }
@@ -88,6 +106,7 @@ const serializeError = (error: Error, seen = new WeakSet<Error>(), depth = 0): S
       error.cause instanceof Error ? serializeError(error.cause, seen, depth + 1) : error.cause;
   }
   seen.delete(error);
+  Object.defineProperty(result, SERIALIZED_ERROR_BRAND, { value: true });
   return result;
 };
 
@@ -168,6 +187,9 @@ export const redact = (
   if (depth > maxDepth) return "[REDACTED]";
 
   if (value instanceof Error) return serializeError(value);
+  // An already-expanded error (built by the entry plan) is final data:
+  // re-walking it would only rescan long stack strings.
+  if (isSerializedError(value)) return value;
 
   if (typeof value === "string") {
     if (secretKey === null || !MESSAGE_REDACTION_PATTERN.test(value)) return value;

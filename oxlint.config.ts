@@ -1,15 +1,20 @@
 import { defineConfig } from "oxlint";
 import core from "ultracite/oxlint/core";
+import react from "ultracite/oxlint/react";
 
 export default defineConfig({
-  extends: [core],
-  ignorePatterns: core.ignorePatterns,
+  extends: [core, react],
+  ignorePatterns: core.ignorePatterns?.concat(react.ignorePatterns!),
+  options: {
+    typeAware: true,
+    typeCheck: true,
+  },
   overrides: [
     {
       files: ["src/**/__test__/**", "src/**/*.test.ts"],
       rules: {
-        "require-await": "off",
         "prefer-destructuring": "off",
+        "require-await": "off",
         "typescript/await-thenable": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-member-access": "off",
@@ -30,6 +35,15 @@ export default defineConfig({
       },
     },
     {
+      files: ["src/core/pipeline.core.ts"],
+      rules: {
+        // dispatchToTransport exists to keep an async frame off the hot
+        // path; swallowing the rejection inline is the point, not a
+        // chaining habit.
+        "promise/prefer-await-to-then": "off",
+      },
+    },
+    {
       files: ["src/worker/worker.transport.ts"],
       rules: {
         // The rule targets the DOM window API. Bun worker threads take
@@ -38,13 +52,12 @@ export default defineConfig({
       },
     },
   ],
-  options: {
-    typeAware: true,
-    typeCheck: true,
-  },
   rules: {
     curly: "off",
     "no-else-return": "off",
+    // The void operator is banned outright, including statement position:
+    // fire-and-forget calls stay bare with a comment naming the guard.
+    "no-void": "error",
     "typescript/await-thenable": "error",
     "typescript/consistent-return": "warn",
     "typescript/consistent-type-exports": "off",

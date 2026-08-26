@@ -254,7 +254,8 @@ export class DatabaseTransport implements Transport {
     stopTimeout(this.reconnectTimer);
     this.reconnectTimer = startUnrefTimeout(() => {
       this.reconnectTimer = null;
-      void this.attemptReconnect();
+      // Guarded internally: every failure path lands in failRecoveryAttempt.
+      this.attemptReconnect();
     }, this.reconnectCooldownMs);
   }
 

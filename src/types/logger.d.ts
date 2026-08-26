@@ -53,6 +53,12 @@ export interface LoggerStats {
   dropped: number;
   /** Failed transport batches or writes observed by this logger. */
   transportErrors: number;
+  /**
+   * Internal brain primitive snapshots keyed by cache name: module-level
+   * primitives (redact, template) plus logger-owned ones (blackbox ring,
+   * profiler cache). Optional so older consumers keep type-checking.
+   */
+  caches?: Record<string, object>;
 }
 
 /** Options for collapsing repeated identical entries (`logger.repeat`). */
@@ -202,6 +208,14 @@ export interface LoggerSettings {
   adaptive?: AdaptiveSettings | false;
   /** Async batching for the console/file transports. `false` disables. */
   batching?: BatchingSettings | false;
+  /**
+   * Coalesce rendered console lines into one stdio write per flush window
+   * (timer, line cap, close or crash) instead of writing per entry. Measured
+   * about 3x faster end to end on real output, at the cost of losing the
+   * log/debug method split inside a chunk and the tail since the last flush
+   * if the process is killed hard. Defaults to false.
+   */
+  bufferedConsole?: boolean;
   /**
    * Attach the caller location ("file:line:col", first stack frame outside
    * this package) to every error and fatal entry as a clickable link in
@@ -361,6 +375,7 @@ export interface FormatSettings {
 export interface ResolvedSettings {
   adaptive: AdaptiveSettings | false;
   batching: BatchingSettings | false;
+  bufferedConsole: boolean;
   callSite: boolean;
   colorizeContext: boolean;
   colors: false | LevelColors;

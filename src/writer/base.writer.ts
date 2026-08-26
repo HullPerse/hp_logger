@@ -30,6 +30,8 @@ export abstract class BaseFileTransport implements Transport {
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private stream: WriteStream | null = null;
   private transportErrors = 0;
+  // Bound once so pushEntries pays one call argument instead of six.
+  private readonly renderLine: (entry: LogEntry) => string;
 
   constructor(options: Omit<FileTransportOptions, "path">) {
     this.contextFormat = options.contextFormat ?? "json";
@@ -40,6 +42,15 @@ export abstract class BaseFileTransport implements Transport {
     this.mode = options.mode ?? "json";
     this.stripControl = options.stripControl ?? false;
     this.tagCase = options.tagCase ?? "upper";
+    this.renderLine = (entry) =>
+      formatEntry(
+        entry,
+        this.mode,
+        this.contextFormat,
+        this.format,
+        this.tagCase,
+        this.stripControl,
+      );
     this.startFlushInterval();
   }
 
@@ -56,16 +67,7 @@ export abstract class BaseFileTransport implements Transport {
 
   private pushEntries(entries: LogEntry[]): void {
     for (const entry of entries) {
-      this.buffer.push(
-        formatEntry(
-          entry,
-          this.mode,
-          this.contextFormat,
-          this.format,
-          this.tagCase,
-          this.stripControl,
-        ),
-      );
+      this.buffer.push(this.renderLine(entry));
     }
     if (this.buffer.length >= this.maxBufferSize) {
       this.flush();

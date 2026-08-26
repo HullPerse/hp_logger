@@ -5,6 +5,18 @@ import { setSpanRegistry, SpanRegistry } from "@/core/span.core";
 
 import { captureConsole } from "./test.transport";
 
+// Module scope: the factory captures nothing, so it lives outside the test.
+const capacityRecord = (name: string): Parameters<SpanRegistry["add"]>[0] => ({
+  durationMs: 1,
+  level: "debug",
+  message: `${name} completed`,
+  name,
+  parentId: undefined,
+  spanId: `s-${name}`,
+  timestamp: "2026-08-26T00:00:00.000Z",
+  traceId: "t-cap",
+});
+
 interface JsonEntry extends Record<string, unknown> {
   message?: string;
   level?: string;
@@ -172,5 +184,14 @@ describe("span tree", () => {
 
     const records = registry.forTrace(childTraceId);
     expect(records).toHaveLength(2);
+  });
+
+  test("registry capacity evicts the oldest completed spans", () => {
+    const small = new SpanRegistry(2);
+    small.add(capacityRecord("first"));
+    small.add(capacityRecord("second"));
+    expect(small.forTrace("t-cap").map((r) => r.name)).toEqual(["first", "second"]);
+    small.add(capacityRecord("third"));
+    expect(small.forTrace("t-cap").map((r) => r.name)).toEqual(["second", "third"]);
   });
 });

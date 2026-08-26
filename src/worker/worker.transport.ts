@@ -64,5 +64,5 @@ const handle = async (data: WorkerInbound): Promise<void> => {
 };
 
 workerSelf.addEventListener("message", (event: MessageEvent<WorkerInbound>): void => {
-  void handle(event.data);
+  handle(event.data);
 });

@@ -1,15 +1,8 @@
-import type {
-  DatabaseSettings,
-  Transport,
-  TransportStats,
-} from "../types/transport";
+import type { DatabaseSettings, Transport, TransportStats } from "../types/transport";
 
 /** Structural module shape of the dynamically imported database writer. */
 interface DatabaseModule {
-  DatabaseTransport: new (
-    settings: DatabaseSettings,
-    notices?: Transport
-  ) => Transport;
+  DatabaseTransport: new (settings: DatabaseSettings, notices?: Transport) => Transport;
 }
 
 const resolveDatabaseModule = (): Promise<DatabaseModule> =>

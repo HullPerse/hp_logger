@@ -210,9 +210,20 @@ describe("Logger", () => {
     logger.info("second");
     logger.info("dropped");
 
-    expect(logger.stats()).toEqual({ dropped: 1, queued: 2, transportErrors: 0 });
+    expect(logger.stats()).toEqual({
+      caches: expect.any(Object),
+      dropped: 1,
+      queued: 2,
+      transportErrors: 0,
+    });
     await logger.close();
-    expect(logger.stats()).toEqual({ dropped: 1, queued: 0, transportErrors: 0 });
+    expect(logger.stats()).toEqual({
+      caches: expect.any(Object),
+      dropped: 1,
+      queued: 0,
+      transportErrors: 0,
+    });
+    expect(logger.stats().caches?.["redact.secretKey"]).toBeDefined();
   });
 
   test("createLogger with json mode", () => {

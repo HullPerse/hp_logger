@@ -12,12 +12,20 @@ import { getAsyncContext, mergeEntryContext } from "./context.core";
 
 const globalTransports: Transport[] = [];
 
-const dispatchSafely = async (transport: Transport, entry: LogEntry): Promise<void> => {
+/** Rejection sink: a failing async transport must not crash its host. */
+const ignoreTransportRejection = (): void => undefined;
+
+/**
+ * Deliver one entry to a transport without an async frame on the hot path.
+ * Sync writes return void and cost zero allocations here; async transports
+ * get their rejection swallowed exactly like before.
+ */
+const dispatchToTransport = (transport: Transport, entry: LogEntry): void => {
   try {
-    await transport.write(entry);
+    const result = transport.write(entry);
+    if (result instanceof Promise) result.catch(ignoreTransportRejection);
   } catch {
-    // Transport failures (sync throws and rejected promises alike) never
-    // crash the application that is logging.
+    // Sync throws from transports never crash the application either.
   }
 };
 
@@ -49,9 +57,9 @@ const deliver = (state: LoggerState, entry: LogEntry): void => {
       ? true
       : state.sampler(entry);
   if (!sampledIn) return;
-  dispatchSafely(state.transport, entry);
+  dispatchToTransport(state.transport, entry);
   if (globalTransports.length > 0) {
-    for (const transport of globalTransports) dispatchSafely(transport, entry);
+    for (const transport of globalTransports) dispatchToTransport(transport, entry);
   }
 };
 
@@ -137,7 +145,9 @@ export const writeEntry = (
 ): void => {
   if (!state.enabled) return;
   if (state.resolvers !== undefined && state.resolvers.size > 0) {
-    void writeResolvedEntry(state, level, message, context);
+    // Fire-and-forget by contract: resolvers resolve in the background and
+    // writeResolvedEntry guards its own errors.
+    writeResolvedEntry(state, level, message, context);
     return;
   }
   dispatchNormal(state, level, message, context);

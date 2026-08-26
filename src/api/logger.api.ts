@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 
 import { LruCache } from "../brain/lru.utils";
+import { brainSnapshots } from "../brain/registry.utils";
 import { RingBuffer } from "../brain/ring.utils";
 import { LOG_LEVELS } from "../config/levels.config";
 import { DEFAULT_AUTHOR } from "../config/logger.config";
@@ -155,7 +156,9 @@ export class Logger implements LoggerState {
     this.hasFilters = settings.filters.length > 0;
     this.needsRedaction = settings.redactKeys !== null || settings.redactPaths.length > 0;
     this.serializers = settings.serializers;
-    this.resolvers = settings.resolvers ? buildResolverSet(settings.resolvers) || undefined : undefined;
+    this.resolvers = settings.resolvers
+      ? buildResolverSet(settings.resolvers) || undefined
+      : undefined;
     this.mixin = settings.mixin;
     this.schemaVersion = settings.schemaVersion ? true : undefined;
     this.callSite = settings.callSite ? true : undefined;
@@ -384,73 +387,49 @@ export class Logger implements LoggerState {
   trace(context: LogContext, message?: string): void;
   trace(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_TRACE < this.levelThreshold) return;
-    const args = Logger.normalizeArgs(first, second);
-    this.write("trace", args.message, args.context);
+    this.writeNormalized("trace", first, second);
   }
 
   debug(message: LazyMessage, context?: LazyContext): void;
   debug(context: LogContext, message?: string): void;
   debug(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_DEBUG < this.levelThreshold) return;
-    const args = Logger.normalizeArgs(first, second);
-    this.write("debug", args.message, args.context);
+    this.writeNormalized("debug", first, second);
   }
 
   info(message: LazyMessage, context?: LazyContext): void;
   info(context: LogContext, message?: string): void;
   info(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_INFO < this.levelThreshold) return;
-    const args = Logger.normalizeArgs(first, second);
-    this.write("info", args.message, args.context);
+    this.writeNormalized("info", first, second);
   }
 
   success(message: LazyMessage, context?: LazyContext): void;
   success(context: LogContext, message?: string): void;
   success(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_SUCCESS < this.levelThreshold) return;
-    const args = Logger.normalizeArgs(first, second);
-    this.write("success", args.message, args.context);
+    this.writeNormalized("success", first, second);
   }
 
   warn(message: LazyMessage, context?: LazyContext): void;
   warn(context: LogContext, message?: string): void;
   warn(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_WARN < this.levelThreshold) return;
-    const args = Logger.normalizeArgs(first, second);
-    this.write("warn", args.message, args.context);
+    this.writeNormalized("warn", first, second);
   }
 
   error(message: LazyMessage, context?: LazyContext): void;
   error(context: LogContext, message?: string): void;
   error(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_ERROR < this.levelThreshold) return;
-    const args = Logger.normalizeArgs(first, second);
-    this.write("error", args.message, args.context);
+    this.writeNormalized("error", first, second);
   }
 
   fatal(message: LazyMessage, context?: LazyContext): void;
   fatal(context: LogContext, message?: string): void;
   fatal(first: LazyMessage | LogContext, second?: LazyContext | string): void {
     if (LEVEL_FATAL < this.levelThreshold) return;
-    const args = Logger.normalizeArgs(first, second);
-    this.write("fatal", args.message, args.context);
-  }
-
-  /**
-   * Normalize the two accepted argument orders plus the bare-object form:
-   * `(message, context)`, `(context, message)`, `(message)` and `(object)`.
-   */
-  private static normalizeArgs(
-    first: LazyMessage | LogContext,
-    second?: LazyContext | string,
-  ): { context: LazyContext | undefined; message: LazyMessage } {
-    if (typeof first === "string" || typeof first === "function") {
-      return { context: second as LazyContext | undefined, message: first };
-    }
-    if (typeof second === "string") {
-      return { context: first, message: second };
-    }
-    return { context: second as LazyContext | undefined, message: () => JSON.stringify(first) };
+    this.writeNormalized("fatal", first, second);
   }
 
   private writeMeasured(
@@ -732,6 +711,26 @@ export class Logger implements LoggerState {
     this.write(level, message, context);
   }
 
+  /**
+   * Route a normalized call into write() without allocating an argument
+   * object: the two accepted signatures are resolved with locals only.
+   */
+  private writeNormalized(
+    level: LogLevel,
+    first: LazyMessage | LogContext,
+    second?: LazyContext | string,
+  ): void {
+    if (typeof first === "string" || typeof first === "function") {
+      this.write(level, first, second as LazyContext | undefined);
+      return;
+    }
+    if (typeof second === "string") {
+      this.write(level, second, first);
+      return;
+    }
+    this.write(level, () => JSON.stringify(first), second as LazyContext | undefined);
+  }
+
   private write(level: LogLevel, message: LazyMessage, context?: LazyContext): void {
     if (this.autoCounter !== null) {
       this.autoCounter.inc({ author: this.author, level });
@@ -766,7 +765,11 @@ export class Logger implements LoggerState {
   }
 
   stats(): LoggerStats {
-    return this.transport.stats?.() ?? EMPTY_STATS;
+    const base = this.transport.stats?.() ?? EMPTY_STATS;
+    const own: Record<string, object> = {};
+    if (this.blackboxRing !== null) own["blackboxRing"] = this.blackboxRing.stats();
+    if (this.profileCache !== null) own["profileCache"] = this.profileCache.stats();
+    return { ...base, caches: { ...brainSnapshots(), ...own } };
   }
 
   /**

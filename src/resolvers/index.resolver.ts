@@ -130,7 +130,10 @@ export class ResolverSet implements ResolverSetShape {
   }
 
   /** Shape the resolver outcome into additions: objects merge, scalars land under `as`. */
-  private static toFields(entry: ResolvedResolver, outcome: unknown): Record<string, unknown> | undefined {
+  private static toFields(
+    entry: ResolvedResolver,
+    outcome: unknown,
+  ): Record<string, unknown> | undefined {
     if (outcome === null || outcome === undefined) return undefined;
     if (typeof outcome === "object") return outcome as Record<string, unknown>;
     if (entry.as === undefined) return undefined;

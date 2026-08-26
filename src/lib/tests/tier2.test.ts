@@ -50,7 +50,7 @@ describe("captureConsole", () => {
 });
 
 describe("fromEnv", () => {
-  test("builds the full basic setup from environment variables", () => {
+  test("builds the full basic setup from environment variables", async () => {
     const logger = fromEnv({
       LOG_COLOR: "false",
       LOG_LEVEL: "warn",
@@ -67,7 +67,7 @@ describe("fromEnv", () => {
     logger.warn("visible");
 
     expect(captured.map((item) => item.level)).toEqual(["warn"]);
-    void logger.close();
+    await logger.close();
   });
 
   test("LOG_FILE enables json file output", async () => {

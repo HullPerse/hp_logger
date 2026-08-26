@@ -102,6 +102,9 @@ auth.info("user registered", { userId: 42 });
   the buffered backlog drains.
 - `batching`: `{ batchSize, maxQueueSize=10000, flushInterval, flushOn?: LogLevel[] }`
   - bounded queue, drop-newest, `logger.stats()`.
+- `bufferedConsole: true` - coalesce console lines into one stdio write per
+  flush window (timer/line cap/close/crash). About 3x faster end to end on
+  real output; the tail since the last flush is lost on a hard kill.
 - `repeat`: `{ windowMs, maxKeys }` - collapse duplicates into `message xN`.
 - `adaptive`: `{ windowMs, errorRate, sample, cooldownMs }` - error-storm sampling.
 - `sampling`: `{ rate, perTrace? }` - trace-coherent sampling (error/fatal pass).

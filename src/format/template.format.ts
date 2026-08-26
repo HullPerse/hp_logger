@@ -1,4 +1,5 @@
 import { LruCache } from "../brain/lru.utils";
+import { registerBrainCache } from "../brain/registry.utils";
 import { SPINNER_FRAMES, TASK_GLYPHS } from "../config/colors.config";
 import { applyColor } from "../lib/color.utils";
 import { stripControlCharacters } from "../lib/json.utils";
@@ -58,6 +59,7 @@ const KNOWN_TOKENS = new Set([
 // templates cannot grow module state without bound (mirrors the redact memo
 // cap). After eviction a token may warn again; memory stays bounded.
 const warnedTokens = new LruCache<string, true>(2048);
+registerBrainCache("template.warnedTokens", () => warnedTokens.stats());
 
 /**
  * User-registered token renderers. Names must be dotless (dotted namespaces

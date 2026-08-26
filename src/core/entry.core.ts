@@ -10,6 +10,21 @@ import type {
 } from "../types/logger";
 import { getActiveSpanPath, getAsyncContext, mergeEntryContext } from "./context.core";
 import { isFiltered } from "./filter.core";
+import { serializeError } from "../redact/index.redact";
+
+/**
+ * Expand top-level Error values before any feature branch so JSON output
+ * always carries name/message/stack/cause regardless of redaction settings
+ * (a raw Error stringifies to {} because its fields are non-enumerable).
+ */
+const serializeErrorKeys = (context: LogContext): LogContext => {
+  const { error, reason } = context;
+  if (!(error instanceof Error) && !(reason instanceof Error)) return context;
+  const next: LogContext = { ...context };
+  if (error instanceof Error) next.error = serializeError(error);
+  if (reason instanceof Error) next.reason = serializeError(reason);
+  return next;
+};
 
 const sanitizeMessage = (
   message: LazyMessage,
@@ -126,7 +141,7 @@ export const buildEntry = (
   let safeContext: LogContext;
   try {
     safeContext = sanitizeContext(
-      applySerializers(finalContext, state.serializers),
+      serializeErrorKeys(applySerializers(finalContext, state.serializers)),
       needsRedaction,
       redactValue,
     );
@@ -184,7 +199,9 @@ export const buildEntryFast = (
     // Hostile context (throwing getters) still logs, with a marker instead.
     finalContext = { contextError: "unserializable context" };
   }
-  const entryContext = level === "fatal" ? attachFatalSnapshot(finalContext) : finalContext;
+  const entryContext = serializeErrorKeys(
+    level === "fatal" ? attachFatalSnapshot(finalContext) : finalContext,
+  );
 
   const entry: LogEntry = {
     author: state.author,
