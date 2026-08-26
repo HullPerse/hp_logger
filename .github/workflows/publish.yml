@@ -55,6 +55,9 @@ jobs:
       - name: Build fresh dist
         run: rm -rf dist && bun run build
 
+      - name: Verify declarations resolve
+        run: bun run verify:dist
+
       - name: Inspect tarball contents
         run: npm pack --dry-run
 
