@@ -104,6 +104,7 @@ export class Logger implements LoggerState {
   mixin!: ((context: LogContext, level: LogLevel) => LogContext) | undefined;
   schemaVersion!: boolean | undefined;
   callSite!: boolean | undefined;
+  baseFields: Record<string, unknown> | undefined;
   entryPlan!: (
     state: LoggerState,
     level: LogLevel,
@@ -117,6 +118,8 @@ export class Logger implements LoggerState {
   private metricsRegistryInstance: Registry | null = null;
   private autoCounter: Counter | null = null;
   private watchHandles: WatchHandle[] = [];
+  private paused = false;
+  private pauseBuffer: Array<{ level: LogLevel; message: LazyMessage; context: LazyContext | undefined }> = [];
   // Profiler state: one registered histogram plus its bounded label cache.
   // Null when settings.profile is off (one null check on the measurement
   // path).
@@ -153,7 +156,10 @@ export class Logger implements LoggerState {
       settings.formatTimestamp === "iso" ? cachedTimestamp : () => formatTimestamp("local");
     this.filters = settings.filters;
     this.hasFilters = settings.filters.length > 0;
-    this.needsRedaction = settings.redactKeys !== null || settings.redactPaths.length > 0;
+    this.needsRedaction =
+      settings.redactKeys !== null ||
+      settings.redactPaths.length > 0 ||
+      settings.redactPii !== false;
     this.serializers = settings.serializers;
     this.resolvers = settings.resolvers
       ? buildResolverSet(settings.resolvers) || undefined
@@ -161,15 +167,25 @@ export class Logger implements LoggerState {
     this.mixin = settings.mixin;
     this.schemaVersion = settings.schemaVersion ? true : undefined;
     this.callSite = settings.callSite ? true : undefined;
+    this.baseFields =
+      settings.baseFields === false ? undefined : settings.baseFields;
     this.sampler = settings.sampling
       ? createSampler(settings.sampling.rate, settings.sampling.perTrace)
       : undefined;
-    const { redactKeys } = settings;
+    const { redactKeys, redactCensor, redactPii } = settings;
     const compiledPaths = compileRedactPaths(settings.redactPaths);
     this.redactValue =
-      redactKeys === null && compiledPaths === null
+      redactKeys === null && compiledPaths === null && redactPii === false
         ? identity
-        : (value) => redactCompiled(value, redactKeys, settings.redactDepth, compiledPaths);
+        : (value) =>
+            redactCompiled(
+              value,
+              redactKeys,
+              settings.redactDepth,
+              compiledPaths,
+              redactCensor,
+              redactPii,
+            );
     // Compiled entry plan: the specialized builder only when every optional
     // per-entry feature is off. Recomputed here, so settings() recompiles.
     this.entryPlan =
@@ -693,6 +709,28 @@ export class Logger implements LoggerState {
     this.write(level, () => JSON.stringify(first), second as LazyContext | undefined);
   }
 
+  /**
+   * Buffer entries instead of dispatching to transports. Entries are held
+   * in FIFO order and drained on resume(). Flush/close work even while
+   * paused so the transport pipeline stays functional.
+   */
+  pause(): this {
+    this.paused = true;
+    return this;
+  }
+
+  /**
+   * Drain buffered entries to transports in FIFO order, then resume
+   * normal logging. Flush errors never propagate.
+   */
+  async resume(): Promise<void> {
+    this.paused = false;
+    const entries = this.pauseBuffer.splice(0);
+    for (const { level, message, context } of entries) {
+      writeEntry(this, level, message, context);
+    }
+  }
+
   private write(level: LogLevel, message: LazyMessage, context?: LazyContext): void {
     if (this.autoCounter !== null) {
       this.autoCounter.inc({ author: this.author, level });
@@ -704,6 +742,10 @@ export class Logger implements LoggerState {
         typeof context === "function"
           ? (): LogContext => ({ ...groupPrefix, ...context() })
           : { ...groupPrefix, ...context };
+    }
+    if (this.paused) {
+      this.pauseBuffer.push({ level, message, context: merged });
+      return;
     }
     writeEntry(this, level, message, merged);
   }
@@ -791,6 +833,15 @@ export class Logger implements LoggerState {
 
   static clearTransports(): void {
     clearGlobalTransports();
+  }
+
+  /**
+   * Force a rotation on every transport that supports it (size-based
+   * file writers roll to the next numbered segment). Transports without
+   * rotate() silently ignore the call.
+   */
+  async rotate(): Promise<void> {
+    await this.transport.rotate?.();
   }
 
   async close(): Promise<void> {

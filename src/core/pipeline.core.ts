@@ -70,6 +70,8 @@ const deliver = (state: LoggerState, entry: LogEntry): void => {
     entry.callSite = captureCaller();
   }
   state.blackbox?.push(entry);
+  // Static base fields are stamped outside context so redaction never masks them.
+  if (state.baseFields !== undefined) entry.baseFields = state.baseFields;
   // Sampling sits after the black box: the flight recorder keeps everything,
   // only the transports are sampled. error/fatal always pass.
   const sampledIn =

@@ -2,6 +2,8 @@ import { Memoize } from "../brain/memo.utils";
 import { registerBrainCache } from "../brain/registry.utils";
 import {
   BEARER_PATTERN,
+  CARD_PATTERN,
+  EMAIL_PATTERN,
   KEY_VALUE_PATTERN,
   MESSAGE_REDACTION_PATTERN,
   DEFAULT_REDACT_KEYS,
@@ -85,10 +87,12 @@ const needsRedactionScan = (
   secretKey: RegExp | null,
   childPath: string,
   compiled: CompiledRedactPaths | null,
+  pii: { card: boolean; email: boolean } | false,
 ): boolean => {
   if (compiled !== null && pathMatches(childPath, compiled)) return true;
   if (secretKey !== null && matchesSecretKey(key, secretKey)) return true;
   if (typeof value === "string") {
+    if (pii !== false) return true;
     return secretKey !== null && matchesPattern(MESSAGE_REDACTION_PATTERN, value);
   }
   return typeof value === "object" && value !== null;
@@ -136,6 +140,8 @@ export const serializeError = (
 type RedactFn = (
   value: unknown,
   secretKey: RegExp | null,
+  censor: string,
+  pii: { card: boolean; email: boolean } | false,
   maxDepth: number,
   depth: number,
   compiled: CompiledRedactPaths | null,
@@ -147,33 +153,37 @@ const resolveRedactChild = (
   child: unknown,
   childPath: string,
   secretKey: RegExp | null,
+  censor: string,
+  pii: { card: boolean; email: boolean } | false,
   maxDepth: number,
   depth: number,
   compiled: CompiledRedactPaths | null,
   currentPath: string,
   redactFn: RedactFn,
 ): unknown => {
-  if (compiled !== null && pathMatches(childPath, compiled)) return "[REDACTED]";
-  if (secretKey !== null && matchesSecretKey(key, secretKey)) return "[REDACTED]";
-  return redactFn(child, secretKey, maxDepth, depth + 1, compiled, childPath);
+  if (compiled !== null && pathMatches(childPath, compiled)) return censor;
+  if (secretKey !== null && matchesSecretKey(key, secretKey)) return censor;
+  return redactFn(child, secretKey, censor, pii, maxDepth, depth + 1, compiled, childPath);
 };
 
 const redactObject = (
   value: Record<string, unknown>,
   secretKey: RegExp | null,
+  censor: string,
+  pii: { card: boolean; email: boolean } | false,
   maxDepth: number,
   depth: number,
   compiled: CompiledRedactPaths | null,
   currentPath: string,
   redactFn: RedactFn,
 ): unknown => {
-  if (secretKey === null && compiled === null) return value;
+  if (secretKey === null && compiled === null && pii === false) return value;
   const keys = Object.keys(value);
   let needsCopy = false;
   for (const key of keys) {
     const child = readChild(value, key);
     const childPath = currentPath === "" ? key : `${currentPath}.${key}`;
-    if (needsRedactionScan(key, child, secretKey, childPath, compiled)) {
+    if (needsRedactionScan(key, child, secretKey, childPath, compiled, pii)) {
       needsCopy = true;
       break;
     }
@@ -189,6 +199,8 @@ const redactObject = (
       child,
       childPath,
       secretKey,
+      censor,
+      pii,
       maxDepth,
       depth,
       compiled,
@@ -199,15 +211,29 @@ const redactObject = (
   return result;
 };
 
+/** Apply PII free-text detectors to a string value. */
+const applyPiiRedaction = (
+  value: string,
+  pii: { card: boolean; email: boolean },
+  censor: string,
+): string => {
+  let result = value;
+  if (pii.email) result = result.replaceAll(EMAIL_PATTERN, censor);
+  if (pii.card) result = result.replaceAll(CARD_PATTERN, censor);
+  return result;
+};
+
 const redactInternal = (
   value: unknown,
   secretKey: RegExp | null,
+  censor: string,
+  pii: { card: boolean; email: boolean } | false,
   maxDepth: number,
   depth: number,
   compiled: CompiledRedactPaths | null,
   currentPath: string,
 ): unknown => {
-  if (depth > maxDepth) return "[REDACTED]";
+  if (depth > maxDepth) return censor;
 
   if (value instanceof Error) return serializeError(value);
   // An already-expanded error (built by the entry plan) is final data:
@@ -215,10 +241,14 @@ const redactInternal = (
   if (isSerializedError(value)) return value;
 
   if (typeof value === "string") {
-    if (secretKey === null || !MESSAGE_REDACTION_PATTERN.test(value)) return value;
-    return value
-      .replaceAll(BEARER_PATTERN, "Bearer [REDACTED]")
-      .replaceAll(KEY_VALUE_PATTERN, "$<key>=[REDACTED]");
+    let result = value;
+    if (secretKey !== null && MESSAGE_REDACTION_PATTERN.test(value)) {
+      result = result
+        .replaceAll(BEARER_PATTERN, `Bearer ${censor}`)
+        .replaceAll(KEY_VALUE_PATTERN, `$<key>=${censor}`);
+    }
+    if (pii !== false) result = applyPiiRedaction(result, pii, censor);
+    return result;
   }
 
   if (Array.isArray(value)) return `[${value.length} items]`;
@@ -227,6 +257,8 @@ const redactInternal = (
     return redactObject(
       value as Record<string, unknown>,
       secretKey,
+      censor,
+      pii,
       maxDepth,
       depth,
       compiled,
@@ -247,7 +279,7 @@ export const redact = (
   paths: string[] = [],
   currentPath = "",
 ): unknown =>
-  redactInternal(value, secretKey, maxDepth, depth, compileRedactPaths(paths), currentPath);
+  redactInternal(value, secretKey, "[REDACTED]", false, maxDepth, depth, compileRedactPaths(paths), currentPath);
 
 /** Settings-time entry point: the path list was compiled once per settings change. */
 export const redactCompiled = (
@@ -255,4 +287,6 @@ export const redactCompiled = (
   secretKey: RegExp | null,
   maxDepth: number,
   compiled: CompiledRedactPaths | null,
-): unknown => redactInternal(value, secretKey, maxDepth, 0, compiled, "");
+  censor = "[REDACTED]",
+  pii: { card: boolean; email: boolean } | false = false,
+): unknown => redactInternal(value, secretKey, censor, pii, maxDepth, 0, compiled, "");

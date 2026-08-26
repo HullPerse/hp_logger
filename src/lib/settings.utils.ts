@@ -232,22 +232,56 @@ const samplingBlock: SettingsBlock<"sampling"> = {
 };
 
 /** Redaction knobs; `redactKeys: null` explicitly disables the denylist. */
+interface RedactionSlice {
+  redactDepth: number;
+  redactKeys: RegExp | null;
+  redactPaths: string[];
+  redactCensor: string;
+  redactPii: { card: boolean; email: boolean } | false;
+}
 const redactionBlock = {
-  merge(base: ResolvedSettings, patch: LoggerSettings) {
+  merge(base: ResolvedSettings, patch: LoggerSettings): RedactionSlice {
     return {
       redactDepth: patch.redactDepth ?? base.redactDepth,
       redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
       redactPaths: patch.redactPaths ?? base.redactPaths,
+      redactCensor: patch.redactCensor ?? base.redactCensor,
+      redactPii:
+        patch.redactPii === undefined
+          ? base.redactPii
+          : resolveRedactPii(patch.redactPii),
     };
   },
-  resolve(settings: LoggerSettings) {
+  resolve(settings: LoggerSettings): RedactionSlice {
     return {
       redactDepth: settings.redactDepth ?? 2,
       redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
       redactPaths: settings.redactPaths ?? [],
+      redactCensor: settings.redactCensor ?? "[REDACTED]",
+      redactPii: resolveRedactPii(settings.redactPii ?? false),
     };
   },
 };
+
+const resolveRedactPii = (value: LoggerSettings["redactPii"]) =>
+  value && (value.card === true || value.email === true)
+    ? { card: value.card === true, email: value.email === true }
+    : false;
+
+/** Static top-level metadata fields stamped onto every entry. */
+const baseFieldsBlock = {
+  merge(base: ResolvedSettings, patch: LoggerSettings) {
+    return patch.baseFields === undefined ? base.baseFields : normalizeBaseFields(patch.baseFields);
+  },
+  resolve(settings: LoggerSettings) {
+    return normalizeBaseFields(settings.baseFields ?? false);
+  },
+};
+
+const normalizeBaseFields = (
+  value: LoggerSettings["baseFields"],
+): Record<string, unknown> | false =>
+  value && typeof value === "object" && Object.keys(value).length > 0 ? { ...value } : false;
 
 /** Output shaping: mode, format callbacks, limits. */
 const formatBlock = {
@@ -286,6 +320,7 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
   return {
     adaptive: settings.adaptive ?? false,
     autoCounters: settings.autoCounters ?? false,
+    baseFields: normalizeBaseFields(settings.baseFields ?? false),
     batching: settings.batching ?? false,
     blackbox: blackboxBlock.resolve(settings),
     box: boxBlock.resolve(settings),
@@ -311,6 +346,8 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
     redactDepth: redaction.redactDepth,
     redactKeys: redaction.redactKeys,
     redactPaths: redaction.redactPaths,
+    redactCensor: redaction.redactCensor,
+    redactPii: redaction.redactPii,
     repeat: settings.repeat ?? false,
     resolvers: settings.resolvers ?? false,
     sampling: samplingBlock.resolve(settings),
@@ -335,6 +372,7 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
   return {
     adaptive: patch.adaptive ?? base.adaptive,
     autoCounters: patch.autoCounters ?? base.autoCounters,
+    baseFields: baseFieldsBlock.merge(base, patch),
     batching: patch.batching ?? base.batching,
     blackbox: blackboxBlock.merge(base.blackbox, patch),
     box: boxBlock.merge(base.box, patch),
@@ -360,6 +398,8 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
     redactDepth: redaction.redactDepth,
     redactKeys: redaction.redactKeys,
     redactPaths: redaction.redactPaths,
+    redactCensor: redaction.redactCensor,
+    redactPii: redaction.redactPii,
     repeat: patch.repeat ?? base.repeat,
     resolvers: patch.resolvers ?? base.resolvers,
     sampling: samplingBlock.merge(base.sampling, patch),

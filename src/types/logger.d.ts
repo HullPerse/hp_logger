@@ -229,6 +229,15 @@ export interface LoggerSettings {
   database?: DatabaseSettings | false;
   /** Master switch: `false` skips every entry. */
   enabled?: boolean;
+  /**
+   * Static fields stamped onto every entry as top-level metadata outside
+   * the redacted context - service names, `pid`, `hostname`, environment
+   * tags. Aggregators index them like pino's automatic host fields.
+   * Explicit context keys win over base fields on collision; pretty
+   * rendering ignores them (they surface in JSON, files, database rows and
+   * black box dumps). An empty object or `false` disables.
+   */
+  baseFields?: Record<string, unknown> | false;
   /** Write entries to a file in addition to the console. */
   file?: FileSettings | false;
   /** Filter entries before they reach any transport. */
@@ -272,6 +281,19 @@ export interface LoggerSettings {
    * `redactKeys` is null. Arrays are summarized and not path-addressable.
    */
   redactPaths?: string[];
+  /**
+   * Replacement token for every redacted value. Defaults to
+   * `[REDACTED]`. Applies to key, path and free-text masking; error
+   * markers like `[Circular]` are not affected.
+   */
+  redactCensor?: string;
+  /**
+   * Opt-in free-text detectors applied to messages and context strings:
+   * emails and card-shaped digit groups (13-19 digits in 4-digit groups)
+   * are replaced with the censor token. Heuristic by design - keep it for
+   * data where false positives are acceptable. Both default to false.
+   */
+  redactPii?: { card?: boolean; email?: boolean } | false;
   /**
    * Per-key context transformers (pino-style serializers), applied before
    * redaction: `serializers: { user: (u) => ({ id: u.id }) }`. A throwing
@@ -374,6 +396,7 @@ export interface FormatSettings {
 
 export interface ResolvedSettings {
   adaptive: AdaptiveSettings | false;
+  baseFields: Record<string, unknown> | false;
   batching: BatchingSettings | false;
   bufferedConsole: boolean;
   callSite: boolean;
@@ -397,6 +420,8 @@ export interface ResolvedSettings {
   redactDepth: number;
   redactKeys: RegExp | null;
   redactPaths: string[];
+  redactCensor: string;
+  redactPii: { card: boolean; email: boolean } | false;
   schemaVersion: boolean;
   serializers: Record<string, (value: unknown) => unknown> | undefined;
   sampling: { perTrace: boolean; rate: number } | false;
@@ -421,6 +446,12 @@ export interface LogEntry {
   context: LogContext;
   level: LogLevel;
   message: string;
+  /**
+   * Static fields stamped onto every entry as top-level metadata outside
+   * the redacted context. Set via `settings.baseFields`. Pretty rendering
+   * ignores them; JSON, file, database and blackbox output include them.
+   */
+  baseFields?: Record<string, unknown> | undefined;
   /**
    * Schema version stamped on every entry when `settings.schemaVersion` is
    * enabled, so stored JSONL lines can be detected and migrated later.
@@ -488,4 +519,9 @@ export interface LoggerState {
   readonly callSite?: boolean | undefined;
   /** Sampling decision for a built entry; undefined disables sampling. */
   readonly sampler?: ((entry: LogEntry) => boolean) | undefined;
+  /**
+   * Static top-level fields stamped onto every built entry in the delivery
+   * stage; undefined or false disables stamping.
+   */
+  readonly baseFields?: Record<string, unknown> | undefined;
 }

@@ -92,6 +92,7 @@ export class ConsoleTransport implements Transport {
   private readonly tagCase: TagCase;
   private readonly startedAt: number;
   private readonly writeCompiled: (entry: LogEntry) => void;
+  private readonly finalizeCompiled: (line: string) => string;
   private authorTagCache: { raw: string; tag: string } | null = null;
   // Buffered-stdout mode (settings.bufferedConsole): rendered lines coalesce
   // into two stdio channels and leave in one write per flush window. The
@@ -118,6 +119,8 @@ export class ConsoleTransport implements Transport {
       settings.mode === "json"
         ? (entry) => this.emit(entry.level, ConsoleTransport.renderJson(entry), false)
         : (entry) => this.writePretty(entry);
+    // S1: compiled fast-path for finalize to avoid per-entry settings checks.
+    this.finalizeCompiled = this.buildFinalize();
     if (settings.bufferedConsole) {
       this.outLines = [];
       this.errLines = [];
@@ -296,28 +299,36 @@ export class ConsoleTransport implements Transport {
     return this.settings.stripControl ? stripControlCharacters(raw) : raw;
   }
 
-  /** Apply prettyTruncate/prettyWrap to a rendered line, ANSI-safe on Bun. */
-  private finalize(line: string): string {
+  /** Build a compiled finalize function once at construction time. */
+  private buildFinalize(): (line: string) => string {
     const { prettyTruncate, prettyWrap } = this.settings;
-    if (prettyTruncate === false && prettyWrap === false) return line;
+    if (prettyTruncate === false && prettyWrap === false) return (line) => line;
 
     const bunRuntime = resolveBunAnsi();
     if (bunRuntime !== null) {
-      let result = line;
+      if (prettyTruncate !== false && prettyWrap !== false) {
+        const t = prettyTruncate;
+        const w = prettyWrap;
+        return (line): string => bunRuntime.wrapAnsi(bunRuntime.sliceAnsi(line, 0, t, "…"), w, { wordWrap: true });
+      }
       if (prettyTruncate !== false) {
-        result = bunRuntime.sliceAnsi(result, 0, prettyTruncate, "…");
+        const t = prettyTruncate;
+        return (line): string => bunRuntime.sliceAnsi(line, 0, t, "…");
       }
-      if (prettyWrap !== false) {
-        result = bunRuntime.wrapAnsi(result, prettyWrap, { wordWrap: true });
-      }
-      return result;
+      if (prettyWrap === false) return (line) => line;
+      const w = prettyWrap;
+      return (line): string => bunRuntime.wrapAnsi(line, w, { wordWrap: true });
     }
-
-    let result = line;
     if (prettyTruncate !== false) {
-      result = result.length > prettyTruncate ? `${result.slice(0, prettyTruncate - 1)}…` : result;
+      const t = prettyTruncate;
+      return (line): string => line.length > t ? `${line.slice(0, t - 1)}…` : line;
     }
-    return result;
+    return (line) => line;
+  }
+
+  /** Apply prettyTruncate/prettyWrap to a rendered line, ANSI-safe on Bun. */
+  private finalize(line: string): string {
+    return this.finalizeCompiled(line);
   }
 
   private colorFor(level: LogLevel): ColorName | false | undefined {
@@ -327,6 +338,7 @@ export class ConsoleTransport implements Transport {
 
   private static renderJson(entry: LogEntry): string {
     return JSON.stringify({
+      ...(entry.baseFields ?? {}),
       author: entry.author,
       level: entry.level,
       message: entry.message,

@@ -4,7 +4,7 @@
 > redaction, file/database output, flood control, spans and traces, Prometheus-style
 > metrics, worker-thread transports and web framework integrations.
 
-Version: 0.8.2. License: MIT. Author: HullPerse.
+Version: 0.10.1. License: MIT. Author: HullPerse.
 Repo: https://github.com/HullPerse/hp_logger
 Issues: https://github.com/HullPerse/hp_logger/issues
 npm: https://www.npmjs.com/package/hp_logger
@@ -59,6 +59,8 @@ auth.info("user registered", { userId: 42 });
 - `logger.watch(options, hooks?)` - endpoint/availability probes; optional
   exponential `backoff` with jitter after failures, reset on success.
 - `logger.stats()`, `logger.flush()`, `logger.close()`, `logger.dump(path?)`.
+- `logger.pause()` - buffer entries instead of dispatching; `await logger.resume()` drains in FIFO order.
+- `logger.rotate()` - force rotation on transports that support it (size-based file writers).
 - `logger.counter/gauge/histogram(...)`, `logger.metricsText()` - Prometheus format.- `Logger.addTransport(t, { level? })`, `Logger.removeTransport(t)`, `Logger.clearTransports()`.
 - `installErrorHandlers(logger)` - logs uncaughtException/unhandledRejection,
   dumps the black box and flushes transports.
@@ -77,8 +79,13 @@ auth.info("user registered", { userId: 42 });
   `{:green}span{:/}`. Unknown dotted tokens render literally (warn once).
 - `format` - full custom renderer function (console + file).
 - `redactKeys` (RegExp, default standard secret keys), `redactPaths`
-  (e.g. ["user.password", "secrets.*"]), `redactDepth` (default 2).
+  (e.g. ["user.password", "secrets.*"]), `redactDepth` (default 2),
+  `redactCensor` (replacement token, default "[REDACTED]"),
+  `redactPii` ({ email?, card? } or false) - opt-in email and card number
+detection in messages and context strings.
 - `serializers` - per-key transformers applied before redaction.
+- `baseFields` (Record<string, unknown> | false) - static metadata fields
+  stamped onto every entry as top-level JSON fields (pid, hostname, service).
 - `mixin(context, level)` - enrichment hook merged under every entry context
   before serializers and redaction; explicit data wins, output is redacted.
 - `resolvers` - per-key async enrichment lookups with a bounded cache:
