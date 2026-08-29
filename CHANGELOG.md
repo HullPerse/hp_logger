@@ -1,7 +1,17 @@
 # Changelog
 
-Notable changes to hp_logger. Versions follow semver; the package is 0.x, so
-minor bumps may contain breaking renames.
+Notable changes to hp_logger. Versions follow semver; 1.0.0 is stable.
+
+## 1.0.0 - 2026-08-30
+
+### Added
+
+- Stable release - API frozen for 1.x. No breaking changes from 0.12.0.
+- are-the-types-wrong (attw) check for distribution types.
+
+### Changed
+
+- Playground i18n now respects language switch (no double language), server-only examples vertical with full-width code blocks.
 
 ## 0.12.0 - 2026-08-30
 
