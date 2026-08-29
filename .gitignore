@@ -143,6 +143,7 @@ vite.config.ts.timestamp-*
 .vite/
 # Agent docs and local tooling
 .docs/
+.scripts/
 .agents/
 AGENTS.md
 skills-lock.json
