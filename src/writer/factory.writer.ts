@@ -21,6 +21,23 @@ const withLevelSuffix = (filepath: string, level: string): string => {
   return `${base}.${level}${ext}`;
 };
 
+type FileCtor = new (path: string, options: FileTransportOptions) => Transport;
+
+const FILE_CTOR_BY_ROTATION: Record<string, FileCtor> = {
+  daily: DateBasedFileTransport as unknown as FileCtor,
+  size: SizeBasedFileTransport as unknown as FileCtor,
+};
+
+const createFileTransport = (
+  path: string,
+  options: FileTransportOptions,
+  rotation: string | undefined,
+): Transport => {
+  const Ctor = (rotation !== undefined ? FILE_CTOR_BY_ROTATION[rotation] : undefined) ?? FileTransport;
+  return new Ctor(path, options);
+};
+
+
 export const buildTransports = (settings: ResolvedSettings): Transport => {
   const transports: Transport[] = [new ConsoleTransport(settings)];
 
@@ -39,25 +56,15 @@ export const buildTransports = (settings: ResolvedSettings): Transport => {
     if (settings.file.splitByLevel) {
       const perLevel: Transport[] = LEVEL_NAMES.map((level) => {
         const options: FileTransportOptions = { ...fileOptions, namePrefix: level };
-        let inner: Transport;
-        if (rotation === "daily") {
-          inner = new DateBasedFileTransport(logDir, options);
-        } else if (rotation === "size") {
-          inner = new SizeBasedFileTransport(withLevelSuffix(logDir, level), options);
-        } else {
-          inner = new FileTransport(withLevelSuffix(logDir, level), options);
-        }
+        const path = withLevelSuffix(logDir, level);
+        const inner = createFileTransport(path, options, rotation);
         return new LeveledTransport(inner, level, true);
       });
       const [first] = perLevel;
       fileTransport =
         perLevel.length === 1 && first !== undefined ? first : new MultiTransport(perLevel);
-    } else if (rotation === "daily") {
-      fileTransport = new DateBasedFileTransport(logDir, fileOptions);
-    } else if (rotation === "size") {
-      fileTransport = new SizeBasedFileTransport(logDir, fileOptions);
     } else {
-      fileTransport = new FileTransport(logDir, fileOptions);
+      fileTransport = createFileTransport(logDir, fileOptions, rotation);
     }
     transports.push(fileTransport);
   }

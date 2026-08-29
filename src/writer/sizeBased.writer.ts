@@ -7,19 +7,16 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_FILES } from "../config/writer.config";
 import type { FileTransportOptions } from "../types/transport";
 import { BaseFileTransport } from "./base.writer";
 
-/** Gzip a rotated segment in the background; the .gz replaces the original. */
-const compressGz = (file: string): void => {
+/** Gzip a rotated segment; the .gz replaces the original. */
+const compressGz = async (file: string): Promise<void> => {
   const archive = `${file}.gz`;
-  const run = async (): Promise<void> => {
-    try {
-      const data = await readFile(file);
-      await writeFile(archive, gzipSync(data));
-      await rm(file);
-    } catch (error: unknown) {
-      console.error(`hp_logger: gzip rotation failed for ${file}: ${String(error)}`);
-    }
-  };
-  run();
+  try {
+    const data = await readFile(file);
+    await writeFile(archive, gzipSync(data));
+    await rm(file);
+  } catch (error: unknown) {
+    console.error(`hp_logger: gzip rotation failed for ${file}: ${String(error)}`);
+  }
 };
 
 /**
@@ -70,6 +67,6 @@ export class SizeBasedFileTransport extends BaseFileTransport {
       rmSync(`${this.segment(index + 1)}.gz`, { force: true });
     }
     if (existsSync(this.filepath)) renameSync(this.filepath, this.segment(1));
-    if (this.gzip) compressGz(this.segment(1));
+    if (this.gzip) await compressGz(this.segment(1));
   }
 }

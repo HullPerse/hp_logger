@@ -13,6 +13,7 @@ export interface ResolvedResolver {
   /** Target field for scalar results; object results merge their own keys. */
   as?: string;
   onError: "skip" | "mark";
+  onTimeout: "skip" | "mark";
   resolve: (value: unknown) => unknown | Promise<unknown>;
   timeoutMs: number;
   ttlMs: number;
@@ -153,7 +154,10 @@ export class ResolverSet implements ResolverSetShape {
   ): Promise<LookupResult | undefined> {
     try {
       const outcome = await ResolverSet.timedResolve(entry, value);
-      if (outcome === TIMEOUT) return undefined;
+      if (outcome === TIMEOUT) {
+        const fields = entry.onTimeout === "mark" ? { [key]: ERROR_MARKER } : undefined;
+        return fields === undefined ? undefined : { cacheKey, fields };
+      }
       if (outcome === RESOLVER_ERROR) {
         const fields = entry.onError === "mark" ? { [key]: ERROR_MARKER } : undefined;
         return fields === undefined ? undefined : { cacheKey, fields };
@@ -184,11 +188,13 @@ export class ResolverSet implements ResolverSetShape {
     return {
       as: entry.as,
       onError: entry.onError ?? "skip",
+      onTimeout: entry.onTimeout ?? entry.onError ?? "skip",
       resolve: entry.resolve,
       timeoutMs: entry.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       ttlMs: entry.ttlMs ?? DEFAULT_TTL_MS,
     };
   }
+
 
   /** Run the lookup with a hard deadline; errors and timeouts map to markers. */
   private static async timedResolve(

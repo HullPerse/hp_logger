@@ -1,5 +1,5 @@
+import path from "node:path";
 import { writeFile } from "node:fs/promises";
-
 import { LruCache } from "../brain/lru.utils";
 import { brainSnapshots, registerBrainCache } from "../brain/registry.utils";
 import { RingBuffer } from "../brain/ring.utils";
@@ -16,14 +16,24 @@ import {
   writeEntry,
 } from "../core/pipeline.core";
 import { getSpanRegistry, inheritSpanContext } from "../core/span.core";
-import { drawBox } from "../format/box.format";
 import { formatDuration } from "../format/duration.format";
-import { renderMetricsTable } from "../format/metrics.format";
 import { renderSpanTree } from "../format/span.format";
 import { renderTable } from "../format/table.format";
 import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
 import { attemptAsync } from "../lib/result.utils";
 import { createSampler } from "../lib/sampling.utils";
+import {
+  createCounter as createCounterHelper,
+  createGauge as createGaugeHelper,
+  createHistogram as createHistogramHelper,
+  ensureAutoCounter as ensureAutoCounterHelper,
+  getMetricsText as getMetricsTextHelper,
+  getOrCreateRegistry as getRegistryHelper,
+  writeMetricsBox as writeMetricsBoxHelper,
+} from "./metrics.api";
+import { spanImpl, timeImpl, traceTreeImpl } from "./span.api";
+import { taskImpl } from "./task.api";
+import { rebindWatchImpl, watchImpl } from "./watch.api";
 import {
   matchEnvModule,
   mergeSettings,
@@ -120,7 +130,8 @@ export class Logger implements LoggerState {
   private watchHandles: WatchHandle[] = [];
   private paused = false;
   private pauseBuffer: Array<{ level: LogLevel; message: LazyMessage; context: LazyContext | undefined }> = [];
-  // Profiler state: one registered histogram plus its bounded label cache.
+  private pauseDropped = 0;
+  private static readonly PAUSE_CAP = 10_000;
   // Null when settings.profile is off (one null check on the measurement
   // path).
   private profiler: OperationProfiler | null = null;
@@ -228,42 +239,33 @@ export class Logger implements LoggerState {
 
   /** Lazy registry for logger metrics; created on first metric usage. */
   private metricsRegistry(): Registry {
-    if (this.metricsRegistryInstance === null) {
-      this.metricsRegistryInstance = new Registry();
-    }
-    return this.metricsRegistryInstance;
+    return getRegistryHelper(this);
   }
 
   private ensureAutoCounter(): void {
-    if (this.autoCounter !== null) return;
-    this.autoCounter = new Counter({
-      help: "Log entries written by this logger",
-      labelNames: ["author", "level"],
-      name: "hp_logger_entries_total",
-      registers: [this.metricsRegistry()],
-    });
+    ensureAutoCounterHelper(this);
   }
 
   /** Create a counter bound to this logger's registry. */
   counter(options: Omit<MetricOptions, "registers">): Counter {
-    return new Counter({ ...options, registers: [this.metricsRegistry()] });
+    return createCounterHelper(this, options);
   }
 
   /** Create a gauge bound to this logger's registry. */
   gauge(options: Omit<MetricOptions, "registers">): Gauge {
-    return new Gauge({ ...options, registers: [this.metricsRegistry()] });
+    return createGaugeHelper(this, options);
   }
 
   /** Create a histogram bound to this logger's registry. */
   histogram(
     options: Omit<MetricOptions, "registers"> & { buckets?: readonly number[] },
   ): Histogram {
-    return new Histogram({ ...options, registers: [this.metricsRegistry()] });
+    return createHistogramHelper(this, options);
   }
 
   /** All logger metrics in Prometheus text format, ready for a /metrics endpoint. */
   metricsText(): string {
-    return this.metricsRegistryInstance?.metrics() ?? "";
+    return getMetricsTextHelper(this);
   }
 
   /**
@@ -272,11 +274,9 @@ export class Logger implements LoggerState {
    * file and database transports receive the same plain-text table.
    */
   metricsBox(level: LogLevel = "info"): void {
-    const snapshots = this.metricsRegistryInstance?.snapshots() ?? [];
-    const body =
-      snapshots.length === 0 ? ["no metrics recorded"] : renderMetricsTable(snapshots).split("\n");
-    this.write(level, drawBox(body, { title: "metrics" }).join("\n"));
+    writeMetricsBoxHelper(this, level);
   }
+
 
   /**
    * Poll a url or a custom probe and log availability edges. Transitions are
@@ -284,31 +284,14 @@ export class Logger implements LoggerState {
    * options.logProbes is set. Watchers are stopped by close().
    */
   watch(options: WatchOptions, hooks: WatchHooks = {}): WatchHandle {
-    const handle = startWatcher(
-      (level, message, context) => {
-        if (level === "success") this.success(message, context);
-        else if (level === "warn") this.warn(message, context);
-        else this.debug(message, context);
-      },
-      options,
-      hooks,
-    );
-    this.watchHandles.push(handle);
-    return handle;
+    return watchImpl(this, options, hooks);
   }
 
   /** Replace or clear the watcher declared through settings on this logger. */
   private rebindWatch(config: WatchOptions | false): void {
-    if (this.declarativeWatch) {
-      const index = this.watchHandles.indexOf(this.declarativeWatch);
-      if (index !== -1) this.watchHandles.splice(index, 1);
-      this.declarativeWatch.stop();
-      this.declarativeWatch = null;
-    }
-    if (config && (config.url || config.probe)) {
-      this.declarativeWatch = this.watch(config);
-    }
+    rebindWatchImpl(this, config);
   }
+
 
   /** Create a named child module with optional settings override. */
   module(name: string, settingsOverride?: LoggerSettings): Logger {
@@ -455,13 +438,9 @@ export class Logger implements LoggerState {
    * Pass `maxMs` to warn when the measurement exceeds the threshold.
    */
   async time<T>(name: string, fn: () => Promise<T> | T, options: TimeOptions = {}): Promise<T> {
-    const startedAt = performance.now();
-    const outcome = await attemptAsync(() => fn());
-    const durationMs = Math.round(performance.now() - startedAt);
-    this.writeMeasured(name, durationMs, options);
-    if (!outcome.ok) throw outcome.error;
-    return outcome.value;
+    return timeImpl(this, name, fn, options);
   }
+
 
   /**
    * Start a manual span. Call `end()` to log the measured duration, or pass a
@@ -480,74 +459,14 @@ export class Logger implements LoggerState {
     optionsOrCallback?: TimeOptions | ((span: SpanHandle) => T | Promise<T>),
     maybeCallback?: (span: SpanHandle) => T | Promise<T>,
   ): SpanHandle | Promise<T> {
-    const thirdIsCallback = typeof maybeCallback === "function";
-    const isCallback = typeof optionsOrCallback === "function";
-    const options: TimeOptions = isCallback ? {} : (optionsOrCallback ?? {});
-    let callback: ((span: SpanHandle) => T | Promise<T>) | undefined;
-    if (thirdIsCallback) {
-      callback = maybeCallback;
-    } else if (isCallback) {
-      callback = optionsOrCallback as (span: SpanHandle) => T | Promise<T>;
-    }
-    const spanContext = inheritSpanContext(getAsyncContext(), options);
-    const { parentId, spanId, traceId } = spanContext;
-    const startedAt = performance.now();
-    const stub: SpanHandle = {
-      end: () => {
-        throw new Error("span.end called before initialization");
-      },
-      ended: false,
-      parentId,
-      spanId,
-      traceId,
-    };
-    const handle: SpanHandle = stub;
-
-    handle.end = (level?: LogLevel): void => {
-      if (handle.ended) return;
-      handle.ended = true;
-      const durationMs = Math.round(performance.now() - startedAt);
-      this.writeMeasured(
-        name,
-        durationMs,
-        { ...options, level: level ?? options.level },
-        spanContext,
-      );
-    };
-
-    if (callback === undefined) return handle;
-
-    return runWithSpanPath(name, () =>
-      runWithContext({ ...spanContext }, async () => {
-        try {
-          const result = (await callback(handle)) as T;
-          if (handle.ended) return result;
-          handle.end();
-          return result;
-        } catch (error: unknown) {
-          if (handle.ended) throw error;
-          handle.end("error");
-          throw error;
-        }
-      }),
-    );
+    return (spanImpl as unknown as (a: unknown, b: string, c: unknown, d: unknown) => SpanHandle | Promise<T>)(this, name, optionsOrCallback, maybeCallback);
   }
 
   /** Render the span tree for a trace (default: most recent) as an ASCII tree. */
   traceTree(traceId?: string): void {
-    const registry = getSpanRegistry();
-    const id = traceId ?? registry.latestTraceId();
-    if (id === undefined) {
-      this.write("info", "no spans recorded");
-      return;
-    }
-    const roots = registry.treeForTrace(id);
-    if (roots.length === 0) {
-      this.write("info", `no spans for trace ${id}`);
-      return;
-    }
-    this.write("info", renderSpanTree(roots));
+    traceTreeImpl(this, traceId);
   }
+
 
   /**
    * Track a pending task: a started entry, then a done/failed entry with the
@@ -562,104 +481,7 @@ export class Logger implements LoggerState {
     name: string,
     optionsOrCallback?: TaskOptions | ((task: TaskHandle) => T | Promise<T>),
   ): TaskHandle | Promise<T> {
-    const isCallback = typeof optionsOrCallback === "function";
-    const options: TaskOptions = isCallback ? {} : (optionsOrCallback ?? {});
-    const callback = isCallback
-      ? (optionsOrCallback as (task: TaskHandle) => T | Promise<T>)
-      : undefined;
-
-    const inherited = getAsyncContext();
-    const prefix = typeof inherited?.group === "string" ? (inherited.group as string) : "";
-    const ownGroup = `${prefix}${name}`;
-    // Trailing dot is load-bearing: it makes child entries indent one level deeper.
-    const childGroup = `${ownGroup}.`;
-
-    const spanContext = inheritSpanContext(inherited);
-
-    const taskLevel: LogLevel = options.level ?? this.currentSettings.task.level;
-    const progressEnabled = this.currentSettings.task.progress;
-    const startedAt = performance.now();
-    const state = { frame: 0, open: true };
-
-    const finish = (ok: boolean, detail?: string | Error): void => {
-      if (state.open) {
-        state.open = false;
-        const durationMs = Math.round(performance.now() - startedAt);
-        const error = detail instanceof Error ? detail : undefined;
-        const suffix =
-          detail === undefined ? "" : ` - ${error === undefined ? detail : error.message}`;
-        const message = ok
-          ? `${name} done in ${formatDuration(durationMs)}${suffix}`
-          : `${name} failed in ${formatDuration(durationMs)}${suffix}`;
-        const level: LogLevel = ok ? "success" : "error";
-        this.profiler?.record(name, durationMs);
-        this.write(level, message, {
-          durationMs,
-          ...(error === undefined ? {} : { error }),
-          group: ownGroup,
-          operation: name,
-          ...spanContext,
-          status: ok ? "done" : "failed",
-          task: name,
-        });
-        getSpanRegistry().add({
-          durationMs,
-          level,
-          message,
-          name,
-          parentId: spanContext.parentId,
-          spanId: spanContext.spanId,
-          timestamp: this.timestamp(),
-          traceId: spanContext.traceId,
-        });
-      }
-    };
-
-    const handle: TaskHandle = {
-      done: (detail?: string): void => {
-        finish(true, detail);
-      },
-      get ended() {
-        return state.open === false;
-      },
-      fail: (detail?: string | Error): void => {
-        finish(false, detail);
-      },
-      update: (text: string, context?: LogContext): void => {
-        if (progressEnabled && state.open) {
-          this.write(taskLevel, text, {
-            frame: state.frame,
-            group: childGroup,
-            status: "progress",
-            task: name,
-            ...context,
-          });
-          state.frame += 1;
-        }
-      },
-    };
-
-    this.write(taskLevel, `${name} started`, {
-      group: ownGroup,
-      ...spanContext,
-      status: "started",
-      task: name,
-    });
-
-    if (callback === undefined) return handle;
-
-    return runWithSpanPath(name, () =>
-      runWithContext({ ...spanContext, group: childGroup }, async () => {
-        try {
-          const result = (await callback(handle)) as T;
-          finish(true);
-          return result;
-        } catch (error: unknown) {
-          finish(false, error instanceof Error ? error : String(error));
-          throw error;
-        }
-      }),
-    );
+    return (taskImpl as unknown as (a: unknown, b: string, c: unknown) => TaskHandle | Promise<T>)(this, name, optionsOrCallback);
   }
 
   /** Render rows as a plain-text table and log it at the given level. */
@@ -730,7 +552,6 @@ export class Logger implements LoggerState {
       writeEntry(this, level, message, context);
     }
   }
-
   private write(level: LogLevel, message: LazyMessage, context?: LazyContext): void {
     if (this.autoCounter !== null) {
       this.autoCounter.inc({ author: this.author, level });
@@ -744,6 +565,10 @@ export class Logger implements LoggerState {
           : { ...groupPrefix, ...context };
     }
     if (this.paused) {
+      if (this.pauseBuffer.length >= Logger.PAUSE_CAP) {
+        this.pauseDropped += 1;
+        return;
+      }
       this.pauseBuffer.push({ level, message, context: merged });
       return;
     }
@@ -773,7 +598,12 @@ export class Logger implements LoggerState {
     const own: Record<string, object> = {};
     if (this.blackboxRing !== null) own["blackboxRing"] = this.blackboxRing.stats();
     if (this.profiler !== null) own["profileCache"] = this.profiler.stats();
-    return { ...base, caches: { ...brainSnapshots(), ...own } };
+    if (this.pauseBuffer.length > 0 || this.pauseDropped > 0) {
+      own["pause"] = { dropped: this.pauseDropped, queued: this.pauseBuffer.length };
+    }
+    const queued = base.queued + this.pauseBuffer.length;
+    const dropped = base.dropped + this.pauseDropped;
+    return { ...base, dropped, queued, caches: { ...brainSnapshots(), ...own } };
   }
 
   /**
@@ -796,11 +626,24 @@ export class Logger implements LoggerState {
    * Returns the path written, or null when the black box is disabled, empty
    * or has no path.
    */
-  async dump(path?: string): Promise<string | null> {
+  async dump(pathOverride?: string): Promise<string | null> {
     const target =
-      path ?? (this.currentSettings.blackbox ? this.currentSettings.blackbox.path : undefined);
+      pathOverride ?? (this.currentSettings.blackbox ? this.currentSettings.blackbox.path : undefined);
     const ring = this.blackboxRing;
     if (target === undefined || ring === null || ring.size === 0) return null;
+    // Soft guard: block traversal, warn when outside cwd.
+    const segments = target.split(/[\\/]/u);
+    if (segments.includes("..")) {
+      console.warn(`hp_logger: dump path blocked: ${target} (traversal)`);
+      return null;
+    }
+    if (path.isAbsolute(target)) {
+      const resolved = path.resolve(target);
+      const cwd = process.cwd();
+      if (resolved !== cwd && !resolved.startsWith(`${cwd}${path.sep}`)) {
+        console.warn(`hp_logger: dump path outside cwd: ${target}`);
+      }
+    }
     const lines = ring
       .toArray()
       .map((entry) => JSON.stringify(entry))

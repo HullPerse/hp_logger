@@ -3,7 +3,45 @@
 Notable changes to hp_logger. Versions follow semver; the package is 0.x, so
 minor bumps may contain breaking renames.
 
-## 0.10.1 - 2026-08-26
+## 0.12.0 - 2026-08-30
+
+### Added
+
+- `Logger.stats()` now reports `paused` queue and drop counters when `pause()` is used.
+- `ResolverEntry.onTimeout` - separate from `onError` for timeout handling (defaults to `onError`).
+- `src/writer/bufferedConsole.writer.ts` - extracted two-channel buffering for `ConsoleTransport` (out/err, 64-line cap, interval flush).
+- `src/api/metrics.api.ts`, `span.api.ts`, `task.api.ts`, `watch.api.ts` - facade split of `Logger` god-class.
+
+### Changed
+
+- `BaseFileTransport.flush` now serializes concurrent flushes via promise lock.
+- `LeveledTransport` recursion replaced with loop for large batches.
+- `SizeBasedFileTransport` gzip now awaited during rotation.
+- `dispatchBatch` avoids `Promise.all` for sync transports.
+- `factory.writer` uses table `FILE_CTOR_BY_ROTATION`.
+- `mergeEntryContext` and `sanitizeContext` avoid `Object.keys` allocations.
+- `pipeline` merges `AsyncLocalStorage` for context and span path into single store.
+- `entry` builders deduped via shared helpers while keeping compiled `entryPlan`.
+- `settings` path validation now warns on absolute paths outside cwd and blocks traversal.
+
+### Fixed
+
+- `pause()` buffer now bounded at 10_000 entries (drop-newest) instead of unbounded.
+- `globalTransports` dispatch now snapshots the array to avoid mutation during iteration.
+- File and blackbox path handling hardened against directory traversal.
+
+## 0.11.0 - 2026-08-26
+
+### Added
+
+- `settings.baseFields` - static top-level metadata stamped on every entry.
+- `logger.pause()` / `resume()` - FIFO buffering of entries.
+- `logger.rotate()` - manual trigger for size-based rotation.
+- `settings.redactPii` and `settings.redactCensor` - PII detectors and custom censor token.
+- Compiled `finalize` fast-path for `prettyTruncate`/`prettyWrap`.
+- Memoized `escapeValue` for metrics label escaping.
+- `TtlCache` and bounded `LruCache` for `once`/`throttle` and resolver TTL.
+
 
 ### Fixed
 

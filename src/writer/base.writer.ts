@@ -33,6 +33,7 @@ export abstract class BaseFileTransport implements Transport {
   // no per-flush promisify/bind work.
   private writeChunk: ((chunk: string) => Promise<void>) | null = null;
   private transportErrors = 0;
+  private flushPromise: Promise<void> | null = null;
   // Bound once so pushEntries pays one call argument instead of six.
   private readonly renderLine: (entry: LogEntry) => string;
 
@@ -79,40 +80,49 @@ export abstract class BaseFileTransport implements Transport {
 
   /** Write buffered lines to the target file; safe to call directly. */
   async flush(): Promise<void> {
-    if (this.buffer.length === 0) return;
-    const filepath = await this.targetFilepath();
-    if (!filepath) return;
-    if (this.stream === null) {
-      const created = createWriteStream(filepath, { flags: "a" });
-      // Without a listener a stream error becomes an uncaughtException.
-      // Self-healing: destroy the dead stream so the next flush re-opens
-      // it fresh (deleted file, bad path, full disk).
-      created.on("error", () => {
-        created.destroy();
-        if (this.stream === created) {
-          this.stream = null;
-          this.writeChunk = null;
-        }
-      });
-      this.stream = created;
-      this.writeChunk = promisify(created.write.bind(created)) as (chunk: string) => Promise<void>;
-    }
-    const { stream, writeChunk } = this;
-    if (writeChunk === null) return;
-    const data = `${this.buffer.join("\n")}\n`;
-    this.buffer = [];
-    // The write callback fires after the chunk reaches the file descriptor,
-    // so callers (size rotation) can stat the file right after the flush.
-    const outcome = await attemptAsync(() => writeChunk(data));
-    // File write errors are non-fatal for logging; the buffer is already
-    // cleared. The stream is destroyed and re-created on the next flush:
-    // a broken stream (deleted file, full disk, revoked handle) stays
-    // broken forever otherwise.
-    if (!outcome.ok) {
-      this.transportErrors += 1;
-      console.error(`hp_logger: file flush failed: ${outcome.error.message}`);
-      stream.destroy();
-      if (this.stream === stream) this.stream = null;
+    if (this.flushPromise !== null) return this.flushPromise;
+    const run = async (): Promise<void> => {
+      if (this.buffer.length === 0) return;
+      const filepath = await this.targetFilepath();
+      if (!filepath) return;
+      if (this.stream === null) {
+        const created = createWriteStream(filepath, { flags: "a" });
+        // Without a listener a stream error becomes an uncaughtException.
+        // Self-healing: destroy the dead stream so the next flush re-opens
+        // it fresh (deleted file, bad path, full disk).
+        created.on("error", () => {
+          created.destroy();
+          if (this.stream === created) {
+            this.stream = null;
+            this.writeChunk = null;
+          }
+        });
+        this.stream = created;
+        this.writeChunk = promisify(created.write.bind(created)) as (chunk: string) => Promise<void>;
+      }
+      const { stream, writeChunk } = this;
+      if (writeChunk === null) return;
+      const data = `${this.buffer.join("\n")}\n`;
+      this.buffer = [];
+      // The write callback fires after the chunk reaches the file descriptor,
+      // so callers (size rotation) can stat the file right after the flush.
+      const outcome = await attemptAsync(() => writeChunk(data));
+      // File write errors are non-fatal for logging; the buffer is already
+      // cleared. The stream is destroyed and re-created on the next flush:
+      // a broken stream (deleted file, full disk, revoked handle) stays
+      // broken forever otherwise.
+      if (!outcome.ok) {
+        this.transportErrors += 1;
+        console.error(`hp_logger: file flush failed: ${outcome.error.message}`);
+        stream.destroy();
+        if (this.stream === stream) this.stream = null;
+      }
+    };
+    this.flushPromise = run();
+    try {
+      await this.flushPromise;
+    } finally {
+      this.flushPromise = null;
     }
   }
 

@@ -1,9 +1,39 @@
+import path from "node:path";
+
 import { LOG_LEVELS } from "../config/levels.config";
 import { DEFAULT_MAX_OPERATIONS } from "../config/metrics.config";
 import { DEFAULT_REDACT_KEYS } from "../config/redaction.config";
 import type { LoggerSettings, LogLevel, ResolvedSettings } from "../types/logger";
 
-/** Adaptive mode: TTY gets tagged pretty output, pipes/files get JSON. */
+const isTraversalBlocked = (candidate: string): boolean => candidate.split(/[\\/]/u).includes("..");
+
+const warnOutsideCwd = (kind: string, candidate: string): void => {
+  if (path.isAbsolute(candidate)) {
+    const resolved = path.resolve(candidate);
+    const cwd = process.cwd();
+    if (resolved !== cwd && !resolved.startsWith(`${cwd}${path.sep}`)) {
+      console.warn(`hp_logger: ${kind} path outside cwd: ${candidate}`);
+    }
+  }
+};
+
+const sanitizeFile = <T extends { path?: string } | false | undefined>(file: T): T | false => {
+  if (file === undefined || file === false) return file as T | false;
+  if (typeof file === "object" && file !== null && "path" in file) {
+    const candidate = (file as { path?: string }).path;
+    if (candidate !== undefined) {
+      if (isTraversalBlocked(candidate)) {
+        console.warn(`hp_logger: file path blocked: ${candidate} (traversal)`);
+        return false;
+      }
+      warnOutsideCwd("file", candidate);
+    }
+  }
+  return file as T | false;
+};
+
+
+
 export const resolveDefaultMode = (isTTY: boolean | undefined): "pretty" | "json" =>
   isTTY ? "pretty" : "json";
 
@@ -147,12 +177,21 @@ const taskBlock: SettingsBlock<"task"> = {
 
 const DEFAULT_BLACKBOX_SIZE = 1000;
 
-const buildBlackbox = (box: Exclude<LoggerSettings["blackbox"], undefined | false>) => ({
-  path: box.path,
-  size: Math.max(1, box.size ?? DEFAULT_BLACKBOX_SIZE),
-});
-
-/** Flight-recorder ring dumped on crash or via logger.dump(). */
+const buildBlackbox = (box: Exclude<LoggerSettings["blackbox"], undefined | false>) => {
+  let candidatePath = box.path;
+  if (candidatePath !== undefined) {
+    if (isTraversalBlocked(candidatePath)) {
+      console.warn(`hp_logger: blackbox path blocked: ${candidatePath} (traversal)`);
+      candidatePath = undefined;
+    } else {
+      warnOutsideCwd("blackbox", candidatePath);
+    }
+  }
+  return {
+    path: candidatePath,
+    size: Math.max(1, box.size ?? DEFAULT_BLACKBOX_SIZE),
+  };
+};
 const blackboxBlock: SettingsBlock<"blackbox"> = {
   merge(base, patch) {
     const { blackbox } = patch;
@@ -331,7 +370,7 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
     database: settings.database ?? false,
     emoji: tags.emoji,
     enabled: settings.enabled ?? true,
-    file: settings.file ?? false,
+    file: sanitizeFile(settings.file) ?? false,
     filters: settings.filters ?? [],
     format: fmt.format,
     formatContext: fmt.formatContext,
@@ -383,7 +422,7 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
     database: patch.database ?? base.database,
     emoji: tags.emoji,
     enabled: patch.enabled ?? base.enabled,
-    file: patch.file ?? base.file,
+    file: sanitizeFile(patch.file) ?? base.file,
     filters: patch.filters ?? base.filters,
     format: fmt.format,
     formatContext: fmt.formatContext,

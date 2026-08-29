@@ -12,9 +12,11 @@ export const countSummary = (entry: LogEntry, count: number): LogEntry => ({
 export const dispatchBatch = async (transport: Transport, entries: LogEntry[]): Promise<void> => {
   if (transport.writeBatch) {
     await transport.writeBatch(entries);
-  } else {
-    const promises = entries.map((entry) => Promise.resolve(transport.write(entry)));
-    await Promise.all(promises);
+    return;
+  }
+  for (const entry of entries) {
+    const result = transport.write(entry);
+    if (result instanceof Promise) await result;
   }
 };
 

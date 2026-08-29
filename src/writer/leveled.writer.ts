@@ -43,10 +43,7 @@ export class LeveledTransport implements Transport {
   }
 
   private async deliverSequentially(entries: LogEntry[]): Promise<void> {
-    const [first, ...rest] = entries;
-    if (first === undefined) return;
-    await this.inner.write(first);
-    await this.deliverSequentially(rest);
+    for (const entry of entries) await this.inner.write(entry);
   }
 
   flush(): void | Promise<void> {

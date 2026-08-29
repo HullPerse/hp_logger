@@ -81,7 +81,8 @@ const deliver = (state: LoggerState, entry: LogEntry): void => {
   if (!sampledIn) return;
   dispatchToTransport(state.transport, entry);
   if (globalTransports.length > 0) {
-    for (const transport of globalTransports) dispatchToTransport(transport, entry);
+    const snapshot = [...globalTransports];
+    for (const transport of snapshot) dispatchToTransport(transport, entry);
   }
 };
 

@@ -2,7 +2,6 @@ import type { sliceAnsi, wrapAnsi } from "bun";
 
 import { DEFAULT_LEVEL_COLORS, LEVEL_EMOJIS } from "../config/colors.config";
 import { LEVEL_NAMES } from "../config/levels.config";
-import { DEFAULT_FLUSH_INTERVAL } from "../config/writer.config";
 import { drawBox } from "../format/box.format";
 import { colorizeJsonString } from "../format/colorize.format";
 import { formatContext } from "../format/context.format";
@@ -12,9 +11,9 @@ import { caseTag } from "../format/tag.format";
 import { renderTemplateSettings } from "../format/template.format";
 import { applyColor } from "../lib/color.utils";
 import { stripControlCharacters } from "../lib/json.utils";
-import { startUnrefInterval, stopInterval } from "../lib/transport.utils";
 import type { ColorName, LogEntry, LogLevel, ResolvedSettings, TagCase } from "../types/logger";
 import type { Transport } from "../types/transport";
+import { BufferedConsole } from "./bufferedConsole.writer";
 
 type LevelTagMap = Record<LogLevel, string>;
 type LevelColorMap = Record<LogLevel, ColorName | false | undefined>;
@@ -49,26 +48,6 @@ const writeTracked = (level: LogLevel, output: string, debugTraceToConsoleDebug 
   consoleWrite(level, output, debugTraceToConsoleDebug);
 };
 
-/** Lines per channel held before an early buffered flush. */
-const BUFFERED_CONSOLE_LINE_CAP = 64;
-
-let exitHookInstalled = false;
-const activeBufferedTransports = new Set<ConsoleTransport>();
-
-/** Best-effort tail drain on normal process exit; hard kills still lose it. */
-const installBufferedExitHook = (): void => {
-  if (exitHookInstalled) return;
-  exitHookInstalled = true;
-  process.on("exit", () => {
-    for (const transport of activeBufferedTransports) transport.flush();
-  });
-};
-
-const registerBufferedConsole = (transport: ConsoleTransport): void => {
-  activeBufferedTransports.add(transport);
-  installBufferedExitHook();
-};
-
 // Bun's ANSI helpers cannot appear or disappear mid-process and no test
 // rebinds the global, so the runtime probe resolves once (null = checked,
 // absent, e.g. Node).
@@ -85,6 +64,7 @@ const resolveBunAnsi = (): { sliceAnsi: typeof sliceAnsi; wrapAnsi: typeof wrapA
   return bunAnsi;
 };
 
+
 export class ConsoleTransport implements Transport {
   private readonly levelColors: LevelColorMap;
   private readonly levelTags: LevelTagMap;
@@ -94,13 +74,7 @@ export class ConsoleTransport implements Transport {
   private readonly writeCompiled: (entry: LogEntry) => void;
   private readonly finalizeCompiled: (line: string) => string;
   private authorTagCache: { raw: string; tag: string } | null = null;
-  // Buffered-stdout mode (settings.bufferedConsole): rendered lines coalesce
-  // into two stdio channels and leave in one write per flush window. The
-  // log/debug method split and warn-vs-error method names collapse inside a
-  // chunk - both channels keep their stream, order is kept per channel.
-  private outLines: string[] | null = null;
-  private errLines: string[] | null = null;
-  private bufferTimer: ReturnType<typeof setInterval> | null = null;
+  private buffered: BufferedConsole | null = null;
 
   constructor(settings: ResolvedSettings) {
     this.startedAt = performance.now();
@@ -122,23 +96,20 @@ export class ConsoleTransport implements Transport {
     // S1: compiled fast-path for finalize to avoid per-entry settings checks.
     this.finalizeCompiled = this.buildFinalize();
     if (settings.bufferedConsole) {
-      this.outLines = [];
-      this.errLines = [];
-      registerBufferedConsole(this);
-      this.bufferTimer = startUnrefInterval(() => this.flush(), DEFAULT_FLUSH_INTERVAL);
+      this.buffered = new BufferedConsole((out, err) => {
+        if (out !== null) consoleWrite("info", out, false);
+        if (err !== null) consoleWrite("error", err, false);
+      });
     }
   }
 
   /** Route one rendered line: buffered channels when enabled, direct write otherwise. */
   private emit(level: LogLevel, output: string, debugTraceToConsoleDebug: boolean): void {
-    const channel =
-      level === "error" || level === "fatal" || level === "warn" ? this.errLines : this.outLines;
-    if (channel === null) {
+    if (this.buffered === null) {
       writeTracked(level, output, debugTraceToConsoleDebug);
       return;
     }
-    channel.push(output);
-    if (channel.length >= BUFFERED_CONSOLE_LINE_CAP) this.flush();
+    this.buffered.push(level, output);
   }
 
   /**
@@ -146,20 +117,9 @@ export class ConsoleTransport implements Transport {
    * flush interval, the line cap, Logger.flush()/close() and process exit.
    */
   flush(): void {
-    const out = this.outLines;
-    const err = this.errLines;
-    if ((out === null || out.length === 0) && (err === null || err.length === 0)) return;
-    if (out !== null && out.length > 0) {
-      const chunk = out.join("\n");
-      out.length = 0;
-      consoleWrite("info", chunk, false);
-    }
-    if (err !== null && err.length > 0) {
-      const chunk = err.join("\n");
-      err.length = 0;
-      consoleWrite("error", chunk, false);
-    }
+    this.buffered?.flush();
   }
+
 
   write(entry: LogEntry): void {
     this.writeCompiled(entry);
@@ -352,9 +312,7 @@ export class ConsoleTransport implements Transport {
 
   /** Stop the flush timer and drain; the transport is done after this. */
   close(): void {
-    stopInterval(this.bufferTimer);
-    this.bufferTimer = null;
-    activeBufferedTransports.delete(this);
-    this.flush();
+    this.buffered?.close();
+    this.buffered = null;
   }
 }

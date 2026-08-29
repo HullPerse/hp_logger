@@ -47,7 +47,13 @@ const sanitizeContext = (
   needsRedaction: boolean,
   redactValue: (value: unknown) => unknown,
 ): LogContext => {
-  if (context === EMPTY_CONTEXT || Object.keys(context).length === 0) return EMPTY_CONTEXT;
+  if (context === EMPTY_CONTEXT) return EMPTY_CONTEXT;
+  let empty = true;
+  for (const _ in context) {
+    empty = false;
+    break;
+  }
+  if (empty) return EMPTY_CONTEXT;
   if (!needsRedaction) return context;
   return redactValue(context) as LogContext;
 };
@@ -85,6 +91,70 @@ const attachFatalSnapshot = (context: LogContext): LogContext => {
   };
 };
 
+const resolveLazyContext = (lazy: LazyContext | undefined): LogContext | undefined =>
+  lazy === undefined ? undefined : typeof lazy === "function" ? lazy() : lazy;
+
+const mergeGuarded = (
+  staticContext: LogContext,
+  hasStaticContext: boolean,
+  lazyContext: LogContext | undefined,
+  asyncContext: LogContext | undefined,
+): LogContext => {
+  try {
+    return mergeEntryContext(staticContext, hasStaticContext, lazyContext, asyncContext);
+  } catch {
+    return { contextError: "unserializable context" };
+  }
+};
+
+const withMixin = (
+  finalContext: LogContext,
+  mixin: ((context: LogContext, level: LogLevel) => LogContext) | undefined,
+  level: LogLevel,
+): LogContext => {
+  if (mixin === undefined) return finalContext;
+  let injected: LogContext | undefined;
+  try {
+    const outcome: unknown = mixin(finalContext, level);
+    injected = typeof outcome === "object" && outcome !== null ? (outcome as LogContext) : undefined;
+  } catch {
+    if (!mixinThrowWarned) {
+      mixinThrowWarned = true;
+      console.warn("hp_logger: settings.mixin threw - its fields are skipped");
+    }
+    injected = undefined;
+  }
+  if (injected !== undefined) {
+    let hasKeys = false;
+    for (const _ in injected) {
+      hasKeys = true;
+      break;
+    }
+    if (hasKeys) return { ...injected, ...finalContext };
+  }
+  return finalContext;
+};
+
+const finalizeEntry = (
+  state: LoggerState,
+  level: LogLevel,
+  message: string,
+  context: LogContext,
+): LogEntry => {
+  const entry: LogEntry = {
+    author: state.author,
+    context,
+    level,
+    message,
+    timestamp: state.timestamp(),
+  };
+  if (state.schemaVersion) entry.v = LOG_SCHEMA_VERSION;
+  const spanPath = getActiveSpanPath();
+  if (spanPath !== undefined && spanPath.length > 0) entry.spanPath = spanPath;
+  return entry;
+};
+
+
 /** Build one entry from a message and context, or null when a filter drops it. */
 export const buildEntry = (
   state: LoggerState,
@@ -92,52 +162,11 @@ export const buildEntry = (
   message: LazyMessage,
   lazyContext: LazyContext | undefined,
 ): LogEntry | null => {
-  const {
-    author,
-    context,
-    filters,
-    hasFilters,
-    hasStaticContext,
-    maxMessageLength,
-    mixin,
-    needsRedaction,
-    redactValue,
-    schemaVersion,
-  } = state;
-
+  const { filters, hasFilters, maxMessageLength, needsRedaction, redactValue } = state;
   const safeMessage = sanitizeMessage(message, needsRedaction, redactValue, maxMessageLength);
-
-  let resolvedContext: LogContext | undefined;
-  if (lazyContext !== undefined) {
-    resolvedContext = typeof lazyContext === "function" ? lazyContext() : lazyContext;
-  }
-  let finalContext: LogContext;
-  try {
-    finalContext = mergeEntryContext(context, hasStaticContext, resolvedContext, getAsyncContext());
-  } catch {
-    // Hostile context (throwing getters) still logs, with a marker instead.
-    finalContext = { contextError: "unserializable context" };
-  }
-  // Mixin fields sit under explicit data: the spread order makes call-site
-  // and async context win. A throwing mixin contributes nothing, and so does
-  // a non-object return; the first throw warns once so bugs stay visible.
-  if (mixin !== undefined) {
-    let injected: LogContext | undefined;
-    try {
-      const outcome: unknown = mixin(finalContext, level);
-      injected =
-        typeof outcome === "object" && outcome !== null ? (outcome as LogContext) : undefined;
-    } catch {
-      if (!mixinThrowWarned) {
-        mixinThrowWarned = true;
-        console.warn("hp_logger: settings.mixin threw - its fields are skipped");
-      }
-      injected = undefined;
-    }
-    if (injected !== undefined && Object.keys(injected).length > 0) {
-      finalContext = { ...injected, ...finalContext };
-    }
-  }
+  const resolvedContext = resolveLazyContext(lazyContext);
+  let finalContext = mergeGuarded(state.context, state.hasStaticContext, resolvedContext, getAsyncContext());
+  finalContext = withMixin(finalContext, state.mixin, level);
   let safeContext: LogContext;
   try {
     safeContext = sanitizeContext(
@@ -149,19 +178,7 @@ export const buildEntry = (
     safeContext = { contextError: "unserializable context" };
   }
   const entryContext = level === "fatal" ? attachFatalSnapshot(safeContext) : safeContext;
-
-  const entry: LogEntry = {
-    author,
-    context: entryContext,
-    level,
-    message: safeMessage,
-    timestamp: state.timestamp(),
-  };
-  if (schemaVersion) entry.v = LOG_SCHEMA_VERSION;
-  // Logger-generated metadata, outside context so redaction never masks it.
-  const spanPath = getActiveSpanPath();
-  if (spanPath !== undefined && spanPath.length > 0) entry.spanPath = spanPath;
-
+  const entry = finalizeEntry(state, level, safeMessage, entryContext);
   if (hasFilters && isFiltered(filters, entry)) return null;
   return entry;
 };
@@ -180,37 +197,17 @@ export const buildEntryFast = (
 ): LogEntry | null => {
   const raw = typeof message === "function" ? message() : message;
   const text = typeof raw === "string" ? raw : String(raw);
-  const { maxMessageLength } = state;
-  const safeMessage = text.length > maxMessageLength ? text.slice(0, maxMessageLength) : text;
-
-  let resolvedContext: LogContext | undefined;
-  if (lazyContext !== undefined) {
-    resolvedContext = typeof lazyContext === "function" ? lazyContext() : lazyContext;
-  }
-  let finalContext: LogContext;
-  try {
-    finalContext = mergeEntryContext(
-      state.context,
-      state.hasStaticContext,
-      resolvedContext,
-      getAsyncContext(),
-    );
-  } catch {
-    // Hostile context (throwing getters) still logs, with a marker instead.
-    finalContext = { contextError: "unserializable context" };
-  }
+  const safeMessage =
+    text.length > state.maxMessageLength ? text.slice(0, state.maxMessageLength) : text;
+  const resolvedContext = resolveLazyContext(lazyContext);
+  const finalContext = mergeGuarded(
+    state.context,
+    state.hasStaticContext,
+    resolvedContext,
+    getAsyncContext(),
+  );
   const entryContext = serializeErrorKeys(
     level === "fatal" ? attachFatalSnapshot(finalContext) : finalContext,
   );
-
-  const entry: LogEntry = {
-    author: state.author,
-    context: entryContext,
-    level,
-    message: safeMessage,
-    timestamp: state.timestamp(),
-  };
-  const spanPath = getActiveSpanPath();
-  if (spanPath !== undefined && spanPath.length > 0) entry.spanPath = spanPath;
-  return entry;
+  return finalizeEntry(state, level, safeMessage, entryContext);
 };

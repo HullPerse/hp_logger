@@ -158,6 +158,8 @@ export interface ResolverEntry {
   timeoutMs?: number;
   /** On lookup failure: "skip" keeps the raw value, "mark" records [RESOLVER ERROR]. Defaults to "skip". */
   onError?: "skip" | "mark";
+  /** On lookup timeout: "skip" or "mark" (defaults to onError). */
+  onTimeout?: "skip" | "mark";
   /** Lookup: the context key's value in, enriched fields (or replacement) out. */
   resolve: (value: unknown) => unknown | Promise<unknown>;
 }
