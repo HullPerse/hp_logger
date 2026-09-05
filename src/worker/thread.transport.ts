@@ -1,5 +1,5 @@
 import { applyJitter } from "../lib/retry.utils";
-import { startUnrefTimeout } from "../lib/transport.utils";
+import { reportTransportError, startUnrefTimeout } from "../lib/transport.utils";
 import type { LogEntry, LoggerSettings } from "../types/logger";
 import type { Transport, TransportStats } from "../types/transport";
 
@@ -126,7 +126,7 @@ export class ThreadTransport implements Transport {
     this.ready = null;
     this.restartAttempts += 1;
     const wait = applyJitter(nextRestartDelayMs(this.restartAttempts), RESTART_JITTER);
-    console.error(`hp_logger: worker crashed (${reason}) - restarting in ${Math.round(wait)}ms`);
+    reportTransportError("worker crashed", `(${reason}) - restarting in ${Math.round(wait)}ms`);
     const gate = Promise.withResolvers<null>();
     this.restarting = gate.promise;
     this.restartTimer = startUnrefTimeout((): void => {
@@ -145,21 +145,6 @@ export class ThreadTransport implements Transport {
     }, wait);
   }
 
-  private finishRestart(gate: { promise: Promise<void>; resolve: (value: null) => void }): void {
-    this.restartTimer = null;
-    this.restarting = null;
-    gate.resolve(null);
-    const respawn = async (): Promise<void> => {
-      try {
-        await this.ensureWorker();
-      } catch (error) {
-        // Spawn failures route back through the crash path, which reschedules.
-        this.onWorkerCrash(error instanceof Error ? error.message : String(error));
-      }
-    };
-    respawn();
-  }
-
   async write(entry: Parameters<Transport["write"]>[0]): Promise<void> {
     if (this.closed) return;
     await this.ensureWorker();
@@ -171,29 +156,30 @@ export class ThreadTransport implements Transport {
     }
   }
 
-  /** Flush the worker-side transports and wait for the acknowledgement. */
-  async flush(): Promise<void> {
-    if (this.closed || !this.worker) return;
+  /** Post a flush/close round trip and wait for the worker acknowledgement. */
+  private async sendAndWait(type: "flush" | "close"): Promise<void> {
+    const { worker } = this;
+    if (worker === null) return;
     this.seq += 1;
     const id = this.seq;
-    const { promise: flushed, resolve } = Promise.withResolvers<null>();
+    const { promise, resolve } = Promise.withResolvers<null>();
     this.acks.set(id, resolve);
-    const message: WorkerInbound = { id, type: "flush" };
-    postToWorker(this.worker, message);
-    await flushed;
+    const message: WorkerInbound = { id, type };
+    postToWorker(worker, message);
+    await promise;
+  }
+
+  /** Flush the worker-side transports and wait for the acknowledgement. */
+  async flush(): Promise<void> {
+    if (this.closed || this.worker === null) return;
+    await this.sendAndWait("flush");
   }
 
   /** Flush, close the worker-side transports, then terminate the thread. */
   async close(): Promise<void> {
-    if (this.closed || !this.worker) return;
+    if (this.closed || this.worker === null) return;
     this.closed = true;
-    this.seq += 1;
-    const id = this.seq;
-    const { promise: closed, resolve } = Promise.withResolvers<null>();
-    this.acks.set(id, resolve);
-    const message: WorkerInbound = { id, type: "close" };
-    postToWorker(this.worker, message);
-    await closed;
+    await this.sendAndWait("close");
     this.worker.terminate();
     this.worker = null;
   }

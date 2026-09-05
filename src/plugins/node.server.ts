@@ -1,9 +1,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { Logger } from "../api/logger.api";
-import { DEFAULT_SKIP_PATHS } from "../config/integrations.config";
-import type { RequestInfo, RequestLogOptions } from "../types/integrations";
-import { levelForStatus, pathFromUrl, resolveCorrelationId } from "./shared.plugin";
+import type { RequestLogOptions } from "../types/integrations";
+import {
+  CORRELATION_ID_HEADER,
+  finishRequest,
+  pathFromUrl,
+  resolveCorrelationId,
+  skipSet,
+} from "./shared.plugin";
 
 type NodeHandler = (request: IncomingMessage, response: ServerResponse) => void;
 
@@ -12,30 +17,41 @@ export const nodeServer = (
   logger: Logger,
   options: RequestLogOptions = {},
 ): NodeHandler => {
-  const skip = new Set(options.skipPaths ?? DEFAULT_SKIP_PATHS);
+  const skip = skipSet(options);
 
   return (request, response) => {
-    const correlationId = resolveCorrelationId(request.headers["x-correlation-id"]);
+    const correlationId = resolveCorrelationId(request.headers[CORRELATION_ID_HEADER]);
     const startedAt = performance.now();
+    const method = request.method ?? "GET";
+    const path = pathFromUrl(request.url ?? "/");
 
     response.on("finish", () => {
-      const path = pathFromUrl(request.url ?? "/");
-      const durationMs = Math.max(0, performance.now() - startedAt);
-      const info: RequestInfo = {
+      finishRequest(logger, options, skip, {
         correlationId,
-        durationMs: Math.round(durationMs),
-        method: request.method ?? "GET",
+        method,
         path,
+        startedAt,
         status: response.statusCode,
-      };
+      });
+    });
 
-      if (!skip.has(path)) {
-        logger.logEvent(levelForStatus(response.statusCode), "request", info);
+    try {
+      logger.withContext({ correlationId }, () => {
+        handler(request, response);
+      });
+    } catch (error) {
+      // A thrown handler never finishes the response; log once here and
+      // rethrow so the crash still surfaces exactly as before.
+      if (!response.writableEnded) {
+        finishRequest(logger, options, skip, {
+          correlationId,
+          method,
+          path,
+          startedAt,
+          status: 500,
+        });
       }
-    });
-
-    logger.withContext({ correlationId }, () => {
-      handler(request, response);
-    });
+      throw error;
+    }
   };
 };

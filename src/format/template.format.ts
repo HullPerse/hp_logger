@@ -2,7 +2,7 @@ import { LruCache } from "../brain/lru.utils";
 import { registerBrainCache } from "../brain/registry.utils";
 import { SPINNER_FRAMES, TASK_GLYPHS } from "../config/colors.config";
 import { applyColor } from "../lib/color.utils";
-import { stripControlCharacters } from "../lib/json.utils";
+import { safeStringify, stripControlCharacters } from "../lib/json.utils";
 import type { ColorName, ContextFormat, LogEntry, LogLevel, TagCase } from "../types/logger";
 import { formatContext } from "./context.format";
 import { formatDuration } from "./duration.format";
@@ -249,7 +249,7 @@ const resolveToken = (name: string, entry: LogEntry, env: TemplateEnv): string =
   }
   const value = entry.context[name];
   if (value === undefined) return "";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return safeStringify(value);
   return String(value);
 };
 

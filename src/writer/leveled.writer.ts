@@ -1,6 +1,8 @@
 import { LOG_LEVELS } from "../config/levels.config";
+import { dispatchBatch } from "../lib/transport.utils";
 import type { LogEntry, LogLevel } from "../types/logger";
-import type { Transport, TransportStats } from "../types/transport";
+import type { Transport } from "../types/transport";
+import { PassthroughTransport } from "./passthrough.writer";
 
 /**
  * Level gate around an arbitrary transport: only entries at or above
@@ -8,14 +10,13 @@ import type { Transport, TransportStats } from "../types/transport";
  * per-level file factory uses. `Logger.addTransport(t, { level })` wraps
  * with this transport.
  */
-export class LeveledTransport implements Transport {
-  private readonly inner: Transport;
+export class LeveledTransport extends PassthroughTransport {
   private readonly minLevel: LogLevel;
   private readonly exact: boolean;
   private readonly minLevelValue: number;
 
   constructor(inner: Transport, minLevel: LogLevel, exact = false) {
-    this.inner = inner;
+    super(inner);
     this.minLevel = minLevel;
     this.exact = exact;
     this.minLevelValue = LOG_LEVELS[minLevel];
@@ -26,7 +27,7 @@ export class LeveledTransport implements Transport {
     return this.exact ? value === this.minLevelValue : value >= this.minLevelValue;
   }
 
-  write(entry: LogEntry): void | Promise<void> {
+  override write(entry: LogEntry): void | Promise<void> {
     if (!this.passes(entry)) return;
     return this.inner.write(entry);
   }
@@ -34,27 +35,6 @@ export class LeveledTransport implements Transport {
   async writeBatch(entries: LogEntry[]): Promise<void> {
     const filtered = entries.filter((entry) => this.passes(entry));
     if (filtered.length === 0) return;
-    const batched = this.inner.writeBatch?.(filtered);
-    if (batched !== undefined) {
-      await batched;
-      return;
-    }
-    await this.deliverSequentially(filtered);
-  }
-
-  private async deliverSequentially(entries: LogEntry[]): Promise<void> {
-    for (const entry of entries) await this.inner.write(entry);
-  }
-
-  flush(): void | Promise<void> {
-    return this.inner.flush?.();
-  }
-
-  close(): void | Promise<void> {
-    return this.inner.close?.();
-  }
-
-  stats(): TransportStats {
-    return this.inner.stats?.() ?? { dropped: 0, queued: 0, transportErrors: 0 };
+    await dispatchBatch(this.inner, filtered);
   }
 }

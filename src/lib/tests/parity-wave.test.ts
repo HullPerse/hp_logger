@@ -14,13 +14,13 @@ import { captureLogger } from "./test.transport";
 describe("baseFields", () => {
   test("stamps configured base fields as top-level metadata on JSON entries", () => {
     const { entries, logger } = captureLogger({
-      baseFields: { pid: 123, hostname: "web-1", service: "api" },
+      baseFields: { hostname: "web-1", pid: 123, service: "api" },
       mode: "json",
       redactKeys: null,
     });
     logger.info("hello");
     const entry = entries[0] as LogEntry;
-    expect(entry.baseFields).toEqual({ pid: 123, hostname: "web-1", service: "api" });
+    expect(entry.baseFields).toEqual({ hostname: "web-1", pid: 123, service: "api" });
     expect(entry.message).toBe("hello");
   });
 
@@ -63,7 +63,7 @@ describe("baseFields", () => {
         redactKeys: null,
       },
     });
-    const { entries } = captureLogger({ mode: "json", redactKeys: null });
+    captureLogger({ mode: "json", redactKeys: null });
     // Verify resolveSettings propagates baseFields through merge
     const merged = resolveSettings({ baseFields: { pid: 1 } });
     expect(merged.baseFields).toEqual({ pid: 1 });
@@ -80,7 +80,7 @@ describe("redactPii", () => {
     expect(result).toBe("Contact me at alice@example.com");
 
     // With PII enabled through the compiled path
-    const compiled = { exact: new Set<string>(), prefixes: [] };
+
     // Manual test: the redactCompiled function accepts pii param
     // We test through the Logger pipeline instead
     const { entries, logger } = captureLogger({
@@ -213,7 +213,7 @@ describe("pause and resume", () => {
     });
 
     logger.pause();
-    for (let i = 0; i < 10; i++) logger.info(`msg-${i}`);
+    for (let i = 0; i < 10; i += 1) logger.info(`msg-${i}`);
     await logger.resume();
     expect(received).toEqual(Array.from({ length: 10 }, (_, i) => `msg-${i}`));
     Logger.clearTransports();
@@ -226,7 +226,8 @@ describe("pause and resume", () => {
 describe("rotate", () => {
   test("Logger.rotate() resolves without error when transport has no rotate", async () => {
     const { logger } = captureLogger({ mode: "json" });
-    await logger.rotate(); // should not throw
+    // should not throw
+    await logger.rotate();
   });
 
   test("Logger.rotate() calls transport.rotate when present", async () => {
@@ -234,8 +235,8 @@ describe("rotate", () => {
     const { logger } = captureLogger({ mode: "json" });
     // Logger.rotate() calls this.transport.rotate, so we must set it directly.
     logger.transport = {
-      write: () => {},
       rotate: () => { rotated = true; },
+      write: () => {},
     };
     await logger.rotate();
     expect(rotated).toBe(true);
@@ -288,10 +289,11 @@ describe("metrics label escape memoization", () => {
       name: "memo_test",
       registers: [reg],
     });
-    for (let i = 0; i < 10; i++) counter.inc({ key: "val\nue" });
+    for (let i = 0; i < 10; i += 1) counter.inc({ key: "val\nue" });
     const text = reg.metrics();
     // Should contain exactly one escaped line with \\n
     const lines = text.split("\n").filter((l) => l.startsWith('memo_test'));
-    expect(lines.length).toBe(1); // only the sample line
+    // only the sample line
+    expect(lines.length).toBe(1);
   });
 });

@@ -35,11 +35,12 @@ export const drawBox = (lines: string[], options: BoxOptions = {}): string[] => 
   const dashes = "-".repeat(width);
   // Width math: a titled top is "+--" + " " + title + " " + dashes + "+",
   // which matches the plain "+-" + dashes + "-+" only at title.length + 2.
+  const plain = `+-${dashes}-+`;
   const top =
     title === ""
-      ? applyColor(color, `+-${dashes}-+`)
+      ? applyColor(color, plain)
       : applyColor(color, `+-- ${title} ${"-".repeat(width - title.length - 2)}+`);
-  const bottom = applyColor(color, `+-${dashes}-+`);
+  const bottom = applyColor(color, plain);
   const body = lines.map((line) => {
     // Pad by visible length: ANSI escapes in content must not skew the frame.
     const padding = " ".repeat(width - visibleLength(line));

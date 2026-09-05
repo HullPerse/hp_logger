@@ -1,10 +1,10 @@
-import type { LabelValues, MetricSnapshot } from "../types/metrics";
+import type { LabelValues, MetricSnapshot, MetricType } from "../types/metrics";
 import { BaseMetric } from "./base.metric";
 
 /** Monotonically increasing counter. */
 export class Counter extends BaseMetric {
-  readonly type = "counter" as const;
-  private readonly values = new Map<string, number>();
+  readonly type: MetricType = "counter";
+  protected readonly values = new Map<string, number>();
 
   /** Increment by `value` (default 1) for the given labels. */
   inc(labels: LabelValues = {}, value = 1): void {

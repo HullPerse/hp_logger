@@ -4,7 +4,7 @@
 > redaction, file/database output, flood control, spans and traces, Prometheus-style
 > metrics, worker-thread transports and web framework integrations.
 
-Version: 0.10.1. License: MIT. Author: HullPerse.
+Version: 1.0.0. License: MIT. Author: HullPerse.
 Repo: https://github.com/HullPerse/hp_logger
 Issues: https://github.com/HullPerse/hp_logger/issues
 npm: https://www.npmjs.com/package/hp_logger
@@ -59,7 +59,7 @@ auth.info("user registered", { userId: 42 });
 - `logger.watch(options, hooks?)` - endpoint/availability probes; optional
   exponential `backoff` with jitter after failures, reset on success.
 - `logger.stats()`, `logger.flush()`, `logger.close()`, `logger.dump(path?)`.
-- `logger.pause()` - buffer entries instead of dispatching; `await logger.resume()` drains in FIFO order.
+- `logger.pause()` - buffer up to 10_000 entries instead of dispatching (drop-newest past the cap); `logger.stats()` reports the queue under `paused` (`queued`/`dropped`); `await logger.resume()` drains in FIFO order.
 - `logger.rotate()` - force rotation on transports that support it (size-based file writers).
 - `logger.counter/gauge/histogram(...)`, `logger.metricsText()` - Prometheus format.- `Logger.addTransport(t, { level? })`, `Logger.removeTransport(t)`, `Logger.clearTransports()`.
 - `installErrorHandlers(logger)` - logs uncaughtException/unhandledRejection,
@@ -93,7 +93,8 @@ detection in messages and context strings.
   Object results merge their own keys; scalars land under `as`. Per-value
   cache with `ttlMs` (default 60s) and per-lookup `timeoutMs` (default 50ms,
   falls back to the raw value); `onError: "mark"` records a
-  `[RESOLVER ERROR]` marker instead of skipping. Only applies to loggers
+  `[RESOLVER ERROR]` marker instead of skipping (`onTimeout` defaults to
+  `onError`). Only applies to loggers
   that configure resolvers; the sync fast path is untouched.
 - `file.fsync` - fsync the descriptor on close for strict durability.
 - `schemaVersion` - stamp `v: 1` on every entry; sqlite adapter option adds a
@@ -101,7 +102,8 @@ detection in messages and context strings.
 - `file`: `{ enabled, path, mode, rotation: "daily" | "size" | "none", splitByLevel?,
   maxBytes?, maxFiles?, gzip?, flushInterval?, maxBufferSize?, maxFilesPerDay? }`.
   splitByLevel writes `app.error.log` per level; size rotation keeps `app.N.log`
-  segments with retention and optional gzip.
+  segments with retention and optional gzip. Paths with `..` segments are
+  blocked; absolute paths outside the cwd warn.
 - `database`: `{ enabled, adapter | createAdapter, level?, maxBufferSize?,
   flushInterval?, retry?: { attempts=5, backoff="exponential"|"linear"|"fixed",
   baseMs=1000, maxMs=30000, jitter=0 }, reconnect?: { cooldownMs=5000, maxAttempts=3 } }`.
@@ -115,7 +117,7 @@ detection in messages and context strings.
 - `repeat`: `{ windowMs, maxKeys }` - collapse duplicates into `message xN`.
 - `adaptive`: `{ windowMs, errorRate, sample, cooldownMs }` - error-storm sampling.
 - `sampling`: `{ rate, perTrace? }` - trace-coherent sampling (error/fatal pass).
-- `blackbox`: `{ size=1000, path? }` - flight recorder; dumped on crash or `logger.dump()`.
+- `blackbox`: `{ size=1000, path? }` - flight recorder; dumped on crash or `logger.dump()`. Same path rules as `file`: `..` blocked, outside-cwd warns.
 - `task`: `{ level="debug", progress=false }`.
 - `stripControl` - strip terminal escapes from logged data (log-injection defense).
 - `box`: `{ error?, fatal?, storm? }` - ASCII frames around error chains, fatal
@@ -125,12 +127,16 @@ detection in messages and context strings.
 
 ## Integrations
 
-- Elysia: `elysiaPlugin(logger, { skipPaths? })`
-- Bun.serve: `bunServe(handler, logger)`
-- Node http: `nodeServer(handler, logger)`
-- Hono: `honoMiddleware(logger)`
-- Fastify: `fastifyPlugin(instance, logger)`
+- Elysia: `elysiaPlugin(logger, { skipPaths?, onFinish? })` - no automatic
+  correlation scope: wrap handlers with `logger.withContext({ correlationId })`
+  yourself when logs inside must carry the request id.
+- Bun.serve: `bunServe(handler, logger, { skipPaths?, onFinish? })`
+- Node http: `nodeServer(handler, logger, { skipPaths?, onFinish? })`
+- Hono: `honoMiddleware(logger, { skipPaths?, onFinish? })`
+- Fastify: `fastifyPlugin(instance, logger, { skipPaths?, onFinish? })`
 All log method/path/status/duration with correlation ids; 2xx info, 4xx warn, 5xx error.
+Handler errors are logged at error level with status 500 and rethrown;
+`onFinish` fires for every finished request including skipped paths.
 
 ## Worker transport
 
@@ -162,6 +168,6 @@ createLogServer(buffer, { port: 8787, token: "secret" });
 
 ## Guarantees
 
-- Zero runtime dependencies; the published tarball contains only dist + README + LICENSE.
+- Zero runtime dependencies; the published tarball contains only dist + llms.txt + README + CHANGELOG + LICENSE.
 - Redaction runs before every transport; error/fatal bypass sampling.
 - No outbound network by default: watch probes and the http viewer are opt-in.

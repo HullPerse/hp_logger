@@ -17,9 +17,14 @@ export class Registry {
     this.registered.delete(name);
   }
 
+  /** Registry contents in stable name order. */
+  private sorted(): Metric[] {
+    return [...this.registered.values()].toSorted((a, b) => a.name.localeCompare(b.name));
+  }
+
   /** Prometheus text format, metrics sorted by name. */
   metrics(): string {
-    const sorted = [...this.registered.values()].toSorted((a, b) => a.name.localeCompare(b.name));
+    const sorted = this.sorted();
     return sorted
       .map((metric) => metric.toText())
       .join("\n")
@@ -31,7 +36,7 @@ export class Registry {
    * implementations without snapshot support are skipped.
    */
   snapshots(): MetricSnapshot[] {
-    const sorted = [...this.registered.values()].toSorted((a, b) => a.name.localeCompare(b.name));
+    const sorted = this.sorted();
     const out: MetricSnapshot[] = [];
     for (const metric of sorted) {
       const snapshot = (metric as Partial<MetricSnapshotProvider>).snapshot?.call(metric);

@@ -53,6 +53,7 @@ export { DateBasedFileTransport } from "./writer/dateBased.writer";
 export { FileTransport } from "./writer/file.writer";
 export { MultiTransport } from "./writer/group.writer";
 export { LeveledTransport } from "./writer/leveled.writer";
+export { PassthroughTransport } from "./writer/passthrough.writer";
 export { RepeatTransport } from "./writer/repeat.writer";
 export { SizeBasedFileTransport } from "./writer/sizeBased.writer";
 export { BaseFileTransport } from "./writer/base.writer";

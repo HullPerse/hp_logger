@@ -91,8 +91,11 @@ const attachFatalSnapshot = (context: LogContext): LogContext => {
   };
 };
 
-const resolveLazyContext = (lazy: LazyContext | undefined): LogContext | undefined =>
-  lazy === undefined ? undefined : typeof lazy === "function" ? lazy() : lazy;
+const resolveLazyContext = (lazy: LazyContext | undefined): LogContext | undefined => {
+  if (lazy === undefined) return undefined;
+  if (typeof lazy === "function") return lazy();
+  return lazy;
+};
 
 const mergeGuarded = (
   staticContext: LogContext,

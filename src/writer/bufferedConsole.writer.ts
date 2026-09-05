@@ -36,7 +36,10 @@ export class BufferedConsole {
   private errLines: string[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private readonly onFlush: (out: string | null, err: string | null) => void) {
+  private readonly onFlush: (out: string | null, err: string | null) => void;
+
+  constructor(onFlush: (out: string | null, err: string | null) => void) {
+    this.onFlush = onFlush;
     registerBuffer(this);
     this.timer = startUnrefInterval(() => this.flush(), DEFAULT_FLUSH_INTERVAL);
   }

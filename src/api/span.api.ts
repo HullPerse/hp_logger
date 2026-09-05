@@ -1,4 +1,4 @@
-import { getAsyncContext, runWithContext, runWithSpanPath } from "../core/context.core";
+import { getAsyncContext, runMeasuredScope } from "../core/context.core";
 import { getSpanRegistry, inheritSpanContext } from "../core/span.core";
 import { formatDuration } from "../format/duration.format";
 import { renderSpanTree } from "../format/span.format";
@@ -61,10 +61,6 @@ export const spanImpl = <T>(
   optionsOrCallback?: TimeOptions | ((span: SpanHandle) => T | Promise<T>),
   maybeCallback?: (span: SpanHandle) => T | Promise<T>,
 ): SpanHandle | Promise<T> => {
-  const self = logger as {
-    timestamp: () => string;
-  };
-  void self;
   const thirdIsCallback = typeof maybeCallback === "function";
   const isCallback = typeof optionsOrCallback === "function";
   const options: TimeOptions = isCallback ? {} : ((optionsOrCallback as TimeOptions) ?? {});
@@ -103,20 +99,9 @@ export const spanImpl = <T>(
 
   if (callback === undefined) return handle;
 
-  return runWithSpanPath(name, () =>
-    runWithContext({ ...spanContext }, async () => {
-      try {
-        const result = (await callback(handle)) as T;
-        if (handle.ended) return result;
-        handle.end();
-        return result;
-      } catch (error: unknown) {
-        if (handle.ended) throw error;
-        handle.end("error");
-        throw error;
-      }
-    }),
-  );
+  return runMeasuredScope(name, { ...spanContext }, handle, callback, (span, ok) => {
+    if (!span.ended) span.end(ok ? undefined : "error");
+  });
 };
 
 export const traceTreeImpl = (logger: unknown, traceId?: string): void => {
@@ -136,5 +121,3 @@ export const traceTreeImpl = (logger: unknown, traceId?: string): void => {
   }
   self.write("info", renderSpanTree(roots));
 };
-
-export const writeMeasuredExport = writeMeasured;

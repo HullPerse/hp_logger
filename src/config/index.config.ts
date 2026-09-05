@@ -7,3 +7,4 @@ export * from "./integrations.config";
 export * from "./context.config";
 export * from "./logger.config";
 export * from "./writer.config";
+export * from "./resolvers.config";

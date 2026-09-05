@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_BUFFER_SIZE } from "../config/writer.config";
 import { formatEntry } from "../format/entry.format";
 import { attemptAsync } from "../lib/result.utils";
-import { startUnrefInterval, stopInterval } from "../lib/transport.utils";
+import { reportTransportError, startUnrefInterval, stopInterval } from "../lib/transport.utils";
 import type {
   ContextFormat,
   EntryFormatter,
@@ -113,7 +113,7 @@ export abstract class BaseFileTransport implements Transport {
       // broken forever otherwise.
       if (!outcome.ok) {
         this.transportErrors += 1;
-        console.error(`hp_logger: file flush failed: ${outcome.error.message}`);
+        reportTransportError("file flush failed", outcome.error.message);
         stream.destroy();
         if (this.stream === stream) this.stream = null;
       }
@@ -157,7 +157,7 @@ export abstract class BaseFileTransport implements Transport {
       if (typeof fd === "number") {
         const outcome = await attemptAsync(() => promisify(fsync)(fd));
         if (!outcome.ok) {
-          console.error(`hp_logger: fsync failed: ${outcome.error.message}`);
+          reportTransportError("fsync failed", outcome.error.message);
         }
       }
     }

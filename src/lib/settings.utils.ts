@@ -5,9 +5,10 @@ import { DEFAULT_MAX_OPERATIONS } from "../config/metrics.config";
 import { DEFAULT_REDACT_KEYS } from "../config/redaction.config";
 import type { LoggerSettings, LogLevel, ResolvedSettings } from "../types/logger";
 
-const isTraversalBlocked = (candidate: string): boolean => candidate.split(/[\\/]/u).includes("..");
+export const isTraversalBlocked = (candidate: string): boolean =>
+  candidate.split(/[\\/]/u).includes("..");
 
-const warnOutsideCwd = (kind: string, candidate: string): void => {
+export const warnOutsideCwd = (kind: string, candidate: string): void => {
   if (path.isAbsolute(candidate)) {
     const resolved = path.resolve(candidate);
     const cwd = process.cwd();
@@ -281,10 +282,10 @@ interface RedactionSlice {
 const redactionBlock = {
   merge(base: ResolvedSettings, patch: LoggerSettings): RedactionSlice {
     return {
+      redactCensor: patch.redactCensor ?? base.redactCensor,
       redactDepth: patch.redactDepth ?? base.redactDepth,
       redactKeys: patch.redactKeys === undefined ? base.redactKeys : patch.redactKeys,
       redactPaths: patch.redactPaths ?? base.redactPaths,
-      redactCensor: patch.redactCensor ?? base.redactCensor,
       redactPii:
         patch.redactPii === undefined
           ? base.redactPii
@@ -293,10 +294,10 @@ const redactionBlock = {
   },
   resolve(settings: LoggerSettings): RedactionSlice {
     return {
+      redactCensor: settings.redactCensor ?? "[REDACTED]",
       redactDepth: settings.redactDepth ?? 2,
       redactKeys: settings.redactKeys === undefined ? DEFAULT_REDACT_KEYS : settings.redactKeys,
       redactPaths: settings.redactPaths ?? [],
-      redactCensor: settings.redactCensor ?? "[REDACTED]",
       redactPii: resolveRedactPii(settings.redactPii ?? false),
     };
   },
@@ -382,10 +383,10 @@ export const resolveSettings = (settings: LoggerSettings = {}): ResolvedSettings
     prettyTruncate: fmt.prettyTruncate,
     prettyWrap: fmt.prettyWrap,
     profile: profileBlock.resolve(settings),
+    redactCensor: redaction.redactCensor,
     redactDepth: redaction.redactDepth,
     redactKeys: redaction.redactKeys,
     redactPaths: redaction.redactPaths,
-    redactCensor: redaction.redactCensor,
     redactPii: redaction.redactPii,
     repeat: settings.repeat ?? false,
     resolvers: settings.resolvers ?? false,
@@ -434,10 +435,10 @@ export const mergeSettings = (base: ResolvedSettings, patch: LoggerSettings): Re
     prettyTruncate: fmt.prettyTruncate,
     prettyWrap: fmt.prettyWrap,
     profile: profileBlock.merge(base.profile, patch),
+    redactCensor: redaction.redactCensor,
     redactDepth: redaction.redactDepth,
     redactKeys: redaction.redactKeys,
     redactPaths: redaction.redactPaths,
-    redactCensor: redaction.redactCensor,
     redactPii: redaction.redactPii,
     repeat: patch.repeat ?? base.repeat,
     resolvers: patch.resolvers ?? base.resolvers,

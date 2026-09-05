@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +10,10 @@ import type { Transport } from "@/types/transport";
 import { AsyncTransport } from "@/writer/buffer.writer";
 
 const workdir = mkdtempSync(path.join(tmpdir(), "hp-blackbox-"));
+
+afterAll(() => {
+  rmSync(workdir, { force: true, recursive: true });
+});
 
 describe("black box", () => {
   test("records entries into the ring and caps it at the configured size", () => {
@@ -152,9 +156,4 @@ describe("crash handlers", () => {
   });
 });
 
-describe("black box cleanup", () => {
-  test("removes the temp workdir", () => {
-    rmSync(workdir, { force: true, recursive: true });
-    expect(existsSync(workdir)).toBe(false);
-  });
-});
+

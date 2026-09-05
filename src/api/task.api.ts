@@ -1,4 +1,4 @@
-import { getAsyncContext, runWithContext, runWithSpanPath } from "../core/context.core";
+import { getAsyncContext, runMeasuredScope } from "../core/context.core";
 import { getSpanRegistry, inheritSpanContext } from "../core/span.core";
 import { formatDuration } from "../format/duration.format";
 import type { LogContext, LogLevel, TaskHandle, TaskOptions } from "../types/logger";
@@ -99,16 +99,7 @@ export const taskImpl = <T>(
 
   if (callback === undefined) return handle;
 
-  return runWithSpanPath(name, () =>
-    runWithContext({ ...spanContext, group: childGroup }, async () => {
-      try {
-        const result = (await callback(handle)) as T;
-        finish(true);
-        return result;
-      } catch (error: unknown) {
-        finish(false, error instanceof Error ? error : String(error));
-        throw error;
-      }
-    }),
+  return runMeasuredScope(name, { ...spanContext, group: childGroup }, handle, callback, (_task, ok, detail) =>
+    finish(ok, detail),
   );
 };

@@ -1,6 +1,7 @@
 import { DEFAULT_INTERVAL, DEFAULT_TIMEOUT } from "../config/watch.config";
 import { attemptAsync } from "../lib/result.utils";
 import { applyJitter } from "../lib/retry.utils";
+import { startUnrefTimeout, stopTimeout } from "../lib/transport.utils";
 import type { ProbeOutcome, WatchHooks, WatchOptions, WatchReason, Watcher } from "../types/watch";
 
 class StatusMismatchError extends Error {
@@ -29,6 +30,11 @@ const classifyError = (error: Error): { reason: WatchReason; normalized: Error }
   if (byCode !== undefined) return { normalized: error, reason: byCode };
   return { normalized: error, reason: "status" };
 };
+
+const successInfo = (outcome: ProbeOutcome) => ({
+  latencyMs: outcome.latencyMs,
+  status: outcome.status,
+});
 
 /** Backoff delay before the Nth retry probe (1-based), capped at maxMs. */
 export const watchBackoffMs = (
@@ -101,16 +107,20 @@ export const startWatcher = (
     return classifyError(outcome.error).reason;
   };
 
+
+  const failureInfo = (outcome: ProbeOutcome) => ({
+    error: outcome.error,
+    latencyMs: outcome.latencyMs,
+    reason: failReasonOf(outcome),
+  });
+
   const fireStatusHooks = (info: { latencyMs: number; status: number }): void => {
     hooks.onStatus?.[info.status]?.(info);
     if (info.status === 403) hooks.onForbidden?.(info);
   };
 
   const handleSuccess = (outcome: ProbeOutcome): void => {
-    const info = {
-      latencyMs: outcome.latencyMs,
-      status: outcome.status,
-    };
+    const info = successInfo(outcome);
     if (up !== true) {
       up = true;
       hooks.onConnect?.(info);
@@ -124,11 +134,7 @@ export const startWatcher = (
   };
 
   const handleFailure = (outcome: ProbeOutcome): void => {
-    const info = {
-      error: outcome.error,
-      latencyMs: outcome.latencyMs,
-      reason: failReasonOf(outcome),
-    };
+    const info = failureInfo(outcome);
     if (outcome.status !== 0) {
       fireStatusHooks({ latencyMs: outcome.latencyMs, status: outcome.status });
     }
@@ -175,18 +181,15 @@ export const startWatcher = (
         backoffJitter,
       );
     }
-    timer = setTimeout(() => {
+    timer = startUnrefTimeout(() => {
       runProbe();
     }, delay);
-    timer.unref();
   };
 
   const stop = (): void => {
     lifecycle.stopped = true;
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
+    stopTimeout(timer);
+    timer = null;
   };
 
   // runProbe never rejects: probeOnce normalizes every failure into an outcome.

@@ -1,7 +1,12 @@
 import type { Logger } from "../api/logger.api";
-import { DEFAULT_SKIP_PATHS } from "../config/integrations.config";
-import type { RequestInfo, RequestLogOptions } from "../types/integrations";
-import { levelForStatus, pathFromUrl, resolveCorrelationId } from "./shared.plugin";
+import type { RequestLogOptions } from "../types/integrations";
+import {
+  CORRELATION_ID_HEADER,
+  finishRequest,
+  pathFromUrl,
+  resolveCorrelationId,
+  skipSet,
+} from "./shared.plugin";
 
 type BunHandler = (request: Request) => Response | Promise<Response>;
 
@@ -10,28 +15,35 @@ export const bunServe = (
   logger: Logger,
   options: RequestLogOptions = {},
 ): BunHandler => {
-  const skip = new Set(options.skipPaths ?? DEFAULT_SKIP_PATHS);
+  const skip = skipSet(options);
 
   return async (request) => {
     const correlationId = resolveCorrelationId(
-      request.headers.get("x-correlation-id") ?? undefined,
+      request.headers.get(CORRELATION_ID_HEADER) ?? undefined,
     );
     const startedAt = performance.now();
-
-    const response = await logger.withContext({ correlationId }, () => handler(request));
     const path = pathFromUrl(request.url);
-    const durationMs = Math.max(0, performance.now() - startedAt);
-    const info: RequestInfo = {
+
+    let response: Response;
+    try {
+      response = await logger.withContext({ correlationId }, () => handler(request));
+    } catch (error) {
+      finishRequest(logger, options, skip, {
+        correlationId,
+        method: request.method,
+        path,
+        startedAt,
+        status: 500,
+      });
+      throw error;
+    }
+    finishRequest(logger, options, skip, {
       correlationId,
-      durationMs: Math.round(durationMs),
       method: request.method,
       path,
+      startedAt,
       status: response.status,
-    };
-
-    if (!skip.has(path)) {
-      logger.logEvent(levelForStatus(response.status), "request", info);
-    }
+    });
 
     return response;
   };

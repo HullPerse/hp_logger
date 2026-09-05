@@ -1,5 +1,10 @@
 import { registerBrainCache } from "../brain/registry.utils";
 import { TtlCache } from "../brain/ttl.utils";
+import {
+  DEFAULT_RESOLVER_CACHE_CAP,
+  DEFAULT_RESOLVER_TIMEOUT_MS,
+  DEFAULT_RESOLVER_TTL_MS,
+} from "../config/resolvers.config";
 import { startUnrefTimeout, stopTimeout } from "../lib/transport.utils";
 import type {
   LogContext,
@@ -25,9 +30,6 @@ interface LookupResult {
   fields: Record<string, unknown>;
 }
 
-const DEFAULT_TTL_MS = 60_000;
-const DEFAULT_TIMEOUT_MS = 50;
-const DEFAULT_CACHE_CAP = 8192;
 const ERROR_MARKER = "[RESOLVER ERROR]";
 
 // Every ResolverSet owns its own bounded cache (per-logger isolation), so
@@ -77,7 +79,7 @@ type ResolveOutcome = unknown | typeof TIMEOUT | typeof RESOLVER_ERROR;
  * on keys. Concurrent lookups for the same value share one in-flight call.
  */
 export class ResolverSet implements ResolverSetShape {
-  private readonly cache = new TtlCache<string, Record<string, unknown>>(DEFAULT_CACHE_CAP);
+  private readonly cache = new TtlCache<string, Record<string, unknown>>(DEFAULT_RESOLVER_CACHE_CAP);
   private readonly config = new Map<string, ResolvedResolver>();
   private readonly inFlight = new Map<string, Promise<LookupResult | undefined>>();
 
@@ -190,8 +192,8 @@ export class ResolverSet implements ResolverSetShape {
       onError: entry.onError ?? "skip",
       onTimeout: entry.onTimeout ?? entry.onError ?? "skip",
       resolve: entry.resolve,
-      timeoutMs: entry.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-      ttlMs: entry.ttlMs ?? DEFAULT_TTL_MS,
+      timeoutMs: entry.timeoutMs ?? DEFAULT_RESOLVER_TIMEOUT_MS,
+      ttlMs: entry.ttlMs ?? DEFAULT_RESOLVER_TTL_MS,
     };
   }
 

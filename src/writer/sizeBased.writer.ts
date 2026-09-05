@@ -4,6 +4,7 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_FILES } from "../config/writer.config";
+import { reportTransportError, splitExtension } from "../lib/transport.utils";
 import type { FileTransportOptions } from "../types/transport";
 import { BaseFileTransport } from "./base.writer";
 
@@ -15,7 +16,7 @@ const compressGz = async (file: string): Promise<void> => {
     await writeFile(archive, gzipSync(data));
     await rm(file);
   } catch (error: unknown) {
-    console.error(`hp_logger: gzip rotation failed for ${file}: ${String(error)}`);
+    reportTransportError(`gzip rotation failed for ${file}`, String(error));
   }
 };
 
@@ -51,9 +52,7 @@ export class SizeBasedFileTransport extends BaseFileTransport {
   }
 
   private segment(index: number): string {
-    const dot = this.filepath.lastIndexOf(".");
-    const base = dot === -1 ? this.filepath : this.filepath.slice(0, dot);
-    const ext = dot === -1 ? "" : this.filepath.slice(dot);
+    const { base, ext } = splitExtension(this.filepath);
     return `${base}.${index}${ext}`;
   }
 

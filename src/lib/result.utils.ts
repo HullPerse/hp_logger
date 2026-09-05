@@ -1,15 +1,12 @@
 /** Outcome of a call: success carries a value, failure carries a normalized Error. */
 export type Result<T> = { ok: true; value: T } | { error: Error; ok: false };
 
-const toError = (error: unknown): Error =>
-  error instanceof Error ? error : new Error(String(error));
-
 /** Run a synchronous call, normalizing a throw into a Result. */
 export const attempt = <T>(fn: () => T): Result<T> => {
   try {
     return { ok: true, value: fn() };
   } catch (error) {
-    return { error: toError(error), ok: false };
+    return { error: error instanceof Error ? error : new Error(String(error)), ok: false };
   }
 };
 
@@ -18,6 +15,6 @@ export const attemptAsync = async <T>(fn: () => Promise<T> | T): Promise<Result<
   try {
     return { ok: true, value: await fn() };
   } catch (error) {
-    return { error: toError(error), ok: false };
+    return { error: error instanceof Error ? error : new Error(String(error)), ok: false };
   }
 };

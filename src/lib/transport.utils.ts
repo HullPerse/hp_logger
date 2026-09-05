@@ -1,5 +1,5 @@
 import type { LogEntry } from "../types/logger";
-import type { Transport } from "../types/transport";
+import type { Transport, TransportStats } from "../types/transport";
 
 /** Summary entry for an aggregated group: the first entry plus an xN marker. */
 export const countSummary = (entry: LogEntry, count: number): LogEntry => ({
@@ -46,4 +46,17 @@ export const startUnrefTimeout = (
 
 export const stopTimeout = (handle: ReturnType<typeof setTimeout> | null): void => {
   if (handle) clearTimeout(handle);
+};
+/** Empty stats for transports that buffer nothing of their own. */
+export const emptyStats = (): TransportStats => ({ dropped: 0, queued: 0, transportErrors: 0 });
+/** Split `app.log` into base + extension for suffix/segment insertion. */
+export const splitExtension = (filepath: string): { base: string; ext: string } => {
+  const dot = filepath.lastIndexOf(".");
+  return dot === -1
+    ? { base: filepath, ext: "" }
+    : { base: filepath.slice(0, dot), ext: filepath.slice(dot) };
+};
+/** Single channel for transport self-reports (rotation, flush, restarts). */
+export const reportTransportError = (context: string, message: string): void => {
+  console.error(`hp_logger: ${context}: ${message}`);
 };

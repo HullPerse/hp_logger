@@ -44,6 +44,31 @@ export const runWithSpanPath = <T>(name: string, fn: () => T): T => {
   return store.run(next, fn);
 };
 
+/**
+ * Shared measure-scope-finalize scaffold for the span/task callback forms:
+ * both run inside the span path and the async-local scope, finalize exactly
+ * once, and rethrow the callback error unchanged.
+ */
+export const runMeasuredScope = <T, H>(
+  name: string,
+  scope: LogContext,
+  handle: H,
+  fn: (handle: H) => T | Promise<T>,
+  finalize: (handle: H, ok: boolean, detail?: string | Error) => void,
+): Promise<T> =>
+  runWithSpanPath(name, () =>
+    runWithContext(scope, async () => {
+      try {
+        const result = await fn(handle);
+        finalize(handle, true);
+        return result;
+      } catch (error: unknown) {
+        finalize(handle, false, error instanceof Error ? error : String(error));
+        throw error;
+      }
+    }),
+  );
+
 /** The active span path of the current call, if any was ever created. */
 export const getActiveSpanPath = (): readonly string[] | undefined =>
   spanPathUsed ? store.getStore()?.spanPath : undefined;

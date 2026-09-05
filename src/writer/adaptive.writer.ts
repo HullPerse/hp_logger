@@ -2,7 +2,8 @@ import { GroupCounter } from "../brain/group.utils";
 import { cachedTimestamp } from "../format/timestamp.format";
 import { countSummary } from "../lib/transport.utils";
 import type { AdaptiveSettings, LogEntry } from "../types/logger";
-import type { Transport, TransportStats } from "../types/transport";
+import type { Transport } from "../types/transport";
+import { PassthroughTransport } from "./passthrough.writer";
 
 /** Levels that are sampled (throttled) during a storm. */
 const SAMPLE_LEVELS = new Set(["debug", "info", "trace"]);
@@ -32,21 +33,20 @@ const makeNotice = (message: string, level: "info" | "warn"): LogEntry => ({
  * collapsed into one summary per group. It returns to normal after a quiet
  * cooldown period.
  */
-export class AdaptiveTransport implements Transport {
+export class AdaptiveTransport extends PassthroughTransport {
   private readonly cooldownMs: number;
 
   private readonly errorRate: number;
   private readonly errors: number[] = [];
   private readonly groups: GroupCounter<string, StormGroup>;
 
-  private readonly inner: Transport;
   private readonly sample: number;
   private readonly windowMs: number;
   private cooldownStart: number | null = null;
   private throttled = false;
 
   constructor(inner: Transport, options: AdaptiveSettings = {}) {
-    this.inner = inner;
+    super(inner);
     this.windowMs = options.windowMs ?? 10_000;
     this.errorRate = options.errorRate ?? 20;
     this.sample = options.sample ?? 0.1;
@@ -54,7 +54,7 @@ export class AdaptiveTransport implements Transport {
     this.groups = new GroupCounter<string, StormGroup>(500);
   }
 
-  write(entry: LogEntry): void {
+  override write(entry: LogEntry): void {
     this.pushEntries([entry]);
   }
 
@@ -62,16 +62,12 @@ export class AdaptiveTransport implements Transport {
     this.pushEntries(entries);
   }
 
-  stats(): TransportStats {
-    return this.inner.stats?.() ?? { dropped: 0, queued: 0, transportErrors: 0 };
-  }
-
-  async close(): Promise<void> {
+  override async close(): Promise<void> {
     this.flushGroupSummaries();
     await this.inner.close?.();
   }
 
-  async flush(): Promise<void> {
+  override async flush(): Promise<void> {
     this.flushGroupSummaries();
     await this.inner.flush?.();
   }

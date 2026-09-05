@@ -1,4 +1,5 @@
 import type { DatabaseSettings, Transport, TransportStats } from "../types/transport";
+import { emptyStats } from "../lib/transport.utils";
 
 /** Structural module shape of the dynamically imported database writer. */
 interface DatabaseModule {
@@ -71,12 +72,6 @@ export class LazyDatabaseTransport implements Transport {
   }
 
   stats(): TransportStats {
-    return (
-      this.inner?.stats?.() ?? {
-        dropped: 0,
-        queued: 0,
-        transportErrors: 0,
-      }
-    );
+    return this.inner?.stats?.() ?? emptyStats();
   }
 }

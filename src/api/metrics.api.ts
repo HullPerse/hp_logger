@@ -37,23 +37,31 @@ export const ensureAutoCounter = (logger: unknown): void => {
   });
 };
 
-export const createCounter = (logger: unknown, options: Omit<MetricOptions, "registers">): Counter => {
+type BoundMetricCtor<T> = new (options: MetricOptions & { registers: Registry[] }) => T;
+
+const bindRegistry = <T>(
+  logger: unknown,
+  Ctor: BoundMetricCtor<T>,
+  options: Omit<MetricOptions, "registers">,
+): T => {
   const registry = getOrCreateRegistry(logger);
-  return new Counter({ ...options, registers: [registry] });
+  return new Ctor({ ...options, registers: [registry] });
 };
 
-export const createGauge = (logger: unknown, options: Omit<MetricOptions, "registers">): Gauge => {
-  const registry = getOrCreateRegistry(logger);
-  return new Gauge({ ...options, registers: [registry] });
-};
+export const createCounter = (
+  logger: unknown,
+  options: Omit<MetricOptions, "registers">,
+): Counter => bindRegistry(logger, Counter, options);
+
+export const createGauge = (
+  logger: unknown,
+  options: Omit<MetricOptions, "registers">,
+): Gauge => bindRegistry(logger, Gauge, options);
 
 export const createHistogram = (
   logger: unknown,
   options: Omit<MetricOptions, "registers"> & { buckets?: readonly number[] },
-): Histogram => {
-  const registry = getOrCreateRegistry(logger);
-  return new Histogram({ ...options, registers: [registry] });
-};
+): Histogram => bindRegistry(logger, Histogram, options);
 
 export const getMetricsText = (logger: unknown): string => {
   const self = logger as { metricsRegistryInstance: Registry | null };

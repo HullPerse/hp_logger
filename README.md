@@ -57,7 +57,7 @@ logger.info("user logged in", { userId: 42 });
 - **Redaction** - passwords, tokens and bearer strings are masked before any transport sees them; `redactPaths` targets exact dot paths like `user.password`; opt-in `redactPii` detects emails and card numbers in free text; `redactCensor` replaces the default `[REDACTED]` token.
 - **Output modes** - tagged pretty output on TTY, JSON lines in pipes and files, template-based custom lines, custom formatters, registered custom tokens (`registerToken`).
 - **Base fields** - static metadata (pid, hostname, service) stamped onto every entry as top-level JSON fields via `settings.baseFields`.
-- **Pause/resume** - buffer entries during pause, drain in FIFO order on resume.
+- **Pause/resume** - buffer up to 10_000 entries during pause (drop-newest past the cap, counted in stats().paused), drain in FIFO order on resume.
 - **File output** - single file, daily rotation, or size-based rotation with retention and optional gzip; optional per-level files (`app.error.log`); optional fsync on close; `logger.rotate()` triggers manual rotation on size-based writers.
 - **Database output** - ready-made SQLite adapter plus a generic adapter interface; self-healing rebuilds a dead adapter from a factory and drains the backlog.
 - **Batching** - async batched writes with a bounded queue, delivery stats and severity-triggered flushes.
@@ -70,7 +70,7 @@ logger.info("user logged in", { userId: 42 });
 - **Metrics** - zero-dependency Counter, Gauge, Histogram and Registry in Prometheus text format, with snapshot helpers.
 - **Box drawing** - optional ASCII frames around error chains, fatal bodies and storm notices in pretty output.
 - **Web viewer** - optional HTTP endpoint serving the last N entries from memory.
-- **Integrations** - Elysia, Bun.serve, Node http, Hono and Fastify middlewares with correlation ids.
+- **Integrations** - Elysia, Bun.serve, Node http, Hono and Fastify middlewares with correlation ids (Elysia needs manual `withContext` in handlers).
 - **Env-driven tuning** - `LOG_LEVEL` for the root level, `LOG_MODULES="auth:debug,http:warn"` per module.
 - **Schema versioning** - opt-in `v` field on every entry plus a versioned sqlite column, so stored logs survive format changes.
 
@@ -80,7 +80,7 @@ Full guides, the complete settings reference and integration recipes live on the
 
 - Zero runtime dependencies: `npm install hp_logger` installs exactly one package.
 - `devDependencies` (framework SDKs for integration tests, TypeScript, linters) and optional `peerDependencies` are never installed by consumers and never enter the published tarball.
-- The published tarball contains only `dist/`, `README.md` and `LICENSE` - verifiable with `npm pack --dry-run`.
+- The published tarball contains only `dist/`, `llms.txt`, `README.md`, `CHANGELOG.md` and `LICENSE` - verifiable with `npm pack --dry-run`.
 - Redaction runs before every transport; the full security contract lives in `.docs/SECURITY.md` in this repository.
 
 ## AI usage disclosure

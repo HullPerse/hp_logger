@@ -1,5 +1,6 @@
 import { LEVEL_NAMES } from "../config/levels.config";
 import { DEFAULT_LOG_DIR } from "../config/writer.config";
+import { splitExtension } from "../lib/transport.utils";
 import type { ResolvedSettings } from "../types/logger";
 import type { FileTransportOptions, Transport } from "../types/transport";
 import { AdaptiveTransport } from "./adaptive.writer";
@@ -15,9 +16,7 @@ import { SizeBasedFileTransport } from "./sizeBased.writer";
 
 /** `logs/app.log` + "error" -> `logs/app.error.log` (extension-aware). */
 const withLevelSuffix = (filepath: string, level: string): string => {
-  const dot = filepath.lastIndexOf(".");
-  const base = dot === -1 ? filepath : filepath.slice(0, dot);
-  const ext = dot === -1 ? "" : filepath.slice(dot);
+  const { base, ext } = splitExtension(filepath);
   return `${base}.${level}${ext}`;
 };
 
@@ -33,7 +32,7 @@ const createFileTransport = (
   options: FileTransportOptions,
   rotation: string | undefined,
 ): Transport => {
-  const Ctor = (rotation !== undefined ? FILE_CTOR_BY_ROTATION[rotation] : undefined) ?? FileTransport;
+  const Ctor = (rotation === undefined ? undefined : FILE_CTOR_BY_ROTATION[rotation]) ?? FileTransport;
   return new Ctor(path, options);
 };
 

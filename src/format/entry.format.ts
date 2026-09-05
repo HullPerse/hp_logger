@@ -19,9 +19,9 @@ export const formatEntry = (
   stripControl = false,
 ): string => {
   if (mode === "json") {
-    const flat = entry.baseFields !== undefined
-      ? { ...entry.baseFields, ...entry }
-      : entry;
+    const flat = entry.baseFields === undefined
+      ? entry
+      : { ...entry.baseFields, ...entry };
     return safeStringify(flat);
   }
   if (formatter !== undefined) {

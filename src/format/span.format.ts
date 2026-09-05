@@ -6,8 +6,7 @@ const PIPE = "   ";
 const TEE = "+-- ";
 const VERTICAL = "|  ";
 
-const pad = (text: string, width: number): string =>
-  text.length >= width ? text : `${text}${" ".repeat(width - text.length)}`;
+const pad = (text: string, width: number): string => text.padEnd(width, " ");
 
 const renderNode = (node: SpanNode, prefix: string, isLast: boolean, lines: string[]): void => {
   const connector = isLast ? BRANCH : TEE;

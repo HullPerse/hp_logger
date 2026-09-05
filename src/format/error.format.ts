@@ -1,4 +1,4 @@
-import { safeStringify } from "../lib/json.utils";
+import { formatContext } from "./context.format";
 import type { LogContext } from "../types/logger";
 
 interface ErrorLike {
@@ -38,12 +38,12 @@ export const formatPrettyErrorBlock = (context: LogContext): string | null => {
 
   const lines: string[] = [];
   renderCauseChain(main, 0, lines);
-  const rest: string[] = [];
+  const rest: LogContext = {};
   for (const [key, value] of Object.entries(context)) {
     if (ERROR_KEYS.has(key)) continue;
-    const rendered = typeof value === "string" ? `"${value}"` : safeStringify(value);
-    rest.push(`${key}=${rendered}`);
+    rest[key] = value;
   }
-  const restLine = rest.length > 0 ? `  ${rest.join(" ")}` : "";
+  const rendered = formatContext(rest, "kv");
+  const restLine = rendered === "" ? "" : ` ${rendered}`;
   return `${lines.join("\n")}\n${restLine}`;
 };

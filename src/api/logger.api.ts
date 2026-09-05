@@ -1,11 +1,10 @@
-import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import { LruCache } from "../brain/lru.utils";
 import { brainSnapshots, registerBrainCache } from "../brain/registry.utils";
 import { RingBuffer } from "../brain/ring.utils";
 import { LOG_LEVELS } from "../config/levels.config";
 import { DEFAULT_AUTHOR, ONCE_THROTTLE_CACHE_CAP } from "../config/logger.config";
-import { getAsyncContext, runWithContext, runWithSpanPath } from "../core/context.core";
+import { runWithContext } from "../core/context.core";
 import { buildEntry, buildEntryFast } from "../core/entry.core";
 import {
   addGlobalTransport,
@@ -15,12 +14,8 @@ import {
   takeLeveledWrapper,
   writeEntry,
 } from "../core/pipeline.core";
-import { getSpanRegistry, inheritSpanContext } from "../core/span.core";
-import { formatDuration } from "../format/duration.format";
-import { renderSpanTree } from "../format/span.format";
 import { renderTable } from "../format/table.format";
 import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
-import { attemptAsync } from "../lib/result.utils";
 import { createSampler } from "../lib/sampling.utils";
 import {
   createCounter as createCounterHelper,
@@ -35,17 +30,19 @@ import { spanImpl, timeImpl, traceTreeImpl } from "./span.api";
 import { taskImpl } from "./task.api";
 import { rebindWatchImpl, watchImpl } from "./watch.api";
 import {
+  isTraversalBlocked,
   matchEnvModule,
   mergeSettings,
   resolveEnvLevel,
   resolveEnvModules,
   resolveSettings,
+  warnOutsideCwd,
 } from "../lib/settings.utils";
-import { Counter } from "../metrics/counter.metric";
-import { Gauge } from "../metrics/gauge.metric";
-import { Histogram } from "../metrics/histogram.metric";
+import type { Counter } from "../metrics/counter.metric";
+import type { Gauge } from "../metrics/gauge.metric";
+import type { Histogram } from "../metrics/histogram.metric";
 import { OperationProfiler } from "../metrics/profiler.metric";
-import { Registry } from "../metrics/registry.metric";
+import type { Registry } from "../metrics/registry.metric";
 import { compileRedactPaths, redactCompiled } from "../redact/index.redact";
 import { buildResolverSet } from "../resolvers/index.resolver";
 import type {
@@ -69,7 +66,6 @@ import type {
 import type { MetricOptions } from "../types/metrics";
 import type { Transport } from "../types/transport";
 import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch";
-import { startWatcher } from "../watch/index.watch";
 import { buildTransports } from "../writer/factory.writer";
 import { LeveledTransport } from "../writer/leveled.writer";
 
@@ -83,6 +79,22 @@ const LEVEL_ERROR = LOG_LEVELS.error;
 const LEVEL_FATAL = LOG_LEVELS.fatal;
 const EMPTY_STATS: LoggerStats = { dropped: 0, queued: 0, transportErrors: 0 };
 const identity = (value: unknown): unknown => value;
+
+/** Compile the per-entry redaction closure; identity when nothing needs masking. */
+const compileRedactValue = (settings: ResolvedSettings): ((value: unknown) => unknown) => {
+  const { redactKeys, redactCensor, redactPii } = settings;
+  const compiledPaths = compileRedactPaths(settings.redactPaths);
+  if (redactKeys === null && compiledPaths === null && redactPii === false) return identity;
+  return (value) =>
+    redactCompiled(
+      value,
+      redactKeys,
+      settings.redactDepth,
+      compiledPaths,
+      redactCensor,
+      redactPii,
+    );
+};
 
 const rateLimits = new LruCache<string, number>(ONCE_THROTTLE_CACHE_CAP);
 const onceKeys = new LruCache<string, true>(ONCE_THROTTLE_CACHE_CAP);
@@ -129,7 +141,7 @@ export class Logger implements LoggerState {
   private autoCounter: Counter | null = null;
   private watchHandles: WatchHandle[] = [];
   private paused = false;
-  private pauseBuffer: Array<{ level: LogLevel; message: LazyMessage; context: LazyContext | undefined }> = [];
+  private pauseBuffer: { level: LogLevel; message: LazyMessage; context: LazyContext | undefined }[] = [];
   private pauseDropped = 0;
   private static readonly PAUSE_CAP = 10_000;
   // Null when settings.profile is off (one null check on the measurement
@@ -183,20 +195,7 @@ export class Logger implements LoggerState {
     this.sampler = settings.sampling
       ? createSampler(settings.sampling.rate, settings.sampling.perTrace)
       : undefined;
-    const { redactKeys, redactCensor, redactPii } = settings;
-    const compiledPaths = compileRedactPaths(settings.redactPaths);
-    this.redactValue =
-      redactKeys === null && compiledPaths === null && redactPii === false
-        ? identity
-        : (value) =>
-            redactCompiled(
-              value,
-              redactKeys,
-              settings.redactDepth,
-              compiledPaths,
-              redactCensor,
-              redactPii,
-            );
+    this.redactValue = compileRedactValue(settings);
     // Compiled entry plan: the specialized builder only when every optional
     // per-entry feature is off. Recomputed here, so settings() recompiles.
     this.entryPlan =
@@ -355,89 +354,65 @@ export class Logger implements LoggerState {
   // work. `levelThreshold` is a number on the instance, updated by
   // settings(), so the comparison stays dynamic.
 
+  // Single gate for the level methods: the numeric compare runs first, so a
+  // disabled level returns before writeNormalized and any argument work.
+  private writeGated(
+    level: LogLevel,
+    gate: number,
+    first: LazyMessage | LogContext,
+    second?: LazyContext | string,
+  ): void {
+    if (gate < this.levelThreshold) return;
+    this.writeNormalized(level, first, second);
+  }
+
   trace(message: LazyMessage, context?: LazyContext): void;
   trace(context: LogContext, message?: string): void;
   trace(first: LazyMessage | LogContext, second?: LazyContext | string): void {
-    if (LEVEL_TRACE < this.levelThreshold) return;
-    this.writeNormalized("trace", first, second);
+    this.writeGated("trace", LEVEL_TRACE, first, second);
   }
 
   debug(message: LazyMessage, context?: LazyContext): void;
   debug(context: LogContext, message?: string): void;
   debug(first: LazyMessage | LogContext, second?: LazyContext | string): void {
-    if (LEVEL_DEBUG < this.levelThreshold) return;
-    this.writeNormalized("debug", first, second);
+    this.writeGated("debug", LEVEL_DEBUG, first, second);
   }
 
   info(message: LazyMessage, context?: LazyContext): void;
   info(context: LogContext, message?: string): void;
   info(first: LazyMessage | LogContext, second?: LazyContext | string): void {
-    if (LEVEL_INFO < this.levelThreshold) return;
-    this.writeNormalized("info", first, second);
+    this.writeGated("info", LEVEL_INFO, first, second);
   }
 
   success(message: LazyMessage, context?: LazyContext): void;
   success(context: LogContext, message?: string): void;
   success(first: LazyMessage | LogContext, second?: LazyContext | string): void {
-    if (LEVEL_SUCCESS < this.levelThreshold) return;
-    this.writeNormalized("success", first, second);
+    this.writeGated("success", LEVEL_SUCCESS, first, second);
   }
 
   warn(message: LazyMessage, context?: LazyContext): void;
   warn(context: LogContext, message?: string): void;
   warn(first: LazyMessage | LogContext, second?: LazyContext | string): void {
-    if (LEVEL_WARN < this.levelThreshold) return;
-    this.writeNormalized("warn", first, second);
+    this.writeGated("warn", LEVEL_WARN, first, second);
   }
 
   error(message: LazyMessage, context?: LazyContext): void;
   error(context: LogContext, message?: string): void;
   error(first: LazyMessage | LogContext, second?: LazyContext | string): void {
-    if (LEVEL_ERROR < this.levelThreshold) return;
-    this.writeNormalized("error", first, second);
+    this.writeGated("error", LEVEL_ERROR, first, second);
   }
 
   fatal(message: LazyMessage, context?: LazyContext): void;
   fatal(context: LogContext, message?: string): void;
   fatal(first: LazyMessage | LogContext, second?: LazyContext | string): void {
-    if (LEVEL_FATAL < this.levelThreshold) return;
-    this.writeNormalized("fatal", first, second);
-  }
-
-  private writeMeasured(
-    name: string,
-    durationMs: number,
-    options: TimeOptions = {},
-    spanContext?: { spanId: string; traceId: string; parentId?: string },
-  ): void {
-    const slow = options.maxMs !== undefined && durationMs > options.maxMs;
-    const level = slow ? "warn" : (options.level ?? "success");
-    this.profiler?.record(name, durationMs);
-    this.write(level, `${name} completed in ${formatDuration(durationMs)}`, {
-      durationMs,
-      operation: name,
-      ...(slow ? { maxMs: options.maxMs, slow: true } : {}),
-      ...spanContext,
-    });
-    if (spanContext !== undefined) {
-      getSpanRegistry().add({
-        durationMs,
-        level,
-        message: `${name} completed in ${formatDuration(durationMs)}`,
-        name,
-        parentId: spanContext.parentId,
-        spanId: spanContext.spanId,
-        timestamp: this.timestamp(),
-        traceId: spanContext.traceId,
-      });
-    }
+    this.writeGated("fatal", LEVEL_FATAL, first, second);
   }
 
   /**
    * Measure a function and log its duration. Returns the function result.
    * Pass `maxMs` to warn when the measurement exceeds the threshold.
    */
-  async time<T>(name: string, fn: () => Promise<T> | T, options: TimeOptions = {}): Promise<T> {
+  time<T>(name: string, fn: () => Promise<T> | T, options: TimeOptions = {}): Promise<T> {
     return timeImpl(this, name, fn, options);
   }
 
@@ -545,6 +520,7 @@ export class Logger implements LoggerState {
    * Drain buffered entries to transports in FIFO order, then resume
    * normal logging. Flush errors never propagate.
    */
+  // eslint-disable-next-line require-await -- resume keeps the Promise<void> contract; the drain itself is synchronous.
   async resume(): Promise<void> {
     this.paused = false;
     const entries = this.pauseBuffer.splice(0);
@@ -569,7 +545,7 @@ export class Logger implements LoggerState {
         this.pauseDropped += 1;
         return;
       }
-      this.pauseBuffer.push({ level, message, context: merged });
+      this.pauseBuffer.push({ context: merged, level, message });
       return;
     }
     writeEntry(this, level, message, merged);
@@ -603,7 +579,7 @@ export class Logger implements LoggerState {
     }
     const queued = base.queued + this.pauseBuffer.length;
     const dropped = base.dropped + this.pauseDropped;
-    return { ...base, dropped, queued, caches: { ...brainSnapshots(), ...own } };
+    return { ...base, caches: { ...brainSnapshots(), ...own }, dropped, queued };
   }
 
   /**
@@ -632,18 +608,11 @@ export class Logger implements LoggerState {
     const ring = this.blackboxRing;
     if (target === undefined || ring === null || ring.size === 0) return null;
     // Soft guard: block traversal, warn when outside cwd.
-    const segments = target.split(/[\\/]/u);
-    if (segments.includes("..")) {
+    if (isTraversalBlocked(target)) {
       console.warn(`hp_logger: dump path blocked: ${target} (traversal)`);
       return null;
     }
-    if (path.isAbsolute(target)) {
-      const resolved = path.resolve(target);
-      const cwd = process.cwd();
-      if (resolved !== cwd && !resolved.startsWith(`${cwd}${path.sep}`)) {
-        console.warn(`hp_logger: dump path outside cwd: ${target}`);
-      }
-    }
+    warnOutsideCwd("dump", target);
     const lines = ring
       .toArray()
       .map((entry) => JSON.stringify(entry))

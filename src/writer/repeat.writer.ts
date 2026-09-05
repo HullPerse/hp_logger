@@ -1,7 +1,8 @@
 import { GroupCounter } from "../brain/group.utils";
 import { countSummary, startUnrefTimeout, stopTimeout } from "../lib/transport.utils";
 import type { LogContext, LogEntry, RepeatSettings } from "../types/logger";
-import type { Transport, TransportStats } from "../types/transport";
+import type { Transport } from "../types/transport";
+import { PassthroughTransport } from "./passthrough.writer";
 
 interface RepeatGroup {
   count: number;
@@ -29,14 +30,13 @@ const repeatKey = (entry: LogEntry): string =>
  * closes the group is written as one summary line `message ×N`. Errors are
  * grouped by their signature (name, message, first stack frame).
  */
-export class RepeatTransport implements Transport {
+export class RepeatTransport extends PassthroughTransport {
   private readonly groups: GroupCounter<string, RepeatGroup>;
-  private readonly inner: Transport;
   private readonly windowMs: number;
   private closed = false;
 
   constructor(inner: Transport, options: RepeatSettings = {}) {
-    this.inner = inner;
+    super(inner);
     this.windowMs = options.windowMs ?? 1000;
     const maxKeys = options.maxKeys ?? 1000;
     // Evicted groups never reach their window timer: flush them now.
@@ -46,7 +46,7 @@ export class RepeatTransport implements Transport {
     });
   }
 
-  write(entry: LogEntry): void {
+  override write(entry: LogEntry): void {
     this.pushEntries([entry]);
   }
 
@@ -54,18 +54,14 @@ export class RepeatTransport implements Transport {
     this.pushEntries(entries);
   }
 
-  stats(): TransportStats {
-    return this.inner.stats?.() ?? { dropped: 0, queued: 0, transportErrors: 0 };
-  }
-
-  async close(): Promise<void> {
+  override async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
     this.drainAll();
     await this.inner.close?.();
   }
 
-  async flush(): Promise<void> {
+  override async flush(): Promise<void> {
     this.drainAll();
     await this.inner.flush?.();
   }
