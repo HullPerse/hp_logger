@@ -8,11 +8,11 @@ import {
   parseTraceparent,
   randomSpanId,
   randomTraceId,
-} from "@/core/traceparent.core";
-import { createLogger } from "@/index.logger";
-import { createSampler } from "@/lib/sampling.utils";
-import { captureLogger } from "@/testing";
-import type { LogEntry } from "@/types/logger";
+} from "../../core/traceparent.core.js";
+import { createLogger } from "../../index.logger.js";
+import { createSampler } from "../sampling.utils.js";
+import { captureLogger } from "../../testing/index.js";
+import type { LogEntry } from "../../types/logger.js";
 
 const TRACE = "4bf92f3577b34da6a3ce929d0e0e4736";
 const SPAN = "00f067aa0ba902b7";
@@ -74,7 +74,7 @@ describe("thread transport", () => {
   test("writes entries through a worker thread into a file", async () => {
     const dir = path.join(tmpdir(), `hp-thread-${Date.now()}`);
     const filePath = path.join(dir, "threaded.log");
-    const { createThreadTransport } = await import("@/worker/thread.transport");
+    const { createThreadTransport } = await import("../../worker/thread.transport.js");
     const transport = createThreadTransport({
       file: { enabled: true, path: filePath },
       mode: "json",

@@ -1,4 +1,4 @@
-export { captureLogger, createCaptureTransport, withMutedConsole } from "@/testing";
+export { captureLogger, createCaptureTransport, withMutedConsole } from "../../testing/index.js";
 
 interface CapturedConsole {
   outputs: string[];

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
-import { ONCE_THROTTLE_CACHE_CAP } from "@/config/logger.config";
-import { formatEntry } from "@/format/entry.format";
-import { createLogger, Logger } from "@/index.logger";
-import { resolveEnvLevel } from "@/lib/settings.utils";
-import { captureConsole, captureLogger, withMutedConsole } from "@/lib/tests/test.transport";
-import { redact } from "@/redact/index.redact";
-import type { LogEntry, LoggerSettings } from "@/types/logger";
-import type { Transport } from "@/types/transport";
+import { ONCE_THROTTLE_CACHE_CAP } from "../../config/logger.config.js";
+import { formatEntry } from "../../format/entry.format.js";
+import { createLogger, Logger } from "../../index.logger.js";
+import { resolveEnvLevel } from "../settings.utils.js";
+import { captureConsole, captureLogger, withMutedConsole } from "./test.transport.js";
+import { redact } from "../../redact/index.redact.js";
+import type { LogEntry, LoggerSettings } from "../../types/logger.js";
+import type { Transport } from "../../types/transport.js";
 
 const captureEntries = (
   settings: LoggerSettings = {},

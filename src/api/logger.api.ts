@@ -1,11 +1,11 @@
 import { writeFile } from "node:fs/promises";
-import { LruCache } from "../brain/lru.utils";
-import { brainSnapshots, registerBrainCache } from "../brain/registry.utils";
-import { RingBuffer } from "../brain/ring.utils";
-import { LOG_LEVELS } from "../config/levels.config";
-import { DEFAULT_AUTHOR, ONCE_THROTTLE_CACHE_CAP } from "../config/logger.config";
-import { runWithContext } from "../core/context.core";
-import { buildEntry, buildEntryFast } from "../core/entry.core";
+import { LruCache } from "../brain/lru.utils.js";
+import { brainSnapshots, registerBrainCache } from "../brain/registry.utils.js";
+import { RingBuffer } from "../brain/ring.utils.js";
+import { LOG_LEVELS } from "../config/levels.config.js";
+import { DEFAULT_AUTHOR, ONCE_THROTTLE_CACHE_CAP } from "../config/logger.config.js";
+import { runWithContext } from "../core/context.core.js";
+import { buildEntry, buildEntryFast } from "../core/entry.core.js";
 import {
   addGlobalTransport,
   clearGlobalTransports,
@@ -13,10 +13,10 @@ import {
   removeGlobalTransport,
   takeLeveledWrapper,
   writeEntry,
-} from "../core/pipeline.core";
-import { renderTable } from "../format/table.format";
-import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format";
-import { createSampler } from "../lib/sampling.utils";
+} from "../core/pipeline.core.js";
+import { renderTable } from "../format/table.format.js";
+import { cachedTimestamp, formatTimestamp } from "../format/timestamp.format.js";
+import { createSampler } from "../lib/sampling.utils.js";
 import {
   createCounter as createCounterHelper,
   createGauge as createGaugeHelper,
@@ -25,10 +25,10 @@ import {
   getMetricsText as getMetricsTextHelper,
   getOrCreateRegistry as getRegistryHelper,
   writeMetricsBox as writeMetricsBoxHelper,
-} from "./metrics.api";
-import { spanImpl, timeImpl, traceTreeImpl } from "./span.api";
-import { taskImpl } from "./task.api";
-import { rebindWatchImpl, watchImpl } from "./watch.api";
+} from "./metrics.api.js";
+import { spanImpl, timeImpl, traceTreeImpl } from "./span.api.js";
+import { taskImpl } from "./task.api.js";
+import { rebindWatchImpl, watchImpl } from "./watch.api.js";
 import {
   isTraversalBlocked,
   matchEnvModule,
@@ -37,14 +37,14 @@ import {
   resolveEnvModules,
   resolveSettings,
   warnOutsideCwd,
-} from "../lib/settings.utils";
-import type { Counter } from "../metrics/counter.metric";
-import type { Gauge } from "../metrics/gauge.metric";
-import type { Histogram } from "../metrics/histogram.metric";
-import { OperationProfiler } from "../metrics/profiler.metric";
-import type { Registry } from "../metrics/registry.metric";
-import { compileRedactPaths, redactCompiled } from "../redact/index.redact";
-import { buildResolverSet } from "../resolvers/index.resolver";
+} from "../lib/settings.utils.js";
+import type { Counter } from "../metrics/counter.metric.js";
+import type { Gauge } from "../metrics/gauge.metric.js";
+import type { Histogram } from "../metrics/histogram.metric.js";
+import { OperationProfiler } from "../metrics/profiler.metric.js";
+import type { Registry } from "../metrics/registry.metric.js";
+import { compileRedactPaths, redactCompiled } from "../redact/index.redact.js";
+import { buildResolverSet } from "../resolvers/index.resolver.js";
 import type {
   CreateLoggerOptions,
   LazyContext,
@@ -62,12 +62,12 @@ import type {
   TaskOptions,
   TimeOptions,
   TimestampFormat,
-} from "../types/logger";
-import type { MetricOptions } from "../types/metrics";
-import type { Transport } from "../types/transport";
-import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch";
-import { buildTransports } from "../writer/factory.writer";
-import { LeveledTransport } from "../writer/leveled.writer";
+} from "../types/logger.js";
+import type { MetricOptions } from "../types/metrics.js";
+import type { Transport } from "../types/transport.js";
+import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch.js";
+import { buildTransports } from "../writer/factory.writer.js";
+import { LeveledTransport } from "../writer/leveled.writer.js";
 
 /** Numeric levels, inlined as constants in the hot path. */
 const LEVEL_TRACE = LOG_LEVELS.trace;

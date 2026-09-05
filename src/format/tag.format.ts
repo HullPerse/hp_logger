@@ -1,4 +1,4 @@
-import type { TagCase } from "../types/logger";
+import type { TagCase } from "../types/logger.js";
 
 const TAG_CASE_TRANSFORMS: Record<TagCase, (value: string) => string> = {
   lower: (value) => value.toLowerCase(),

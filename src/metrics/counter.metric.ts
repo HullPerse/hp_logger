@@ -1,5 +1,5 @@
-import type { LabelValues, MetricSnapshot, MetricType } from "../types/metrics";
-import { BaseMetric } from "./base.metric";
+import type { LabelValues, MetricSnapshot, MetricType } from "../types/metrics.js";
+import { BaseMetric } from "./base.metric.js";
 
 /** Monotonically increasing counter. */
 export class Counter extends BaseMetric {

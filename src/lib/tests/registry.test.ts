@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { LruCache } from "@/brain/lru.utils";
-import { brainSnapshots, registerBrainCache } from "@/brain/registry.utils";
+import { LruCache } from "../../brain/lru.utils.js";
+import { brainSnapshots, registerBrainCache } from "../../brain/registry.utils.js";
 
 describe("brain registry", () => {
   test("aggregates registered snapshots under their names", () => {

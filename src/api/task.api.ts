@@ -1,7 +1,7 @@
-import { getAsyncContext, runMeasuredScope } from "../core/context.core";
-import { getSpanRegistry, inheritSpanContext } from "../core/span.core";
-import { formatDuration } from "../format/duration.format";
-import type { LogContext, LogLevel, TaskHandle, TaskOptions } from "../types/logger";
+import { getAsyncContext, runMeasuredScope } from "../core/context.core.js";
+import { getSpanRegistry, inheritSpanContext } from "../core/span.core.js";
+import { formatDuration } from "../format/duration.format.js";
+import type { LogContext, LogLevel, TaskHandle, TaskOptions } from "../types/logger.js";
 
 export const taskImpl = <T>(
   logger: unknown,

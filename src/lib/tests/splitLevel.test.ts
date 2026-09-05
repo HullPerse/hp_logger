@@ -3,12 +3,12 @@ import { mkdirSync, existsSync, readFileSync, readdirSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { createLogger, Logger } from "@/index.logger";
-import { captureLogger, withMutedConsole } from "@/lib/tests/test.transport";
-import type { LogEntry, LogLevel } from "@/types/logger";
-import type { Transport } from "@/types/transport";
-import { DateBasedFileTransport } from "@/writer/dateBased.writer";
-import { LeveledTransport } from "@/writer/leveled.writer";
+import { createLogger, Logger } from "../../index.logger.js";
+import { captureLogger, withMutedConsole } from "./test.transport.js";
+import type { LogEntry, LogLevel } from "../../types/logger.js";
+import type { Transport } from "../../types/transport.js";
+import { DateBasedFileTransport } from "../../writer/dateBased.writer.js";
+import { LeveledTransport } from "../../writer/leveled.writer.js";
 
 const workdir = path.join(tmpdir(), `hp-split-${Date.now()}`);
 

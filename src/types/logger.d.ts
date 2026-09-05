@@ -1,5 +1,5 @@
-import type { DatabaseSettings, FileSettings, Transport } from "./transport";
-import type { WatchOptions } from "./watch";
+import type { DatabaseSettings, FileSettings, Transport } from "./transport.js";
+import type { WatchOptions } from "./watch.js";
 
 export type LogLevel = "trace" | "debug" | "info" | "success" | "warn" | "error" | "fatal";
 

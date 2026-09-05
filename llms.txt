@@ -4,7 +4,7 @@
 > redaction, file/database output, flood control, spans and traces, Prometheus-style
 > metrics, worker-thread transports and web framework integrations.
 
-Version: 1.1.0. License: MIT. Author: HullPerse.
+Version: 1.1.1. License: MIT. Author: HullPerse.
 Repo: https://github.com/HullPerse/hp_logger
 Issues: https://github.com/HullPerse/hp_logger/issues
 npm: https://www.npmjs.com/package/hp_logger

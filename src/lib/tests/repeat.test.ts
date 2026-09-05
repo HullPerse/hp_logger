@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { LogEntry } from "@/types/logger";
-import { RepeatTransport } from "@/writer/repeat.writer";
+import type { LogEntry } from "../../types/logger.js";
+import { RepeatTransport } from "../../writer/repeat.writer.js";
 
 const entry = (message: string, context: Record<string, unknown> = {}): LogEntry => ({
   author: "TEST",

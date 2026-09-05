@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { Elysia } from "elysia";
 
-import { Logger } from "@/index.logger";
-import { captureLogger as captureTestLogger } from "@/lib/tests/test.transport";
-import { elysiaPlugin } from "@/plugins/elysia.plugin";
-import type { LogEntry } from "@/types/logger";
+import { Logger } from "../../index.logger.js";
+import { captureLogger as captureTestLogger } from "./test.transport.js";
+import { elysiaPlugin } from "../../plugins/elysia.plugin.js";
+import type { LogEntry } from "../../types/logger.js";
 
 const captureLogger = (): { entries: LogEntry[]; logger: Logger } =>
   captureTestLogger({ level: "debug", mode: "json" });

@@ -1,4 +1,4 @@
-import type { LogEntry } from "../types/logger";
+import type { LogEntry } from "../types/logger.js";
 
 /**
  * Deterministic polynomial string hash: tiny, stable across runs, and

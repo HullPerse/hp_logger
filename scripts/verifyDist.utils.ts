@@ -20,7 +20,9 @@ for (const file of files) {
   for (const match of source.matchAll(RELATIVE_SPECIFIER)) {
     const specifier = match[1];
     if (specifier === undefined) continue;
-    const resolved = normalize(join(dirname(file), specifier));
+    // Node16-style explicit `.js` specifiers map to TS sources.
+    const base = specifier.replace(/\.[mc]?js$/, "");
+    const resolved = normalize(join(dirname(file), base));
     const found = [
       resolved,
       `${resolved}.d.ts`,

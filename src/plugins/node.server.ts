@@ -1,14 +1,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import type { Logger } from "../api/logger.api";
-import type { RequestLogOptions } from "../types/integrations";
+import type { Logger } from "../api/logger.api.js";
+import type { RequestLogOptions } from "../types/integrations.js";
 import {
   CORRELATION_ID_HEADER,
   finishRequest,
   pathFromUrl,
   resolveCorrelationId,
   skipSet,
-} from "./shared.plugin";
+} from "./shared.plugin.js";
 
 type NodeHandler = (request: IncomingMessage, response: ServerResponse) => void;
 

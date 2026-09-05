@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { createLogger } from "@/index.logger";
-import { captureLogger, withMutedConsole } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
+import { createLogger } from "../../index.logger.js";
+import { captureLogger, withMutedConsole } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
 
 const settle = (ms = 15): Promise<void> => Bun.sleep(ms);
 

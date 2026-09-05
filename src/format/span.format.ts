@@ -1,5 +1,5 @@
-import type { SpanNode } from "../types/logger";
-import { formatDuration } from "./duration.format";
+import type { SpanNode } from "../types/logger.js";
+import { formatDuration } from "./duration.format.js";
 
 const BRANCH = "`-- ";
 const PIPE = "   ";

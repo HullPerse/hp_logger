@@ -5,7 +5,7 @@ import {
   resolveDefaultMode,
   resolveEnvLevel,
   resolveSettings,
-} from "@/lib/settings.utils";
+} from "../settings.utils.js";
 
 describe("settings", () => {
   test("resolves the documented defaults", () => {

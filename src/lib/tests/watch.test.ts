@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { createLogger } from "@/index.logger";
-import { startWatcher } from "@/watch/index.watch";
+import { createLogger } from "../../index.logger.js";
+import { startWatcher } from "../../watch/index.watch.js";
 
 const noop = (): void => {};
 const fakeFetch = (response: Response | Promise<Response>): typeof fetch =>

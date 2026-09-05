@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { createLogger } from "@/index.logger";
-import { redact } from "@/redact/index.redact";
+import { createLogger } from "../../index.logger.js";
+import { redact } from "../../redact/index.redact.js";
 
 describe("error serialization before redaction", () => {
   test("json without redaction still carries the full error", async () => {

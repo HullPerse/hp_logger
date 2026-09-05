@@ -1,4 +1,4 @@
-import type { Metric, MetricSnapshot, MetricSnapshotProvider } from "../types/metrics";
+import type { Metric, MetricSnapshot, MetricSnapshotProvider } from "../types/metrics.js";
 
 /** Collects metrics and renders them in Prometheus text format. */
 export class Registry {

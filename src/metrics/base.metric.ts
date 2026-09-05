@@ -1,5 +1,5 @@
-import { LABEL_NAME_PATTERN, METRIC_NAME_PATTERN } from "../config/metrics.config";
-import type { LabelValues, MetricOptions, MetricSnapshot, MetricType } from "../types/metrics";
+import { LABEL_NAME_PATTERN, METRIC_NAME_PATTERN } from "../config/metrics.config.js";
+import type { LabelValues, MetricOptions, MetricSnapshot, MetricType } from "../types/metrics.js";
 
 /** Base class with name validation and label serialization. */
 export abstract class BaseMetric {

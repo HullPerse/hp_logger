@@ -1,5 +1,5 @@
-import { Memoize } from "../brain/memo.utils";
-import { registerBrainCache } from "../brain/registry.utils";
+import { Memoize } from "../brain/memo.utils.js";
+import { registerBrainCache } from "../brain/registry.utils.js";
 import {
   BEARER_PATTERN,
   CARD_PATTERN,
@@ -8,8 +8,8 @@ import {
   MESSAGE_REDACTION_PATTERN,
   DEFAULT_REDACT_KEYS,
   SENSITIVE_KEY_FRAGMENTS,
-} from "../config/redaction.config";
-import type { SerializedError } from "../types/redact";
+} from "../config/redaction.config.js";
+import type { SerializedError } from "../types/redact.js";
 
 const matchesPattern = (pattern: RegExp, value: string): boolean => {
   // Non-stateful expressions do not need lastIndex writes on every key.

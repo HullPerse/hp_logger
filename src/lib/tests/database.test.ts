@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 
-import { createLogger } from "@/index.logger";
-import { captureLogger, withMutedConsole } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
-import { DatabaseTransport } from "@/writer/database.writer";
-import { createSqliteAdapter } from "@/writer/sqlite.writer";
+import { createLogger } from "../../index.logger.js";
+import { captureLogger, withMutedConsole } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
+import { DatabaseTransport } from "../../writer/database.writer.js";
+import { createSqliteAdapter } from "../../writer/sqlite.writer.js";
 
 const entry = (message: string): LogEntry => ({
   author: "TEST",

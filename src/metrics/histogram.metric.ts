@@ -1,11 +1,11 @@
-import { DEFAULT_BUCKETS as defaultBuckets } from "../config/metrics.config";
+import { DEFAULT_BUCKETS as defaultBuckets } from "../config/metrics.config.js";
 import type {
   HistogramEntry,
   HistogramOptions,
   LabelValues,
   MetricSnapshot,
-} from "../types/metrics";
-import { BaseMetric } from "./base.metric";
+} from "../types/metrics.js";
+import { BaseMetric } from "./base.metric.js";
 
 /** Distribution of observations over configured buckets. */
 export class Histogram extends BaseMetric {

@@ -25,12 +25,7 @@
     // Stricter flags, disabled by design: unused code is tracked by knip/oxlint.
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false,
-
-    // Path alias (the only place @/* is declared)
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "noPropertyAccessFromIndexSignature": false
   },
   "include": ["src"]
 }

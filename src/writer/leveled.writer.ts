@@ -1,8 +1,8 @@
-import { LOG_LEVELS } from "../config/levels.config";
-import { dispatchBatch } from "../lib/transport.utils";
-import type { LogEntry, LogLevel } from "../types/logger";
-import type { Transport } from "../types/transport";
-import { PassthroughTransport } from "./passthrough.writer";
+import { LOG_LEVELS } from "../config/levels.config.js";
+import { dispatchBatch } from "../lib/transport.utils.js";
+import type { LogEntry, LogLevel } from "../types/logger.js";
+import type { Transport } from "../types/transport.js";
+import { PassthroughTransport } from "./passthrough.writer.js";
 
 /**
  * Level gate around an arbitrary transport: only entries at or above

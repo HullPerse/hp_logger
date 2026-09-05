@@ -1,21 +1,21 @@
-import { LOG_LEVELS } from "../config/levels.config";
-import { DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_BUFFER_SIZE } from "../config/writer.config";
-import { attemptAsync } from "../lib/result.utils";
-import { applyJitter, resolveRetry, retryDelayMs } from "../lib/retry.utils";
-import type { ResolvedRetry } from "../lib/retry.utils";
+import { LOG_LEVELS } from "../config/levels.config.js";
+import { DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_BUFFER_SIZE } from "../config/writer.config.js";
+import { attemptAsync } from "../lib/result.utils.js";
+import { applyJitter, resolveRetry, retryDelayMs } from "../lib/retry.utils.js";
+import type { ResolvedRetry } from "../lib/retry.utils.js";
 import {
   startUnrefInterval,
   startUnrefTimeout,
   stopInterval,
   stopTimeout,
-} from "../lib/transport.utils";
-import type { LogContext, LogEntry, LogLevel } from "../types/logger";
+} from "../lib/transport.utils.js";
+import type { LogContext, LogEntry, LogLevel } from "../types/logger.js";
 import type {
   DatabaseAdapter,
   DatabaseSettings,
   Transport,
   TransportStats,
-} from "../types/transport";
+} from "../types/transport.js";
 
 /** Author of retry/drop notices so they never re-enter this transport. */
 const NOTICE_AUTHOR = "database";

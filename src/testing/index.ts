@@ -1,2 +1,2 @@
-export { ConsoleTransport } from "../writer/console.writer";
-export { captureLogger, createCaptureTransport, withMutedConsole } from "./capture.transport";
+export { ConsoleTransport } from "../writer/console.writer.js";
+export { captureLogger, createCaptureTransport, withMutedConsole } from "./capture.transport.js";

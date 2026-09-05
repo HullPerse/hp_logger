@@ -3,18 +3,18 @@ import type { WriteStream } from "node:fs";
 import { finished } from "node:stream/promises";
 import { promisify } from "node:util";
 
-import { DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_BUFFER_SIZE } from "../config/writer.config";
-import { formatEntry } from "../format/entry.format";
-import { attemptAsync } from "../lib/result.utils";
-import { reportTransportError, startUnrefInterval, stopInterval } from "../lib/transport.utils";
+import { DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_BUFFER_SIZE } from "../config/writer.config.js";
+import { formatEntry } from "../format/entry.format.js";
+import { attemptAsync } from "../lib/result.utils.js";
+import { reportTransportError, startUnrefInterval, stopInterval } from "../lib/transport.utils.js";
 import type {
   ContextFormat,
   EntryFormatter,
   FormatSettings,
   LogEntry,
   TagCase,
-} from "../types/logger";
-import type { FileTransportOptions, Transport, TransportStats } from "../types/transport";
+} from "../types/logger.js";
+import type { FileTransportOptions, Transport, TransportStats } from "../types/transport.js";
 
 /** Common buffered file writing shared by fixed-path and daily-rotating transports. */
 export abstract class BaseFileTransport implements Transport {

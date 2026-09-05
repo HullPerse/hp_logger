@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { DEFAULT_REDACT_KEYS } from "@/config/redaction.config";
-import { mergeEntryContext } from "@/core/context.core";
-import type { Logger } from "@/index.logger";
-import { redact } from "@/redact/index.redact";
-import type { LogEntry, LogLevel } from "@/types/logger";
+import { DEFAULT_REDACT_KEYS } from "../../config/redaction.config.js";
+import { mergeEntryContext } from "../../core/context.core.js";
+import type { Logger } from "../../index.logger.js";
+import { redact } from "../../redact/index.redact.js";
+import type { LogEntry, LogLevel } from "../../types/logger.js";
 
-import { captureLogger } from "./test.transport";
+import { captureLogger } from "./test.transport.js";
 
 // Timestamps can straddle a millisecond boundary between two writes.
 const stripTimestamp = (entry: LogEntry): Omit<LogEntry, "timestamp"> => {

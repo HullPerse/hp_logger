@@ -2,6 +2,19 @@
 
 Notable changes to hp_logger. Versions follow semver; 1.0.0 is stable.
 
+## 1.1.1 - 2026-09-05
+
+### Fixed
+
+- Published types now resolve under node10, node16 and bundler
+  (`bun run attw` exits 0): explicit `.js` extensions on all relative
+  imports in src, the `@/` alias converted to relative paths (alias
+  removed from tsconfig), and a `typesVersions` map for every subpath.
+- Published runtime now imports under plain Node ESM (same specifier
+  fixes; verified with a node smoke import of the root and a subpath).
+- attw gate repointed at `@arethetypeswrong/cli` with `--profile esm-only`
+  (the unscoped package was removed from the registry).
+
 ## 1.1.0 - 2026-09-05
 
 ### Added

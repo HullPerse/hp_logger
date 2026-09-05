@@ -1,4 +1,4 @@
-import { applyColor } from "../lib/color.utils";
+import { applyColor } from "../lib/color.utils.js";
 
 /**
  * Minimal JSON token colorizer for pretty console context. Keys are cyan,

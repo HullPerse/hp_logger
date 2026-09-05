@@ -4,11 +4,11 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { SPAN_PATH_MAX_DEPTH } from "@/config/logger.config";
-import { createLogger } from "@/index.logger";
-import { captureLogger, withMutedConsole } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
-import { createSqliteAdapter } from "@/writer/sqlite.writer";
+import { SPAN_PATH_MAX_DEPTH } from "../../config/logger.config.js";
+import { createLogger } from "../../index.logger.js";
+import { captureLogger, withMutedConsole } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
+import { createSqliteAdapter } from "../../writer/sqlite.writer.js";
 
 const lastEntry = (entries: LogEntry[]): LogEntry => entries.at(-1) as LogEntry;
 

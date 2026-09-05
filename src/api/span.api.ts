@@ -1,9 +1,9 @@
-import { getAsyncContext, runMeasuredScope } from "../core/context.core";
-import { getSpanRegistry, inheritSpanContext } from "../core/span.core";
-import { formatDuration } from "../format/duration.format";
-import { renderSpanTree } from "../format/span.format";
-import { attemptAsync } from "../lib/result.utils";
-import type { LogLevel, SpanHandle, TimeOptions } from "../types/logger";
+import { getAsyncContext, runMeasuredScope } from "../core/context.core.js";
+import { getSpanRegistry, inheritSpanContext } from "../core/span.core.js";
+import { formatDuration } from "../format/duration.format.js";
+import { renderSpanTree } from "../format/span.format.js";
+import { attemptAsync } from "../lib/result.utils.js";
+import type { LogLevel, SpanHandle, TimeOptions } from "../types/logger.js";
 
 const writeMeasured = (
   logger: unknown,

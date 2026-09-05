@@ -1,4 +1,4 @@
-import { captureCaller } from "../lib/callsite.utils";
+import { captureCaller } from "../lib/callsite.utils.js";
 import type {
   LazyContext,
   LazyMessage,
@@ -6,10 +6,10 @@ import type {
   LogEntry,
   LogLevel,
   LoggerState,
-} from "../types/logger";
-import type { Transport } from "../types/transport";
-import type { LeveledTransport } from "../writer/leveled.writer";
-import { getAsyncContext, mergeEntryContext } from "./context.core";
+} from "../types/logger.js";
+import type { Transport } from "../types/transport.js";
+import type { LeveledTransport } from "../writer/leveled.writer.js";
+import { getAsyncContext, mergeEntryContext } from "./context.core.js";
 
 const globalTransports: Transport[] = [];
 

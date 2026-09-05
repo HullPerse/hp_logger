@@ -1,8 +1,8 @@
 import type { Database } from "bun:sqlite";
 
-import { DEFAULT_TABLE_NAME, LOG_SCHEMA_VERSION } from "../config/writer.config";
-import type { LogEntry } from "../types/logger";
-import type { DatabaseAdapter, LogRow, SqliteAdapterOptions } from "../types/transport";
+import { DEFAULT_TABLE_NAME, LOG_SCHEMA_VERSION } from "../config/writer.config.js";
+import type { LogEntry } from "../types/logger.js";
+import type { DatabaseAdapter, LogRow, SqliteAdapterOptions } from "../types/transport.js";
 
 // The logger relies on these columns; an existing table must provide them.
 // id is INTEGER, the rest TEXT. `context` defaults to '{}' on new tables.

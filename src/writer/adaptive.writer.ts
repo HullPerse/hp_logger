@@ -1,9 +1,9 @@
-import { GroupCounter } from "../brain/group.utils";
-import { cachedTimestamp } from "../format/timestamp.format";
-import { countSummary } from "../lib/transport.utils";
-import type { AdaptiveSettings, LogEntry } from "../types/logger";
-import type { Transport } from "../types/transport";
-import { PassthroughTransport } from "./passthrough.writer";
+import { GroupCounter } from "../brain/group.utils.js";
+import { cachedTimestamp } from "../format/timestamp.format.js";
+import { countSummary } from "../lib/transport.utils.js";
+import type { AdaptiveSettings, LogEntry } from "../types/logger.js";
+import type { Transport } from "../types/transport.js";
+import { PassthroughTransport } from "./passthrough.writer.js";
 
 /** Levels that are sampled (throttled) during a storm. */
 const SAMPLE_LEVELS = new Set(["debug", "info", "trace"]);

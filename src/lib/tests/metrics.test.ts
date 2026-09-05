@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { Counter, Gauge, Histogram, Registry } from "@/metrics/index.metric";
+import { Counter, Gauge, Histogram, Registry } from "../../metrics/index.metric.js";
 
 describe("Counter", () => {
   test("increments and renders with labels", () => {

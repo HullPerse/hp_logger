@@ -1,4 +1,4 @@
-import type { ColorName, LogLevel } from "../types/logger";
+import type { ColorName, LogLevel } from "../types/logger.js";
 
 export const DEFAULT_LEVEL_COLORS: Record<string, ColorName> = {
   debug: "magenta",

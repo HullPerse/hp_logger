@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { SPINNER_FRAMES, TASK_GLYPHS } from "@/config/colors.config";
-import { parseTemplate, renderTemplate } from "@/format/template.format";
-import type { LogEntry, LogLevel } from "@/types/logger";
+import { SPINNER_FRAMES, TASK_GLYPHS } from "../../config/colors.config.js";
+import { parseTemplate, renderTemplate } from "../../format/template.format.js";
+import type { LogEntry, LogLevel } from "../../types/logger.js";
 
 const entry: LogEntry = {
   author: "api",

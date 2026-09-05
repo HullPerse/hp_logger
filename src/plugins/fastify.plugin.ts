@@ -1,14 +1,14 @@
 import type { FastifyInstance } from "fastify";
 
-import type { Logger } from "../api/logger.api";
-import type { RequestLogOptions, RequestMeta } from "../types/integrations";
+import type { Logger } from "../api/logger.api.js";
+import type { RequestLogOptions, RequestMeta } from "../types/integrations.js";
 import {
   CORRELATION_ID_HEADER,
   finishRequest,
   pathFromUrl,
   resolveCorrelationId,
   skipSet,
-} from "./shared.plugin";
+} from "./shared.plugin.js";
 
 export const fastifyPlugin = (
   fastify: FastifyInstance,

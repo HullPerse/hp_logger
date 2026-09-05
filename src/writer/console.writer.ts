@@ -1,19 +1,19 @@
 import type { sliceAnsi, wrapAnsi } from "bun";
 
-import { DEFAULT_LEVEL_COLORS, LEVEL_EMOJIS } from "../config/colors.config";
-import { LEVEL_NAMES } from "../config/levels.config";
-import { drawBox } from "../format/box.format";
-import { colorizeJsonString } from "../format/colorize.format";
-import { formatContext } from "../format/context.format";
-import { formatDuration } from "../format/duration.format";
-import { formatPrettyErrorBlock } from "../format/error.format";
-import { caseTag } from "../format/tag.format";
-import { renderTemplateSettings } from "../format/template.format";
-import { applyColor } from "../lib/color.utils";
-import { stripControlCharacters } from "../lib/json.utils";
-import type { ColorName, LogEntry, LogLevel, ResolvedSettings, TagCase } from "../types/logger";
-import type { Transport } from "../types/transport";
-import { BufferedConsole } from "./bufferedConsole.writer";
+import { DEFAULT_LEVEL_COLORS, LEVEL_EMOJIS } from "../config/colors.config.js";
+import { LEVEL_NAMES } from "../config/levels.config.js";
+import { drawBox } from "../format/box.format.js";
+import { colorizeJsonString } from "../format/colorize.format.js";
+import { formatContext } from "../format/context.format.js";
+import { formatDuration } from "../format/duration.format.js";
+import { formatPrettyErrorBlock } from "../format/error.format.js";
+import { caseTag } from "../format/tag.format.js";
+import { renderTemplateSettings } from "../format/template.format.js";
+import { applyColor } from "../lib/color.utils.js";
+import { stripControlCharacters } from "../lib/json.utils.js";
+import type { ColorName, LogEntry, LogLevel, ResolvedSettings, TagCase } from "../types/logger.js";
+import type { Transport } from "../types/transport.js";
+import { BufferedConsole } from "./bufferedConsole.writer.js";
 
 type LevelTagMap = Record<LogLevel, string>;
 type LevelColorMap = Record<LogLevel, ColorName | false | undefined>;

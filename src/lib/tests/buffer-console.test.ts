@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { createLogger } from "@/index.logger";
-import type { LogEntry } from "@/types/logger";
-import type { Transport } from "@/types/transport";
+import { createLogger } from "../../index.logger.js";
+import type { LogEntry } from "../../types/logger.js";
+import type { Transport } from "../../types/transport.js";
 
 interface ConsoleSpies {
   calls: { channel: string; output: string }[];

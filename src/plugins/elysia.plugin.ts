@@ -1,15 +1,15 @@
 import { Elysia } from "elysia";
 
-import type { Logger } from "../api/logger.api";
-import { ELYSIA_ERROR_STATUS } from "../config/integrations.config";
-import type { RequestLogOptions, RequestMeta } from "../types/integrations";
+import type { Logger } from "../api/logger.api.js";
+import { ELYSIA_ERROR_STATUS } from "../config/integrations.config.js";
+import type { RequestLogOptions, RequestMeta } from "../types/integrations.js";
 import {
   CORRELATION_ID_HEADER,
   finishRequest,
   pathFromUrl,
   resolveCorrelationId,
   skipSet,
-} from "./shared.plugin";
+} from "./shared.plugin.js";
 
 export const elysiaPlugin = (logger: Logger, options: RequestLogOptions = {}): Elysia => {
   const requests = new WeakMap<Request, RequestMeta>();

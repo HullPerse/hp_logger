@@ -1,7 +1,7 @@
-import { resolveSettings } from "../lib/settings.utils";
-import type { LogEntry, LoggerSettings, ResolvedSettings } from "../types/logger";
-import type { Transport } from "../types/transport";
-import { buildTransports } from "../writer/factory.writer";
+import { resolveSettings } from "../lib/settings.utils.js";
+import type { LogEntry, LoggerSettings, ResolvedSettings } from "../types/logger.js";
+import type { Transport } from "../types/transport.js";
+import { buildTransports } from "../writer/factory.writer.js";
 
 type WorkerInbound =
   | { type: "init"; settings: LoggerSettings }

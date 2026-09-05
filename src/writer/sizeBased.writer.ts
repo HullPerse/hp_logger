@@ -3,10 +3,10 @@ import { readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_FILES } from "../config/writer.config";
-import { reportTransportError, splitExtension } from "../lib/transport.utils";
-import type { FileTransportOptions } from "../types/transport";
-import { BaseFileTransport } from "./base.writer";
+import { DEFAULT_MAX_BYTES, DEFAULT_MAX_FILES } from "../config/writer.config.js";
+import { reportTransportError, splitExtension } from "../lib/transport.utils.js";
+import type { FileTransportOptions } from "../types/transport.js";
+import { BaseFileTransport } from "./base.writer.js";
 
 /** Gzip a rotated segment; the .gz replaces the original. */
 const compressGz = async (file: string): Promise<void> => {

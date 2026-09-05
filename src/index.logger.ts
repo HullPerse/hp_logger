@@ -1,6 +1,6 @@
 // Public surface of the package: explicit named re-exports (no export-*),
 // so the entry stays tree-shakeable and the barrel detector stays quiet.
-export type * from "./types/index.types";
+export type * from "./types/index.types.js";
 
 export {
   Logger,
@@ -11,7 +11,7 @@ export {
   formatDuration,
   installErrorHandlers,
   redact,
-} from "./api/index.api";
+} from "./api/index.api.js";
 
 export {
   BEARER_PATTERN,
@@ -44,24 +44,24 @@ export {
   SENSITIVE_KEY_FRAGMENTS,
   SPINNER_FRAMES,
   TASK_GLYPHS,
-} from "./config/index.config";
+} from "./config/index.config.js";
 
-export { AdaptiveTransport } from "./writer/adaptive.writer";
-export { AsyncTransport } from "./writer/buffer.writer";
-export { ConsoleTransport } from "./writer/console.writer";
-export { DateBasedFileTransport } from "./writer/dateBased.writer";
-export { FileTransport } from "./writer/file.writer";
-export { MultiTransport } from "./writer/group.writer";
-export { LeveledTransport } from "./writer/leveled.writer";
-export { PassthroughTransport } from "./writer/passthrough.writer";
-export { RepeatTransport } from "./writer/repeat.writer";
-export { SizeBasedFileTransport } from "./writer/sizeBased.writer";
-export { BaseFileTransport } from "./writer/base.writer";
-export { buildTransports } from "./writer/factory.writer";
+export { AdaptiveTransport } from "./writer/adaptive.writer.js";
+export { AsyncTransport } from "./writer/buffer.writer.js";
+export { ConsoleTransport } from "./writer/console.writer.js";
+export { DateBasedFileTransport } from "./writer/dateBased.writer.js";
+export { FileTransport } from "./writer/file.writer.js";
+export { MultiTransport } from "./writer/group.writer.js";
+export { LeveledTransport } from "./writer/leveled.writer.js";
+export { PassthroughTransport } from "./writer/passthrough.writer.js";
+export { RepeatTransport } from "./writer/repeat.writer.js";
+export { SizeBasedFileTransport } from "./writer/sizeBased.writer.js";
+export { BaseFileTransport } from "./writer/base.writer.js";
+export { buildTransports } from "./writer/factory.writer.js";
 
-export { registerToken } from "./format/template.format";
+export { registerToken } from "./format/template.format.js";
 
-export { ResolverSet, buildResolverSet } from "./resolvers/index.resolver";
+export { ResolverSet, buildResolverSet } from "./resolvers/index.resolver.js";
 
 export {
   BaseMetric,
@@ -70,4 +70,4 @@ export {
   Histogram,
   Registry,
   createProcessMetrics,
-} from "./metrics/index.metric";
+} from "./metrics/index.metric.js";

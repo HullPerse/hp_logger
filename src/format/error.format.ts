@@ -1,5 +1,5 @@
-import { formatContext } from "./context.format";
-import type { LogContext } from "../types/logger";
+import { formatContext } from "./context.format.js";
+import type { LogContext } from "../types/logger.js";
 
 interface ErrorLike {
   cause?: unknown;

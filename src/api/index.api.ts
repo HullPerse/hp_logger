@@ -1,4 +1,4 @@
-export { Logger, createLogger, installErrorHandlers } from "./logger.api";
-export { formatContext, formatDuration, redact } from "./helpers.api";
-export { captureConsole, type ConsoleCaptureHandle } from "./console.api";
-export { fromEnv, resolveEnvModules } from "./env.api";
+export { Logger, createLogger, installErrorHandlers } from "./logger.api.js";
+export { formatContext, formatDuration, redact } from "./helpers.api.js";
+export { captureConsole, type ConsoleCaptureHandle } from "./console.api.js";
+export { fromEnv, resolveEnvModules } from "./env.api.js";

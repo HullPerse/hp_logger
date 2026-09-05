@@ -1,18 +1,18 @@
-import { LEVEL_NAMES } from "../config/levels.config";
-import { DEFAULT_LOG_DIR } from "../config/writer.config";
-import { splitExtension } from "../lib/transport.utils";
-import type { ResolvedSettings } from "../types/logger";
-import type { FileTransportOptions, Transport } from "../types/transport";
-import { AdaptiveTransport } from "./adaptive.writer";
-import { AsyncTransport } from "./buffer.writer";
-import { ConsoleTransport } from "./console.writer";
-import { DateBasedFileTransport } from "./dateBased.writer";
-import { FileTransport } from "./file.writer";
-import { MultiTransport } from "./group.writer";
-import { LazyDatabaseTransport } from "./lazyDatabase.writer";
-import { LeveledTransport } from "./leveled.writer";
-import { RepeatTransport } from "./repeat.writer";
-import { SizeBasedFileTransport } from "./sizeBased.writer";
+import { LEVEL_NAMES } from "../config/levels.config.js";
+import { DEFAULT_LOG_DIR } from "../config/writer.config.js";
+import { splitExtension } from "../lib/transport.utils.js";
+import type { ResolvedSettings } from "../types/logger.js";
+import type { FileTransportOptions, Transport } from "../types/transport.js";
+import { AdaptiveTransport } from "./adaptive.writer.js";
+import { AsyncTransport } from "./buffer.writer.js";
+import { ConsoleTransport } from "./console.writer.js";
+import { DateBasedFileTransport } from "./dateBased.writer.js";
+import { FileTransport } from "./file.writer.js";
+import { MultiTransport } from "./group.writer.js";
+import { LazyDatabaseTransport } from "./lazyDatabase.writer.js";
+import { LeveledTransport } from "./leveled.writer.js";
+import { RepeatTransport } from "./repeat.writer.js";
+import { SizeBasedFileTransport } from "./sizeBased.writer.js";
 
 /** `logs/app.log` + "error" -> `logs/app.error.log` (extension-aware). */
 const withLevelSuffix = (filepath: string, level: string): string => {

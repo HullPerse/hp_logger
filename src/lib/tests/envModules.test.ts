@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { matchEnvModule, resolveEnvModules } from "@/lib/settings.utils";
-import { captureLogger } from "@/lib/tests/test.transport";
+import { matchEnvModule, resolveEnvModules } from "../settings.utils.js";
+import { captureLogger } from "./test.transport.js";
 
 describe("resolveEnvModules", () => {
   test("parses name:level pairs and skips garbage", () => {

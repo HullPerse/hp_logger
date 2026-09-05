@@ -1,11 +1,11 @@
-import { drawBox } from "../format/box.format";
-import { renderMetricsTable } from "../format/metrics.format";
-import { Counter } from "../metrics/counter.metric";
-import { Gauge } from "../metrics/gauge.metric";
-import { Histogram } from "../metrics/histogram.metric";
-import { Registry } from "../metrics/registry.metric";
-import type { LogLevel } from "../types/logger";
-import type { MetricOptions } from "../types/metrics";
+import { drawBox } from "../format/box.format.js";
+import { renderMetricsTable } from "../format/metrics.format.js";
+import { Counter } from "../metrics/counter.metric.js";
+import { Gauge } from "../metrics/gauge.metric.js";
+import { Histogram } from "../metrics/histogram.metric.js";
+import { Registry } from "../metrics/registry.metric.js";
+import type { LogLevel } from "../types/logger.js";
+import type { MetricOptions } from "../types/metrics.js";
 
 // Helpers operate on a Logger instance via any to access private fields without circular private checks.
 // They are extracted from Logger to reduce god-class size while keeping the facade in logger.api.ts.

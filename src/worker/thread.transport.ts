@@ -1,7 +1,7 @@
-import { applyJitter } from "../lib/retry.utils";
-import { reportTransportError, startUnrefTimeout } from "../lib/transport.utils";
-import type { LogEntry, LoggerSettings } from "../types/logger";
-import type { Transport, TransportStats } from "../types/transport";
+import { applyJitter } from "../lib/retry.utils.js";
+import { reportTransportError, startUnrefTimeout } from "../lib/transport.utils.js";
+import type { LogEntry, LoggerSettings } from "../types/logger.js";
+import type { Transport, TransportStats } from "../types/transport.js";
 
 type WorkerInbound =
   | { type: "init"; settings: LoggerSettings }

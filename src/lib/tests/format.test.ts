@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { colorizeJsonString } from "@/format/colorize.format";
-import { formatContext } from "@/format/context.format";
-import { formatDuration } from "@/format/duration.format";
-import { formatEntry } from "@/format/entry.format";
-import { formatPrettyErrorBlock } from "@/format/error.format";
-import { renderTable } from "@/format/table.format";
-import { caseTag } from "@/format/tag.format";
-import { safeStringify, stripControlCharacters } from "@/lib/json.utils";
-import type { LogEntry } from "@/types/logger";
+import { colorizeJsonString } from "../../format/colorize.format.js";
+import { formatContext } from "../../format/context.format.js";
+import { formatDuration } from "../../format/duration.format.js";
+import { formatEntry } from "../../format/entry.format.js";
+import { formatPrettyErrorBlock } from "../../format/error.format.js";
+import { renderTable } from "../../format/table.format.js";
+import { caseTag } from "../../format/tag.format.js";
+import { safeStringify, stripControlCharacters } from "../json.utils.js";
+import type { LogEntry } from "../../types/logger.js";
 
 const entry: LogEntry = {
   author: "api",

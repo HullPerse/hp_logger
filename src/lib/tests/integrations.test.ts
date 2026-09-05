@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { Logger } from "@/index.logger";
-import { captureLogger as captureTestLogger } from "@/lib/tests/test.transport";
-import { bunServe } from "@/plugins/bun.server";
-import { fastifyPlugin } from "@/plugins/fastify.plugin";
-import { honoMiddleware } from "@/plugins/hono.plugin";
-import { nodeServer } from "@/plugins/node.server";
-import { levelForStatus, pathFromUrl, resolveCorrelationId } from "@/plugins/shared.plugin";
-import type { LogEntry } from "@/types/logger";
+import { Logger } from "../../index.logger.js";
+import { captureLogger as captureTestLogger } from "./test.transport.js";
+import { bunServe } from "../../plugins/bun.server.js";
+import { fastifyPlugin } from "../../plugins/fastify.plugin.js";
+import { honoMiddleware } from "../../plugins/hono.plugin.js";
+import { nodeServer } from "../../plugins/node.server.js";
+import { levelForStatus, pathFromUrl, resolveCorrelationId } from "../../plugins/shared.plugin.js";
+import type { LogEntry } from "../../types/logger.js";
 
 const captureLogger = (): { entries: LogEntry[]; logger: Logger } =>
   captureTestLogger({ level: "trace", mode: "json" });

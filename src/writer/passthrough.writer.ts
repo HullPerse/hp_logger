@@ -1,6 +1,6 @@
-import type { LogEntry } from "../types/logger";
-import type { Transport, TransportStats } from "../types/transport";
-import { emptyStats } from "../lib/transport.utils";
+import type { LogEntry } from "../types/logger.js";
+import type { Transport, TransportStats } from "../types/transport.js";
+import { emptyStats } from "../lib/transport.utils.js";
 
 /**
  * Shared base for transports that wrap exactly one inner transport:

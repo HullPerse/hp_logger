@@ -1,5 +1,5 @@
-export { DatabaseTransport } from "../writer/database.writer";
-export { createSqliteAdapter } from "../writer/sqlite.writer";
+export { DatabaseTransport } from "../writer/database.writer.js";
+export { createSqliteAdapter } from "../writer/sqlite.writer.js";
 export type {
   DatabaseAdapter,
   DatabaseSettings,
@@ -7,4 +7,4 @@ export type {
   ReconnectSettings,
   RetrySettings,
   SqliteAdapterOptions,
-} from "../types/transport";
+} from "../types/transport.js";

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { createLogger } from "@/api/logger.api";
-import { setSpanRegistry, SpanRegistry } from "@/core/span.core";
+import { createLogger } from "../../api/logger.api.js";
+import { setSpanRegistry, SpanRegistry } from "../../core/span.core.js";
 
-import { captureConsole } from "./test.transport";
+import { captureConsole } from "./test.transport.js";
 
 // Module scope: the factory captures nothing, so it lives outside the test.
 const capacityRecord = (name: string): Parameters<SpanRegistry["add"]>[0] => ({

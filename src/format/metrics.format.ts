@@ -1,5 +1,5 @@
-import type { MetricSnapshot } from "../types/metrics";
-import { renderTable } from "./table.format";
+import type { MetricSnapshot } from "../types/metrics.js";
+import { renderTable } from "./table.format.js";
 
 const quantileText = (value: number | undefined): string =>
   value === undefined || Number.isNaN(value) ? "-" : String(Math.round(value * 10) / 10);

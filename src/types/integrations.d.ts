@@ -1,4 +1,4 @@
-import type { LogContext } from "./logger";
+import type { LogContext } from "./logger.js";
 
 export interface RequestLogOptions {
   /** Called for every finished request (including skipped paths). */

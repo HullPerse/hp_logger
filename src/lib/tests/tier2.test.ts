@@ -3,9 +3,9 @@ import { readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { captureConsole, fromEnv } from "@/index.logger";
-import { captureLogger } from "@/testing";
-import type { LogEntry } from "@/types/logger";
+import { captureConsole, fromEnv } from "../../index.logger.js";
+import { captureLogger } from "../../testing/index.js";
+import type { LogEntry } from "../../types/logger.js";
 
 describe("captureConsole", () => {
   test("routes console methods into logger levels and restores cleanly", () => {

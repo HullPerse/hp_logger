@@ -1,6 +1,6 @@
-import { DEFAULT_SKIP_PATHS } from "../config/integrations.config";
-import type { Logger } from "../api/logger.api";
-import type { FinishData, RequestInfo, RequestLogOptions } from "../types/integrations";
+import { DEFAULT_SKIP_PATHS } from "../config/integrations.config.js";
+import type { Logger } from "../api/logger.api.js";
+import type { FinishData, RequestInfo, RequestLogOptions } from "../types/integrations.js";
 
 export const levelForStatus = (status: number): "error" | "info" | "warn" => {
   if (status >= 500) return "error";

@@ -1,8 +1,8 @@
-import { DEFAULT_BATCH_SIZE, DEFAULT_MAX_QUEUE_SIZE } from "../config/writer.config";
-import { attemptAsync } from "../lib/result.utils";
-import { dispatchBatch, startUnrefInterval, stopInterval } from "../lib/transport.utils";
-import type { BatchingSettings, LogEntry, LogLevel } from "../types/logger";
-import type { QueuedEntry, Transport, TransportStats } from "../types/transport";
+import { DEFAULT_BATCH_SIZE, DEFAULT_MAX_QUEUE_SIZE } from "../config/writer.config.js";
+import { attemptAsync } from "../lib/result.utils.js";
+import { dispatchBatch, startUnrefInterval, stopInterval } from "../lib/transport.utils.js";
+import type { BatchingSettings, LogEntry, LogLevel } from "../types/logger.js";
+import type { QueuedEntry, Transport, TransportStats } from "../types/transport.js";
 
 export class AsyncTransport implements Transport {
   private readonly batchSize: number;

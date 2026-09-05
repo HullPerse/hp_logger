@@ -1,11 +1,11 @@
-import { LruCache } from "../brain/lru.utils";
+import { LruCache } from "../brain/lru.utils.js";
 import {
   DEFAULT_OPERATION_BUCKETS,
   OPERATION_METRIC_NAME,
   PROFILE_OVERFLOW_LABEL,
-} from "../config/metrics.config";
-import { Histogram } from "./histogram.metric";
-import type { Registry } from "./registry.metric";
+} from "../config/metrics.config.js";
+import { Histogram } from "./histogram.metric.js";
+import type { Registry } from "./registry.metric.js";
 
 /**
  * Aggregates every time()/span()/task() duration into one operation

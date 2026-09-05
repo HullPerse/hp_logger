@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { formatEntry } from "@/format/entry.format";
-import { resolveCaller } from "@/lib/callsite.utils";
-import { resolveSettings } from "@/lib/settings.utils";
-import { captureConsole, captureLogger } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
-import { ConsoleTransport } from "@/writer/console.writer";
+import { formatEntry } from "../../format/entry.format.js";
+import { resolveCaller } from "../callsite.utils.js";
+import { resolveSettings } from "../settings.utils.js";
+import { captureConsole, captureLogger } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
+import { ConsoleTransport } from "../../writer/console.writer.js";
 
 const lastEntry = (entries: LogEntry[]): LogEntry => entries.at(-1) as LogEntry;
 

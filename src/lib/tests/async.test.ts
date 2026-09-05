@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import type { LogEntry } from "@/types/logger";
-import type { Transport } from "@/types/transport";
-import { AsyncTransport } from "@/writer/buffer.writer";
-import { MultiTransport } from "@/writer/group.writer";
+import type { LogEntry } from "../../types/logger.js";
+import type { Transport } from "../../types/transport.js";
+import { AsyncTransport } from "../../writer/buffer.writer.js";
+import { MultiTransport } from "../../writer/group.writer.js";
 
 const entry = (message: string): LogEntry => ({
   author: "ROOT",

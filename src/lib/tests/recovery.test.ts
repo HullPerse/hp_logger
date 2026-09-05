@@ -3,10 +3,10 @@ import { mkdirSync, mkdtempSync, existsSync, readFileSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { withMutedConsole } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
-import { DatabaseTransport } from "@/writer/database.writer";
-import { FileTransport } from "@/writer/file.writer";
+import { withMutedConsole } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
+import { DatabaseTransport } from "../../writer/database.writer.js";
+import { FileTransport } from "../../writer/file.writer.js";
 
 const entry = (message: string): LogEntry => ({
   author: "TEST",

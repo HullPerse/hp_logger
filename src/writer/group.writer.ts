@@ -1,6 +1,6 @@
-import { dispatchBatch } from "../lib/transport.utils";
-import type { LogEntry } from "../types/logger";
-import type { Transport, TransportStats } from "../types/transport";
+import { dispatchBatch } from "../lib/transport.utils.js";
+import type { LogEntry } from "../types/logger.js";
+import type { Transport, TransportStats } from "../types/transport.js";
 
 export class MultiTransport implements Transport {
   private readonly transports: Transport[];

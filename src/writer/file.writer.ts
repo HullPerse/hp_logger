@@ -1,8 +1,8 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-import type { FileTransportOptions } from "../types/transport";
-import { BaseFileTransport } from "./base.writer";
+import type { FileTransportOptions } from "../types/transport.js";
+import { BaseFileTransport } from "./base.writer.js";
 
 export class FileTransport extends BaseFileTransport {
   private readonly filepath: string;

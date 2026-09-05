@@ -1,4 +1,4 @@
-import type { LogLevel } from "../types/logger";
+import type { LogLevel } from "../types/logger.js";
 
 export const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 1,

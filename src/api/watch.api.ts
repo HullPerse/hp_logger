@@ -1,5 +1,5 @@
-import { startWatcher } from "../watch/index.watch";
-import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch";
+import { startWatcher } from "../watch/index.watch.js";
+import type { WatchHandle, WatchHooks, WatchOptions } from "../types/watch.js";
 
 export const watchImpl = (
   logger: unknown,

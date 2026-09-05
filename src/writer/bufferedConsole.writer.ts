@@ -1,7 +1,7 @@
-import { startUnrefInterval, stopInterval } from "../lib/transport.utils";
+import { startUnrefInterval, stopInterval } from "../lib/transport.utils.js";
 
-import { DEFAULT_FLUSH_INTERVAL } from "../config/writer.config";
-import type { LogLevel } from "../types/logger";
+import { DEFAULT_FLUSH_INTERVAL } from "../config/writer.config.js";
+import type { LogLevel } from "../types/logger.js";
 
 /** Lines per channel held before an early buffered flush. */
 const LINE_CAP = 64;

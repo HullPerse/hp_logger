@@ -1,5 +1,5 @@
-import type { DatabaseSettings, Transport, TransportStats } from "../types/transport";
-import { emptyStats } from "../lib/transport.utils";
+import type { DatabaseSettings, Transport, TransportStats } from "../types/transport.js";
+import { emptyStats } from "../lib/transport.utils.js";
 
 /** Structural module shape of the dynamically imported database writer. */
 interface DatabaseModule {
@@ -8,7 +8,7 @@ interface DatabaseModule {
 
 const resolveDatabaseModule = (): Promise<DatabaseModule> =>
   import.meta.url.endsWith(".ts")
-    ? (import("./database.writer") as Promise<DatabaseModule>)
+    ? (import("./database.writer.js") as Promise<DatabaseModule>)
     : (import("./database.writer.js") as Promise<DatabaseModule>);
 
 /**

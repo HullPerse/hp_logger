@@ -7,8 +7,8 @@ import {
   applyJitter,
   resolveRetry,
   retryDelayMs,
-} from "@/lib/retry.utils";
-import type { RetrySettings } from "@/types/transport";
+} from "../retry.utils.js";
+import type { RetrySettings } from "../../types/transport.js";
 
 const mustResolve = (settings: RetrySettings) => {
   const resolved = resolveRetry(settings);

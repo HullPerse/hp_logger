@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { captureLogger } from "@/lib/tests/test.transport";
+import { captureLogger } from "./test.transport.js";
 
 describe("profiler aggregation", () => {
   test("time(), span() and task() durations feed one operation histogram", async () => {

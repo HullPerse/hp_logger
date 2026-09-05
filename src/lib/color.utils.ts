@@ -1,4 +1,4 @@
-import type { ColorName } from "../types/logger";
+import type { ColorName } from "../types/logger.js";
 
 // ANSI foreground codes: standard 30-37 plus bright black (gray) 90.
 // The close code is 39 (default foreground), so a wrapped segment never

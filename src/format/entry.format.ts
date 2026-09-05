@@ -1,14 +1,14 @@
-import { safeStringify, stripControlCharacters } from "../lib/json.utils";
+import { safeStringify, stripControlCharacters } from "../lib/json.utils.js";
 import type {
   ContextFormat,
   EntryFormatter,
   FormatSettings,
   LogEntry,
   TagCase,
-} from "../types/logger";
-import { formatContext } from "./context.format";
-import { caseTag } from "./tag.format";
-import { renderTemplateSettings } from "./template.format";
+} from "../types/logger.js";
+import { formatContext } from "./context.format.js";
+import { caseTag } from "./tag.format.js";
+import { renderTemplateSettings } from "./template.format.js";
 
 export const formatEntry = (
   entry: LogEntry,

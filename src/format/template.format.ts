@@ -1,12 +1,12 @@
-import { LruCache } from "../brain/lru.utils";
-import { registerBrainCache } from "../brain/registry.utils";
-import { SPINNER_FRAMES, TASK_GLYPHS } from "../config/colors.config";
-import { applyColor } from "../lib/color.utils";
-import { safeStringify, stripControlCharacters } from "../lib/json.utils";
-import type { ColorName, ContextFormat, LogEntry, LogLevel, TagCase } from "../types/logger";
-import { formatContext } from "./context.format";
-import { formatDuration } from "./duration.format";
-import { caseTag } from "./tag.format";
+import { LruCache } from "../brain/lru.utils.js";
+import { registerBrainCache } from "../brain/registry.utils.js";
+import { SPINNER_FRAMES, TASK_GLYPHS } from "../config/colors.config.js";
+import { applyColor } from "../lib/color.utils.js";
+import { safeStringify, stripControlCharacters } from "../lib/json.utils.js";
+import type { ColorName, ContextFormat, LogEntry, LogLevel, TagCase } from "../types/logger.js";
+import { formatContext } from "./context.format.js";
+import { formatDuration } from "./duration.format.js";
+import { caseTag } from "./tag.format.js";
 
 /** A `{name}` or `{:color}text{:/}` piece of a parsed template. */
 export interface TemplatePart {

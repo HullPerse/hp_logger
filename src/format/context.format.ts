@@ -1,6 +1,6 @@
-import { EMPTY_CONTEXT } from "../config/context.config";
-import { safeStringify } from "../lib/json.utils";
-import type { ContextFormat, LogContext } from "../types/logger";
+import { EMPTY_CONTEXT } from "../config/context.config.js";
+import { safeStringify } from "../lib/json.utils.js";
+import type { ContextFormat, LogContext } from "../types/logger.js";
 
 export const formatContext = (context: LogContext, contextFormat: ContextFormat): string => {
   if (context === EMPTY_CONTEXT || Object.keys(context).length === 0) return "";

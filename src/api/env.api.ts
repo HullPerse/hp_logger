@@ -1,7 +1,7 @@
-import { resolveEnvLevel } from "../lib/settings.utils";
-import type { LoggerSettings } from "../types/logger";
-import { createLogger } from "./logger.api";
-import type { Logger } from "./logger.api";
+import { resolveEnvLevel } from "../lib/settings.utils.js";
+import type { LoggerSettings } from "../types/logger.js";
+import { createLogger } from "./logger.api.js";
+import type { Logger } from "./logger.api.js";
 
 const isFalse = (value: string | undefined): boolean =>
   value !== undefined && (value === "0" || value.toLowerCase() === "false");
@@ -32,4 +32,4 @@ export const fromEnv = (env: Record<string, string | undefined> = process.env): 
   return createLogger({ author: env.LOG_AUTHOR, settings });
 };
 
-export { resolveEnvModules } from "../lib/settings.utils";
+export { resolveEnvModules } from "../lib/settings.utils.js";

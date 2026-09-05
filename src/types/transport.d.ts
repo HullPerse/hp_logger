@@ -5,7 +5,7 @@ import type {
   LogEntry,
   LogLevel,
   TagCase,
-} from "./logger";
+} from "./logger.js";
 
 export interface DatabaseAdapter {
   close?: () => void | Promise<void>;

@@ -1,4 +1,4 @@
-import type { RetrySettings } from "../types/transport";
+import type { RetrySettings } from "../types/transport.js";
 
 export interface ResolvedRetry {
   attempts: number;

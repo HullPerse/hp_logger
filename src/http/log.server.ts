@@ -1,6 +1,6 @@
-import { RingBuffer } from "../brain/ring.utils";
-import type { LogEntry } from "../types/logger";
-import type { Transport } from "../types/transport";
+import { RingBuffer } from "../brain/ring.utils.js";
+import type { LogEntry } from "../types/logger.js";
+import type { Transport } from "../types/transport.js";
 
 export interface LogServerOptions {
   /** Port to listen on. Defaults to 8787. */

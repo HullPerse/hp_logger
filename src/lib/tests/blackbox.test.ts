@@ -3,11 +3,11 @@ import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { createLogger, installErrorHandlers } from "@/index.logger";
-import { captureLogger } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
-import type { Transport } from "@/types/transport";
-import { AsyncTransport } from "@/writer/buffer.writer";
+import { createLogger, installErrorHandlers } from "../../index.logger.js";
+import { captureLogger } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
+import type { Transport } from "../../types/transport.js";
+import { AsyncTransport } from "../../writer/buffer.writer.js";
 
 const workdir = mkdtempSync(path.join(tmpdir(), "hp-blackbox-"));
 

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { drawBox } from "@/format/box.format";
-import { resolveSettings } from "@/lib/settings.utils";
-import { captureConsole } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
-import { ConsoleTransport } from "@/writer/console.writer";
+import { drawBox } from "../../format/box.format.js";
+import { resolveSettings } from "../settings.utils.js";
+import { captureConsole } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
+import { ConsoleTransport } from "../../writer/console.writer.js";
 
 const entry = (overrides: Partial<LogEntry>): LogEntry => ({
   author: "api",

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { captureLogger } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
+import { captureLogger } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
 
 describe("logger.task", () => {
   test("manual form logs started and done with duration", () => {

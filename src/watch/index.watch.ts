@@ -1,8 +1,8 @@
-import { DEFAULT_INTERVAL, DEFAULT_TIMEOUT } from "../config/watch.config";
-import { attemptAsync } from "../lib/result.utils";
-import { applyJitter } from "../lib/retry.utils";
-import { startUnrefTimeout, stopTimeout } from "../lib/transport.utils";
-import type { ProbeOutcome, WatchHooks, WatchOptions, WatchReason, Watcher } from "../types/watch";
+import { DEFAULT_INTERVAL, DEFAULT_TIMEOUT } from "../config/watch.config.js";
+import { attemptAsync } from "../lib/result.utils.js";
+import { applyJitter } from "../lib/retry.utils.js";
+import { startUnrefTimeout, stopTimeout } from "../lib/transport.utils.js";
+import type { ProbeOutcome, WatchHooks, WatchOptions, WatchReason, Watcher } from "../types/watch.js";
 
 class StatusMismatchError extends Error {
   readonly status: number;

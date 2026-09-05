@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { captureLogger } from "@/lib/tests/test.transport";
+import { captureLogger } from "./test.transport.js";
 
 describe("logger.metricsBox", () => {
   test("renders a framed table of every registered metric", async () => {

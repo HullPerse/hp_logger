@@ -1,4 +1,4 @@
-import type { Registry } from "../metrics/registry.metric";
+import type { Registry } from "../metrics/registry.metric.js";
 
 export type MetricType = "counter" | "gauge" | "histogram";
 

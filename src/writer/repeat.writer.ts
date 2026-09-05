@@ -1,8 +1,8 @@
-import { GroupCounter } from "../brain/group.utils";
-import { countSummary, startUnrefTimeout, stopTimeout } from "../lib/transport.utils";
-import type { LogContext, LogEntry, RepeatSettings } from "../types/logger";
-import type { Transport } from "../types/transport";
-import { PassthroughTransport } from "./passthrough.writer";
+import { GroupCounter } from "../brain/group.utils.js";
+import { countSummary, startUnrefTimeout, stopTimeout } from "../lib/transport.utils.js";
+import type { LogContext, LogEntry, RepeatSettings } from "../types/logger.js";
+import type { Transport } from "../types/transport.js";
+import { PassthroughTransport } from "./passthrough.writer.js";
 
 interface RepeatGroup {
   count: number;

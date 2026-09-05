@@ -1,8 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { EMPTY_CONTEXT } from "../config/context.config";
-import { SPAN_PATH_MAX_DEPTH } from "../config/logger.config";
-import type { LogContext } from "../types/logger";
+import { EMPTY_CONTEXT } from "../config/context.config.js";
+import { SPAN_PATH_MAX_DEPTH } from "../config/logger.config.js";
+import type { LogContext } from "../types/logger.js";
 
 interface CombinedStore {
   context?: LogContext;

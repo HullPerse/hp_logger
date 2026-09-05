@@ -1,8 +1,8 @@
-export type * from "../types/metrics";
-export * from "./base.metric";
-export * from "./counter.metric";
-export * from "./gauge.metric";
-export * from "./histogram.metric";
-export * from "./registry.metric";
-export * from "./process.metric";
-export * from "./profiler.metric";
+export type * from "../types/metrics.js";
+export * from "./base.metric.js";
+export * from "./counter.metric.js";
+export * from "./gauge.metric.js";
+export * from "./histogram.metric.js";
+export * from "./registry.metric.js";
+export * from "./process.metric.js";
+export * from "./profiler.metric.js";

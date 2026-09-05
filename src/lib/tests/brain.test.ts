@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { GroupCounter } from "@/brain/group.utils";
-import { LruCache } from "@/brain/lru.utils";
-import { Memoize } from "@/brain/memo.utils";
-import { RingBuffer } from "@/brain/ring.utils";
-import { TtlCache } from "@/brain/ttl.utils";
+import { GroupCounter } from "../../brain/group.utils.js";
+import { LruCache } from "../../brain/lru.utils.js";
+import { Memoize } from "../../brain/memo.utils.js";
+import { RingBuffer } from "../../brain/ring.utils.js";
+import { TtlCache } from "../../brain/ttl.utils.js";
 
 interface TestGroup {
   count: number;

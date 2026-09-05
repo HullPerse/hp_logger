@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
 
-import { withMutedConsole } from "@/lib/tests/test.transport";
-import type { LogEntry } from "@/types/logger";
-import { SizeBasedFileTransport } from "@/writer/sizeBased.writer";
+import { withMutedConsole } from "./test.transport.js";
+import type { LogEntry } from "../../types/logger.js";
+import { SizeBasedFileTransport } from "../../writer/sizeBased.writer.js";
 
 const entry = (message: string): LogEntry => ({
   author: "TEST",

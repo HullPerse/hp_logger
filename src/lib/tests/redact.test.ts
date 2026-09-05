@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { redact } from "@/redact/index.redact";
+import { redact } from "../../redact/index.redact.js";
 
 describe("redactPaths", () => {
   test("redacts an exact dot path without touching same-named keys elsewhere", () => {

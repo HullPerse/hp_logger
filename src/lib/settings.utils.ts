@@ -1,9 +1,9 @@
 import path from "node:path";
 
-import { LOG_LEVELS } from "../config/levels.config";
-import { DEFAULT_MAX_OPERATIONS } from "../config/metrics.config";
-import { DEFAULT_REDACT_KEYS } from "../config/redaction.config";
-import type { LoggerSettings, LogLevel, ResolvedSettings } from "../types/logger";
+import { LOG_LEVELS } from "../config/levels.config.js";
+import { DEFAULT_MAX_OPERATIONS } from "../config/metrics.config.js";
+import { DEFAULT_REDACT_KEYS } from "../config/redaction.config.js";
+import type { LoggerSettings, LogLevel, ResolvedSettings } from "../types/logger.js";
 
 export const isTraversalBlocked = (candidate: string): boolean =>
   candidate.split(/[\\/]/u).includes("..");

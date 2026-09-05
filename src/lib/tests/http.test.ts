@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { createLogServer, LogBuffer } from "@/http/log.server";
-import type { LogEntry } from "@/types/logger";
+import { createLogServer, LogBuffer } from "../../http/log.server.js";
+import type { LogEntry } from "../../types/logger.js";
 
 const entry = (message: string, level: LogEntry["level"] = "info"): LogEntry => ({
   author: "test",

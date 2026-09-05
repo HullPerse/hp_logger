@@ -1,4 +1,4 @@
-import { LruCache } from "./lru.utils";
+import { LruCache } from "./lru.utils.js";
 
 /** Immutable counters for one group counter instance. */
 export interface GroupCounterStats {

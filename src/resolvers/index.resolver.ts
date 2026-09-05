@@ -1,17 +1,17 @@
-import { registerBrainCache } from "../brain/registry.utils";
-import { TtlCache } from "../brain/ttl.utils";
+import { registerBrainCache } from "../brain/registry.utils.js";
+import { TtlCache } from "../brain/ttl.utils.js";
 import {
   DEFAULT_RESOLVER_CACHE_CAP,
   DEFAULT_RESOLVER_TIMEOUT_MS,
   DEFAULT_RESOLVER_TTL_MS,
-} from "../config/resolvers.config";
-import { startUnrefTimeout, stopTimeout } from "../lib/transport.utils";
+} from "../config/resolvers.config.js";
+import { startUnrefTimeout, stopTimeout } from "../lib/transport.utils.js";
 import type {
   LogContext,
   ResolverEntry,
   ResolverSet as ResolverSetShape,
   ResolverSettings,
-} from "../types/logger";
+} from "../types/logger.js";
 
 /** One configured resolver: how to translate a context key and how to cache. */
 export interface ResolvedResolver {

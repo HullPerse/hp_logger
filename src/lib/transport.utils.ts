@@ -1,5 +1,5 @@
-import type { LogEntry } from "../types/logger";
-import type { Transport, TransportStats } from "../types/transport";
+import type { LogEntry } from "../types/logger.js";
+import type { Transport, TransportStats } from "../types/transport.js";
 
 /** Summary entry for an aggregated group: the first entry plus an xN marker. */
 export const countSummary = (entry: LogEntry, count: number): LogEntry => ({

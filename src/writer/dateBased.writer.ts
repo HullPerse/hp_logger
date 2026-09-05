@@ -1,9 +1,9 @@
 import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { DEFAULT_MAX_FILES_PER_DAY } from "../config/writer.config";
-import type { FileTransportOptions } from "../types/transport";
-import { BaseFileTransport } from "./base.writer";
+import { DEFAULT_MAX_FILES_PER_DAY } from "../config/writer.config.js";
+import type { FileTransportOptions } from "../types/transport.js";
+import { BaseFileTransport } from "./base.writer.js";
 
 // One file per day shared by all transport instances with the same baseDir.
 // Without this every logger (SYSTEM, HTTP, ...) would open its own file and

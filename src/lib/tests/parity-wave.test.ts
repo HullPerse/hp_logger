@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { createLogger, Logger } from "@/index.logger";
-import { resolveSettings } from "@/lib/settings.utils";
-import { redact } from "@/redact/index.redact";
-import { Counter } from "@/metrics/counter.metric";
-import { Registry } from "@/metrics/registry.metric";
-import type { LogEntry } from "@/types/logger";
-import { captureLogger } from "./test.transport";
+import { createLogger, Logger } from "../../index.logger.js";
+import { resolveSettings } from "../settings.utils.js";
+import { redact } from "../../redact/index.redact.js";
+import { Counter } from "../../metrics/counter.metric.js";
+import { Registry } from "../../metrics/registry.metric.js";
+import type { LogEntry } from "../../types/logger.js";
+import { captureLogger } from "./test.transport.js";
 
 // ---------------------------------------------------------------------------
 // F1: baseFields

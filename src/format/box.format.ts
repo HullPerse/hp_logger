@@ -1,5 +1,5 @@
-import { applyColor } from "../lib/color.utils";
-import type { ColorName } from "../types/logger";
+import { applyColor } from "../lib/color.utils.js";
+import type { ColorName } from "../types/logger.js";
 
 export interface BoxOptions {
   /** Frame color; `false` or omitted renders plain ASCII. */

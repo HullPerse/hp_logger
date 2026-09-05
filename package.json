@@ -1,6 +1,6 @@
 {
   "name": "hp_logger",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Structured logger for Bun/Node with levels, redaction, colors, file output and server framework integrations",
   "type": "module",
   "sideEffects": false,
@@ -48,6 +48,19 @@
       "import": "./dist/worker/thread.transport.js"
     }
   },
+  "typesVersions": {
+    "*": {
+      "bun": ["./dist/plugins/bun.server.d.ts"],
+      "database": ["./dist/database/index.d.ts"],
+      "elysia": ["./dist/plugins/elysia.plugin.d.ts"],
+      "fastify": ["./dist/plugins/fastify.plugin.d.ts"],
+      "hono": ["./dist/plugins/hono.plugin.d.ts"],
+      "http": ["./dist/http/log.server.d.ts"],
+      "node": ["./dist/plugins/node.server.d.ts"],
+      "test": ["./dist/testing/index.d.ts"],
+      "worker": ["./dist/worker/thread.transport.d.ts"]
+    }
+  },
   "files": [
     "dist",
     "llms.txt",
@@ -67,7 +80,7 @@
     "format": "oxfmt --write src/",
     "format:check": "oxfmt --check src/",
     "prepublishOnly": "bun run build",
-    "attw": "bunx --package are-the-types-wrong attw --pack",
+    "attw": "bunx --package @arethetypeswrong/cli attw --pack --profile esm-only",
     "verify:attw": "bun run attw"
   },
   "keywords": [

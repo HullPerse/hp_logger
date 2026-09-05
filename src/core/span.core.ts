@@ -1,5 +1,5 @@
-import { RingBuffer } from "../brain/ring.utils";
-import type { LogContext, SpanNode, SpanRecord } from "../types/logger";
+import { RingBuffer } from "../brain/ring.utils.js";
+import type { LogContext, SpanNode, SpanRecord } from "../types/logger.js";
 
 /** Monotonic counter for short, collision-free span/trace ids. */
 let spanCounter = 0;

@@ -1,5 +1,5 @@
-import type { LabelValues } from "../types/metrics";
-import { Counter } from "./counter.metric";
+import type { LabelValues } from "../types/metrics.js";
+import { Counter } from "./counter.metric.js";
 
 /** Value that can go up and down: a counter plus absolute set and decrement. */
 export class Gauge extends Counter {

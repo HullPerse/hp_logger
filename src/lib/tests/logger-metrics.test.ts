@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { captureLogger } from "@/lib/tests/test.transport";
-import { createProcessMetrics } from "@/metrics/process.metric";
-import { Registry } from "@/metrics/registry.metric";
+import { captureLogger } from "./test.transport.js";
+import { createProcessMetrics } from "../../metrics/process.metric.js";
+import { Registry } from "../../metrics/registry.metric.js";
 
 describe("Logger metrics", () => {
   test("counter, gauge and histogram bind to the logger registry", () => {

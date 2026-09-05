@@ -1,6 +1,6 @@
-export type * from "./logger";
-export type * from "./transport";
-export type * from "./watch";
-export type * from "./metrics";
-export type * from "./integrations";
-export type * from "./redact";
+export type * from "./logger.js";
+export type * from "./transport.js";
+export type * from "./watch.js";
+export type * from "./metrics.js";
+export type * from "./integrations.js";
+export type * from "./redact.js";

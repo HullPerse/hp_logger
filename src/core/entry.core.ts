@@ -1,6 +1,6 @@
-import { EMPTY_CONTEXT } from "../config/context.config";
-import { LOG_SCHEMA_VERSION } from "../config/writer.config";
-import { serializeError } from "../redact/index.redact";
+import { EMPTY_CONTEXT } from "../config/context.config.js";
+import { LOG_SCHEMA_VERSION } from "../config/writer.config.js";
+import { serializeError } from "../redact/index.redact.js";
 import type {
   LazyContext,
   LazyMessage,
@@ -8,9 +8,9 @@ import type {
   LogEntry,
   LogLevel,
   LoggerState,
-} from "../types/logger";
-import { getActiveSpanPath, getAsyncContext, mergeEntryContext } from "./context.core";
-import { isFiltered } from "./filter.core";
+} from "../types/logger.js";
+import { getActiveSpanPath, getAsyncContext, mergeEntryContext } from "./context.core.js";
+import { isFiltered } from "./filter.core.js";
 
 /**
  * Expand top-level Error values before any feature branch so JSON output

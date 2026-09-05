@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { createLogger, Logger } from "@/index.logger";
-import { captureLogger } from "@/lib/tests/test.transport";
-import type { LogEntry, LogLevel } from "@/types/logger";
+import { createLogger, Logger } from "../../index.logger.js";
+import { captureLogger } from "./test.transport.js";
+import type { LogEntry, LogLevel } from "../../types/logger.js";
 
 const ALL_LEVELS: LogLevel[] = ["trace", "debug", "info", "success", "warn", "error", "fatal"];
 

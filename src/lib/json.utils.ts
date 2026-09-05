@@ -1,4 +1,4 @@
-import { attempt } from "./result.utils";
+import { attempt } from "./result.utils.js";
 
 /** JSON.stringify with a fallback: never throws on hostile values. */
 export const safeStringify = (value: unknown): string => {

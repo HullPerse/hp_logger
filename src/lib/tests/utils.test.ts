@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { attempt, attemptAsync } from "@/lib/result.utils";
-import { dispatchBatch } from "@/lib/transport.utils";
-import type { LogEntry } from "@/types/logger";
-import type { Transport } from "@/types/transport";
+import { attempt, attemptAsync } from "../result.utils.js";
+import { dispatchBatch } from "../transport.utils.js";
+import type { LogEntry } from "../../types/logger.js";
+import type { Transport } from "../../types/transport.js";
 
 const entry = (message: string): LogEntry => ({
   author: "ROOT",

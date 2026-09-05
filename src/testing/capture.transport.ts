@@ -1,9 +1,9 @@
-import { Logger } from "../api/logger.api";
-import { DEFAULT_AUTHOR } from "../config/logger.config";
-import { resolveSettings } from "../lib/settings.utils";
-import type { LogEntry, LogLevel, LoggerSettings } from "../types/logger";
-import type { Transport } from "../types/transport";
-import { AsyncTransport } from "../writer/buffer.writer";
+import { Logger } from "../api/logger.api.js";
+import { DEFAULT_AUTHOR } from "../config/logger.config.js";
+import { resolveSettings } from "../lib/settings.utils.js";
+import type { LogEntry, LogLevel, LoggerSettings } from "../types/logger.js";
+import type { Transport } from "../types/transport.js";
+import { AsyncTransport } from "../writer/buffer.writer.js";
 
 /** In-memory transport for tests: every entry lands in `entries`. */
 export const createCaptureTransport = (): { entries: LogEntry[]; transport: Transport } => {
