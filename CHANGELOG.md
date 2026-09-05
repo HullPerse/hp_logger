@@ -2,6 +2,25 @@
 
 Notable changes to hp_logger. Versions follow semver; 1.0.0 is stable.
 
+## 1.1.0 - 2026-09-05
+
+### Added
+
+- `PassthroughTransport` decorator base for `adaptive`, `repeat` and `leveled` transports.
+
+### Changed
+
+- Internal dedup waves with no behavior change: `dispatchBatch` in leveled transport,
+  shared `finishRequest`/`skipSet`/`onFinish` in server plugins, shared error-block and
+  token helpers in formatting, `writeGated` table in core.
+- Documented the `pause()` bound (10_000 entries, drop-newest, counted in `stats().paused`)
+  and the Elysia manual `withContext` correlation scope in README and llms.txt.
+
+### Fixed
+
+- Test isolation: blackbox cleanup moved from a test case to `afterAll`; `bun test --randomize`
+  passes (seeds 3245476426 and 7).
+
 ## 1.0.0 - 2026-08-30
 
 ### Added

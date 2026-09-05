@@ -1,6 +1,6 @@
 {
   "name": "hp_logger",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Structured logger for Bun/Node with levels, redaction, colors, file output and server framework integrations",
   "type": "module",
   "sideEffects": false,
