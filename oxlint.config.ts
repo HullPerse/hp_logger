@@ -120,9 +120,6 @@ export default defineConfig({
         "anti-slop/no-known-value-widening": "off",
         "anti-slop/no-chained-type-assertions": "off",
         "anti-slop/no-conditional-empty-object-spread": "off",
-        /* Recorded independently-red narrowing sites on the frozen 1.x call
-           shapes; retyping churns public call sites for zero behavior delta. */
-        "typescript/no-unnecessary-condition": "off",
       },
     },
     {
@@ -136,9 +133,6 @@ export default defineConfig({
         /* Blocks-then-helpers narrative: resolvers run at call time, after
            module evaluation, so forward references never fire early. */
         "eslint/no-use-before-define": "off",
-        /* Recorded independently-red narrowing site on the frozen 1.x call
-           shape; retyping churns public call sites for zero behavior delta. */
-        "typescript/no-unnecessary-condition": "off",
       },
     },
     {

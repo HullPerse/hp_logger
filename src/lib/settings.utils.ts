@@ -18,10 +18,15 @@ export const warnOutsideCwd = (kind: string, candidate: string): void => {
   }
 };
 
+const isFileObject = (
+  value: { path?: string } | false | undefined | null,
+): value is { path?: string } =>
+  typeof value === "object" && value !== null && "path" in value;
+
 const sanitizeFile = <T extends { path?: string } | false | undefined>(file: T): T | false => {
   if (file === undefined || file === false) return file as T | false;
-  if (typeof file === "object" && file !== null && "path" in file) {
-    const candidate = (file as { path?: string }).path;
+  if (isFileObject(file)) {
+    const candidate = file.path;
     if (candidate !== undefined) {
       if (isTraversalBlocked(candidate)) {
         console.warn(`hp_logger: file path blocked: ${candidate} (traversal)`);

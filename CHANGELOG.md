@@ -2,6 +2,15 @@
 
 Notable changes to hp_logger. Versions follow semver; 1.0.0 is stable.
 
+## 1.1.2 - 2026-09-05
+
+### Fixed
+
+- Three `no-unnecessary-condition` findings fixed with real types instead
+  of lint relief (relief lines removed): span/task delegators narrow options
+  without casts; the settings file check uses a union-typed `isFileObject`
+  guard. No public API or behavior change.
+
 ## 1.1.1 - 2026-09-05
 
 ### Fixed

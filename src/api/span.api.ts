@@ -63,7 +63,7 @@ export const spanImpl = <T>(
 ): SpanHandle | Promise<T> => {
   const thirdIsCallback = typeof maybeCallback === "function";
   const isCallback = typeof optionsOrCallback === "function";
-  const options: TimeOptions = isCallback ? {} : ((optionsOrCallback as TimeOptions) ?? {});
+  const options: TimeOptions = isCallback ? {} : (optionsOrCallback ?? {});
   let callback: ((span: SpanHandle) => T | Promise<T>) | undefined;
   if (thirdIsCallback) {
     callback = maybeCallback;

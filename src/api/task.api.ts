@@ -15,7 +15,7 @@ export const taskImpl = <T>(
     currentSettings: { task: { level: LogLevel; progress: boolean } };
   };
   const isCallback = typeof optionsOrCallback === "function";
-  const options: TaskOptions = isCallback ? {} : ((optionsOrCallback as TaskOptions) ?? {});
+  const options: TaskOptions = isCallback ? {} : (optionsOrCallback ?? {});
   const callback = isCallback
     ? (optionsOrCallback as (task: TaskHandle) => T | Promise<T>)
     : undefined;
